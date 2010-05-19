@@ -12,7 +12,7 @@ class PythonTokenizer:
 		self.grammar = grammar
 
 
-	def tokenize(self, source:str):
+	def tokenize(self, source:str) -> list:
 		fp = StringIO(source)
 		tokens = list(self.token_iter(fp.readline))
 		return tokens
