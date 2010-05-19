@@ -36,6 +36,7 @@ if __name__ == '__main__':
 		except UnicodeDecodeError as ex:
 			print(str(ex))
 			sys.exit(1)
+		content += '\n\n'
 
 		tokens = config.interpreters['3.1'].parser.tokenizer.tokenize(content)
 		for tok in tokens:
