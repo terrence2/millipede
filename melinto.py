@@ -21,10 +21,20 @@ if __name__ == '__main__':
 
 	# lint each given file
 	for filename in args:
-		# read the file contents
-		with open(filename, 'rb') as fp:
-			encoding, _ = detect_encoding(fp.readline)
-		with open(filename, 'rt', encoding=encoding) as fp:
-			content = fp.read()
-		print(content)
+		print(filename)
+
+		# read the file contents, obeying the python encoding marker
+		try:
+			with open(filename, 'rb') as fp:
+				encoding, _ = detect_encoding(fp.readline)
+		except SyntaxError as ex:
+			print(str(ex))
+			sys.exit(1)
+		try:
+			with open(filename, 'rt', encoding=encoding) as fp:
+				content = fp.read()
+		except UnicodeDecodeError as ex:
+			print(str(ex))
+			sys.exit(1)
+
 
