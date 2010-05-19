@@ -5,6 +5,7 @@ expose a simple interface to parsing.
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano.config.python_version import PythonVersion
+from .common.parser import PythonParser
 import os.path
 
 
@@ -24,9 +25,16 @@ class PythonParserDriver:
 			from .py3.grammar import PythonGrammar
 			from .py3.tokenizer import PythonTokenizer
 
-		self.grammar = PythonGrammar()
-		self.tokenizer = PythonTokenizer(self.grammar)
+		self.parser = PythonParser(self.grammar_filename, PythonGrammar)
+		self.tokenizer = PythonTokenizer(self.parser.grammar)
 
 		#self.parser = PythonParser(self.version, self.grammar_filename)
 		#self.builder = PythonAstBuilder(self.version)
+
+
+	def parse(self, content:str):
+		tokens = self.tokenizer.tokenize(content)
+		parse_tree = self.parser.parse(tokens)
+		
+		return parse_tree
 

@@ -38,8 +38,6 @@ if __name__ == '__main__':
 			sys.exit(1)
 		content += '\n\n'
 
-		tokens = config.interpreters['3.1'].parser.tokenizer.tokenize(content)
-		for tok in tokens:
-			print(config.interpreters['3.1'].parser.grammar.TOKEN_MAP[tok.type])
-			#print(tok)
+		# parse the file contents
+		parse_tree = config.interpreters['3.1'].parser.parse(content)
 
