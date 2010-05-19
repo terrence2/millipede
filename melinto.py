@@ -37,4 +37,8 @@ if __name__ == '__main__':
 			print(str(ex))
 			sys.exit(1)
 
+		tokens = config.interpreters['3.1'].parser.tokenizer.tokenize(content)
+		for tok in tokens:
+			print(config.interpreters['3.1'].parser.grammar.TOKEN_MAP[tok.type])
+			#print(tok)
 
