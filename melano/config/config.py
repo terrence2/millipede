@@ -4,6 +4,7 @@ Load, track, and store the globally useful bits of the melano configuration.
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano import VERSION
+from melano.config.python_language import PythonLanguage
 import os
 import os.path
 
@@ -38,9 +39,16 @@ class MelanoConfig:
 		if os.path.exists('./data/grammar/python-3.1'):
 			self.data_dir = os.path.join(os.path.realpath('.'), 'data')
 
+		# track what we know about all interpreters that we support
+		self.interpretters = {
+			'3.1': PythonLanguage(self, '3.1')
+		}
+
+
 	def thaw(self):
 		raise NotImplementedError()
-	
+
+
 	def freeze(self):
 		raise NotImplementedError()
 
