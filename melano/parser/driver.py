@@ -8,7 +8,7 @@ from melano.config.python_version import PythonVersion
 import os.path
 
 
-class PythonParser:
+class PythonParserDriver:
 	'''
 	Note: this driver is the only one that should need to worry explicitly
 		about the version of python we are attempting to parse.
