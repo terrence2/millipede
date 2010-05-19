@@ -24,9 +24,11 @@ class PythonParserDriver:
 		if self.version.major == 3:
 			from .py3.grammar import PythonGrammar
 			from .py3.tokenizer import PythonTokenizer
+			from .py3.astbuilder import PythonASTBuilder
 
 		self.parser = PythonParser(self.grammar_filename, PythonGrammar)
 		self.tokenizer = PythonTokenizer(self.parser.grammar)
+		self.builder = PythonASTBuilder(self.parser)
 
 		#self.parser = PythonParser(self.version, self.grammar_filename)
 		#self.builder = PythonAstBuilder(self.version)
@@ -35,6 +37,6 @@ class PythonParserDriver:
 	def parse(self, content:str):
 		tokens = self.tokenizer.tokenize(content)
 		parse_tree = self.parser.parse(tokens)
-		
-		return parse_tree
+		ast = self.builder.build(parse_tree)
+		return ast
 
