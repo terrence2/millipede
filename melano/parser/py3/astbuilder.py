@@ -1123,6 +1123,12 @@ class PythonASTBuilder:
 				return self.handle_power(expr_node)
 			elif expr_node_type == self.syms.lambdef:
 				return self.handle_lambdef(expr_node)
+			elif expr_node_type == self.syms.star_expr:
+				assert len(children) == 2
+				assert children[0].type == self.tokens.STAR
+				assert children[0].value == '*'
+				value = self.handle_expr(children[1])
+				return ast.Starred(value, ast.Load, expr_node)
 			else:
 				raise AssertionError("unknown expr: {}".format(
 					self.type_name(expr_node_type)))
