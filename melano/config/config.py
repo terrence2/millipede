@@ -40,7 +40,7 @@ class MelanoConfig:
 			self.data_dir = os.path.join(os.path.realpath('.'), 'data')
 
 		# track what we know about all interpreters that we support
-		self.interpretters = {
+		self.interpreters = {
 			'3.1': PythonLanguage(self, '3.1')
 		}
 
