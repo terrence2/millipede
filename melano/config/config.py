@@ -5,8 +5,10 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano import VERSION
 from melano.config.python_language import PythonLanguage
+import logging
 import os
 import os.path
+import sys
 
 
 class MelanoConfig:
@@ -14,7 +16,11 @@ class MelanoConfig:
 		'''Set default configuration.  Do a 'thaw' to restore from an existing
 			configuration for the current user or given configuration 
 			directory, if possible.'''
-		
+		# log target
+		self.log = logging.getLogger("Melano")
+		self.log.setLevel(logging.DEBUG)
+		self.log.addHandler(logging.StreamHandler(sys.stdout))
+
 		# discover the config directory
 		self.base_dir = basedir
 		if not basedir:
