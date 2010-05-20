@@ -1,11 +1,6 @@
+from melano.parser.common.ast import AST
 
 ### Base Class
-class AST:
-	__slots__ = ('startpos', 'endpos')
-	def __init__(self, node):
-		self.startpos = node.startpos
-		self.endpos = node.endpos
-
 
 class mod(AST):
 	__slots__ = ()
