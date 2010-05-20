@@ -5,6 +5,7 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano import VERSION
 from melano.config.python_language import PythonLanguage
+import hashlib
 import logging
 import os
 import os.path
@@ -57,4 +58,23 @@ class MelanoConfig:
 
 	def freeze(self):
 		raise NotImplementedError()
+
+
+	def get_cachefile(self, name:str):
+		'''Build a cache location that is unique for name.'''
+		tgt = hashlib.sha1(name.encode('UTF-8')).hexdigest()
+		tgt0 = tgt[0:3]
+		tgt1 = tgt[3:6]
+		tgt2 = tgt[6:]
+
+		cachedir = os.path.join(self.cache_dir, tgt0, tgt1)
+		cachefile = os.path.join(cachedir, tgt2)
+		if not os.path.exists(cachedir):
+			try:
+				os.makedirs(cachedir, 0o755)
+			except OSError as ex:
+				if ex.errno != errno.EEXIST:
+					raise
+
+		return cachefile
 
