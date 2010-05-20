@@ -3,6 +3,7 @@ High level analytics for a single source file at a time.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
+from melano.parser.common.visitor import ASTVisitor
 import hashlib
 import os.path
 
@@ -34,10 +35,8 @@ class MelanoCodeUnit:
 
 
 	def get_scopes(self):
-		self.ast
-		#from melano.parser.common.visitor import ASTVisitor
-		#visitor = ASTVisitor()
-		#visitor.visit(self.ast)
+		visitor = ASTVisitor()
+		visitor.visit(self.ast)
 
 
 	def freeze(self):
