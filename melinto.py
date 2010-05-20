@@ -10,6 +10,7 @@ if __name__ == '__main__':
 	import optparse
 	import sys
 	from melano.config.config import MelanoConfig
+	from melano.code.unit import MelanoCodeUnit
 	from melano.parser.pgen.parser import ParseError
 
 	# parse the command line
@@ -23,11 +24,14 @@ if __name__ == '__main__':
 	for filename in args:
 		config.log.info(filename)
 		try:
-			ast = config.interpreters['3.1'].parser.parse_file(filename)
+			unit = MelanoCodeUnit(config, filename)
+			unit.get_scopes()
 		except ParseError as ex:
 			try:
 				print(str(ex))
 			except UnicodeEncodeError:
 				print("Invalid unicode in parse!")
 			sys.exit(1)
+
+
 

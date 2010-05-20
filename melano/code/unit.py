@@ -34,6 +34,7 @@ class MelanoCodeUnit:
 
 
 	def get_scopes(self):
+		self.ast
 		#from melano.parser.common.visitor import ASTVisitor
 		#visitor = ASTVisitor()
 		#visitor.visit(self.ast)
