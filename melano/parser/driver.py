@@ -6,6 +6,8 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano.config.python_version import PythonVersion
 from .common.parser import PythonParser
+from .pgen.parser import ParseError
+from tokenize import detect_encoding
 import os.path
 
 
@@ -30,11 +32,32 @@ class PythonParserDriver:
 		self.tokenizer = PythonTokenizer(self.parser.grammar)
 		self.builder = PythonASTBuilder(self.parser)
 
-		#self.parser = PythonParser(self.version, self.grammar_filename)
-		#self.builder = PythonAstBuilder(self.version)
+
+	def __read_file(self, filename):
+		# read the file contents, obeying the python encoding marker
+		try:
+			with open(filename, 'rb') as fp:
+				encoding, _ = detect_encoding(fp.readline)
+		except SyntaxError as ex:
+			raise ParseError('when detecting file encoding: {}'.format(str(ex)),
+				None, str(ex), (0, 0), (2, 0), 0)
+		try:
+			with open(filename, 'rt', encoding=encoding) as fp:
+				content = fp.read()
+		except UnicodeDecodeError as ex:
+			raise ParseError('invalid encoding: {}'.format(str(ex)),
+				None, str(ex), (0, 0), (0, 0), 0)
+		content += '\n\n'
+
+		return content
 
 
-	def parse(self, content:str):
+	def parse_file(self, filename:str):
+		content = self.__read_file(filename)
+		return self.parse_string(content)
+
+
+	def parse_string(self, content:str):
 		tokens = self.tokenizer.tokenize(content)
 		parse_tree = self.parser.parse(tokens)
 		ast = self.builder.build(parse_tree)
