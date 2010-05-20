@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
 	# lint each given file
 	for filename in args:
-		print(filename)
+		config.log.info(filename)
 		try:
 			ast = config.interpreters['3.1'].parser.parse_file(filename)
 		except ParseError as ex:
