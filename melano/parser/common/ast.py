@@ -1,4 +1,6 @@
-
+'''
+Abstract Syntax Tree pieces that are common between python versions.
+'''
 
 class AST:
 	'''Base class of all ast nodes.'''
