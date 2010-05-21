@@ -8,6 +8,7 @@ NOTES for Melano:
 		off and passing start line and column individually.
 	- Handles our skiptokens by filtering the children lists as needed.
 '''
+import melano.parser.common.ast as common
 import melano.parser.py3.ast as ast
 from pprint import pprint
 
@@ -36,32 +37,32 @@ class PythonASTBuilder:
 				self.tokens.ENDMARKER}
 
 		self.operator_map = {
-			self.tokens.VBAR : ast.BitOr,
-			self.tokens.CIRCUMFLEX : ast.BitXor,
-			self.tokens.AMPER : ast.BitAnd,
-			self.tokens.LEFTSHIFT : ast.LShift,
-			self.tokens.RIGHTSHIFT : ast.RShift,
-			self.tokens.PLUS : ast.Add,
-			self.tokens.MINUS : ast.Sub,
-			self.tokens.STAR : ast.Mult,
-			self.tokens.SLASH : ast.Div,
-			self.tokens.DOUBLESLASH : ast.FloorDiv,
-			self.tokens.PERCENT : ast.Mod
+			self.tokens.VBAR : common.BitOr,
+			self.tokens.CIRCUMFLEX : common.BitXor,
+			self.tokens.AMPER : common.BitAnd,
+			self.tokens.LEFTSHIFT : common.LShift,
+			self.tokens.RIGHTSHIFT : common.RShift,
+			self.tokens.PLUS : common.Add,
+			self.tokens.MINUS : common.Sub,
+			self.tokens.STAR : common.Mult,
+			self.tokens.SLASH : common.Div,
+			self.tokens.DOUBLESLASH : common.FloorDiv,
+			self.tokens.PERCENT : common.Mod
 		}
 		
 		self.augassign_operator_map = {
-			'+='  : ast.Add,
-			'-='  : ast.Sub,
-			'/='  : ast.Div,
-			'//=' : ast.FloorDiv,
-			'%='  : ast.Mod,
-			'<<='  : ast.LShift,
-			'>>='  : ast.RShift,
-			'&='  : ast.BitAnd,
-			'|='  : ast.BitOr,
-			'^='  : ast.BitXor,
-			'*='  : ast.Mult,
-			'**=' : ast.Pow
+			'+='  : common.Add,
+			'-='  : common.Sub,
+			'/='  : common.Div,
+			'//=' : common.FloorDiv,
+			'%='  : common.Mod,
+			'<<='  : common.LShift,
+			'>>='  : common.RShift,
+			'&='  : common.BitAnd,
+			'|='  : common.BitOr,
+			'^='  : common.BitXor,
+			'*='  : common.Mult,
+			'**=' : common.Pow
 		}
 
 
@@ -124,7 +125,7 @@ class PythonASTBuilder:
 
 	def handle_del_stmt(self, del_node):
 		children = self.children(del_node)
-		targets = self.handle_exprlist(children[1], ast.Del)
+		targets = self.handle_exprlist(children[1], common.Del)
 		return ast.Delete(targets, del_node)
 
 
@@ -442,11 +443,11 @@ class PythonASTBuilder:
 	def handle_for_stmt(self, for_node):
 		children = self.children(for_node)
 		target_node = children[1]
-		target_as_exprlist = self.handle_exprlist(target_node, ast.Store)
+		target_as_exprlist = self.handle_exprlist(target_node, common.Store)
 		if len(target_node.children) == 1:
 			target = target_as_exprlist[0]
 		else:
-			target = ast.Tuple(target_as_exprlist, ast.Store, target_node)
+			target = ast.Tuple(target_as_exprlist, common.Store, target_node)
 		expr = self.handle_testlist(children[3])
 		body = self.handle_suite(children[5])
 		if len(children) == 9:
@@ -468,7 +469,7 @@ class PythonASTBuilder:
 			target = exc.children[3]
 			assert target.type == self.tokens.NAME
 			#target = self.handle_expr(target_child)
-			#self.set_context(target, ast.Store)
+			#self.set_context(target, common.Store)
 		return ast.excepthandler(test, target, suite, exc)
 
 
@@ -643,10 +644,10 @@ class PythonASTBuilder:
 
 	def handle_dotted_name(self, dotted_name_node):
 		base_value = dotted_name_node.children[0].value
-		name = ast.Name(base_value, ast.Load, dotted_name_node)
+		name = ast.Name(base_value, common.Load, dotted_name_node)
 		for i in range(2, len(dotted_name_node.children), 2):
 			attr = dotted_name_node.children[i].value
-			name = ast.Attribute(name, attr, ast.Load, dotted_name_node)
+			name = ast.Attribute(name, attr, common.Load, dotted_name_node)
 		return name
 
 
@@ -756,7 +757,7 @@ class PythonASTBuilder:
 		elif children[1].type == self.syms.augassign:
 			target_child = children[0]
 			target_expr = self.handle_testlist(target_child)
-			self.set_context(target_expr, ast.Store)
+			self.set_context(target_expr, common.Store)
 			value_child = children[2]
 			if value_child.type == self.syms.testlist:
 				value_expr = self.handle_testlist(value_child)
@@ -772,7 +773,7 @@ class PythonASTBuilder:
 				if target_node.type == self.syms.yield_expr:
 					self.error("can't assign to yield expression", target_node)
 				target_expr = self.handle_testlist(target_node)
-				self.set_context(target_expr, ast.Store)
+				self.set_context(target_expr, common.Store)
 				targets.append(target_expr)
 			value_child = children[-1]
 			if value_child.type == self.syms.testlist:
@@ -794,7 +795,7 @@ class PythonASTBuilder:
 			return self.handle_expr(children[0])
 		else:
 			elts = self.get_expression_list(tests)
-			return ast.Tuple(elts, ast.Load, tests)
+			return ast.Tuple(elts, common.Load, tests)
 
 
 	def handle_expr(self, expr_node):
@@ -820,16 +821,16 @@ class PythonASTBuilder:
 				seq = [self.handle_expr(children[i])
 					   for i in range(0, len(children), 2)]
 				if expr_node_type == self.syms.or_test:
-					op = ast.Or
+					op = common.Or
 				else:
-					op = ast.And
+					op = common.And
 				return ast.BoolOp(op, seq, expr_node)
 			elif expr_node_type == self.syms.not_test:
 				if len(children) == 1:
 					expr_node = children[0]
 					continue
 				expr = self.handle_expr(children[1])
-				return ast.UnaryOp(ast.Not, expr, expr_node)
+				return ast.UnaryOp(common.Not, expr, expr_node)
 			elif expr_node_type == self.syms.comparison:
 				if len(children) == 1:
 					expr_node = children[0]
@@ -871,7 +872,7 @@ class PythonASTBuilder:
 				assert children[0].type == self.tokens.STAR
 				assert children[0].value == '*'
 				value = self.handle_expr(children[1])
-				return ast.Starred(value, ast.Load, expr_node)
+				return ast.Starred(value, common.Load, expr_node)
 			else:
 				raise AssertionError("unknown expr: {}".format(
 					self.type_name(expr_node_type)))
@@ -903,31 +904,31 @@ class PythonASTBuilder:
 		comp_type = comp_node.type
 		if len(comp_op_node.children) == 1:
 			if comp_type == self.tokens.LESS:
-				return ast.Lt
+				return common.Lt
 			elif comp_type == self.tokens.GREATER:
-				return ast.Gt
+				return common.Gt
 			elif comp_type == self.tokens.EQEQUAL:
-				return ast.Eq
+				return common.Eq
 			elif comp_type == self.tokens.LESSEQUAL:
-				return ast.LtE
+				return common.LtE
 			elif comp_type == self.tokens.GREATEREQUAL:
-				return ast.GtE
+				return common.GtE
 			elif comp_type == self.tokens.NOTEQUAL:
-				return ast.NotEq
+				return common.NotEq
 			elif comp_type == self.tokens.NAME:
 				if comp_node.value == "is":
-					return ast.Is
+					return common.Is
 				elif comp_node.value == "in":
-					return ast.In
+					return common.In
 				else:
 					raise AssertionError("invalid comparison")
 			else:
 				raise AssertionError("invalid comparison")
 		else:
 			if comp_op_node.children[1].value == "in":
-				return ast.NotIn
+				return common.NotIn
 			elif comp_node.value == "is":
-				return ast.IsNot
+				return common.IsNot
 			else:
 				raise AssertionError("invalid comparison")
 
@@ -964,11 +965,11 @@ class PythonASTBuilder:
 		expr = self.handle_expr(factor_node.children[1])
 		op_type = factor_node.children[0].type
 		if op_type == self.tokens.PLUS:
-			op = ast.UAdd
+			op = common.UAdd
 		elif op_type == self.tokens.MINUS:
-			op = ast.USub
+			op = common.USub
 		elif op_type == self.tokens.TILDE:
-			op = ast.Invert
+			op = common.Invert
 		else:
 			raise AssertionError("invalid factor node")
 		return ast.UnaryOp(op, expr, factor_node)
@@ -989,7 +990,7 @@ class PythonASTBuilder:
 			atom_expr = tmp_atom_expr
 		if children[-1].type == self.syms.factor:
 			right = self.handle_expr(children[-1])
-			atom_expr = ast.BinOp(atom_expr, ast.Pow, right, power_node)
+			atom_expr = ast.BinOp(atom_expr, common.Pow, right, power_node)
 		return atom_expr
 
 
@@ -1018,7 +1019,7 @@ class PythonASTBuilder:
 		last_child = children[-1]
 		if last_child.type == self.syms.sliceop:
 			if len(last_child.children) == 1:
-				step = ast.Name("None", ast.Load, last_child)
+				step = ast.Name("None", common.Load, last_child)
 			else:
 				step_child = last_child.children[1]
 				if step_child.type == self.syms.test:
@@ -1038,12 +1039,12 @@ class PythonASTBuilder:
 				return ast.Call(left_expr, bases, keywords, starargs, kwargs, trailer_node)
 		elif first_child.type == self.tokens.DOT:
 			attr = children[1].value
-			return ast.Attribute(left_expr, attr, ast.Load, trailer_node)
+			return ast.Attribute(left_expr, attr, common.Load, trailer_node)
 		else:
 			middle = children[1]
 			if len(middle.children) == 1:
 				slice = self.handle_slice(middle.children[0])
-				return ast.Subscript(left_expr, slice, ast.Load, middle)
+				return ast.Subscript(left_expr, slice, common.Load, middle)
 			slices = []
 			simple = True
 			for i in range(0, len(middle.children), 2):
@@ -1053,13 +1054,13 @@ class PythonASTBuilder:
 				slices.append(slc)
 			if not simple:
 				ext_slice = ast.ExtSlice(slices)
-				return ast.Subscript(left_expr, ext_slice, ast.Load, middle)
+				return ast.Subscript(left_expr, ext_slice, common.Load, middle)
 			elts = []
 			for idx in slices:
 				assert isinstance(idx, ast.Index)
 				elts.append(idx.value)
-			tup = ast.Tuple(elts, ast.Load, middle)
-			return ast.Subscript(left_expr, ast.Index(tup, middle), ast.Load, middle)
+			tup = ast.Tuple(elts, common.Load, middle)
+			return ast.Subscript(left_expr, ast.Index(tup, middle), common.Load, middle)
 
 
 	def parse_number(self, raw):
@@ -1079,7 +1080,7 @@ class PythonASTBuilder:
 		first_child = children[0]
 		first_child_type = first_child.type
 		if first_child_type == self.tokens.NAME:
-			return ast.Name(first_child.value, ast.Load, first_child)
+			return ast.Name(first_child.value, common.Load, first_child)
 		elif first_child_type == self.tokens.STRING:
 			sub_strings = [s.value for s in children]
 			if len(sub_strings) > 0:
@@ -1095,19 +1096,19 @@ class PythonASTBuilder:
 		elif first_child_type == self.tokens.LPAR:
 			second_child = children[1]
 			if second_child.type == self.tokens.RPAR:
-				return ast.Tuple(None, ast.Load, atom_node)
+				return ast.Tuple(None, common.Load, atom_node)
 			elif second_child.type == self.syms.yield_expr:
 				return self.handle_expr(second_child)
 			return self.handle_testlist_gexp(second_child)
 		elif first_child_type == self.tokens.LSQB:
 			second_child = children[1]
 			if second_child.type == self.tokens.RSQB:
-				return ast.List(None, ast.Load, atom_node)
+				return ast.List(None, common.Load, atom_node)
 			second_children = self.children(second_child)
 			if len(second_children) == 1 or \
 					second_children[1].type == self.tokens.COMMA:
 				elts = self.get_expression_list(second_child)
-				return ast.List(elts, ast.Load, atom_node)
+				return ast.List(elts, common.Load, atom_node)
 			return self.handle_listcomp(second_child)
 		elif first_child_type == self.tokens.LBRACE:
 			second_child = children[1]
@@ -1161,7 +1162,7 @@ class PythonASTBuilder:
 		'''comp_for: 'for' exprlist 'in' or_test [comp_iter]'''
 		comps = []
 		children = self.children(comp_for_node)
-		target = self.handle_exprlist(children[1], ast.Store)
+		target = self.handle_exprlist(children[1], common.Store)
 		iter_ = self.handle_testlist(children[3])
 		ifs = []
 		if len(children) > 4:
@@ -1243,13 +1244,13 @@ class PythonASTBuilder:
 		comp_for = comp_node.children[1]
 		for i in range(fors_count):
 			for_node = comp_for.children[1]
-			for_targets = self.handle_exprlist(for_node, ast.Store)
+			for_targets = self.handle_exprlist(for_node, common.Store)
 			expr = handle_source_expression(comp_for.children[3])
 			assert isinstance(expr, ast.expr)
 			if len(for_node.children) == 1:
 				comp = ast.comprehension(for_targets[0], expr, None, comp_for)
 			else:
-				target = ast.Tuple(for_targets, ast.Store, comp_for)
+				target = ast.Tuple(for_targets, common.Store, comp_for)
 				comp = ast.comprehension(target, expr, None, comp_node)
 			if len(comp_for.children) == 5:
 				comp_for = comp_iter = comp_for.children[4]
