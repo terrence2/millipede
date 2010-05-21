@@ -223,7 +223,7 @@ class PythonASTBuilder:
 		children = self.children(import_as_name)
 		assert children[0].type == self.tokens.NAME
 		name = children[0].value
-		asname = None
+		asname = ''
 		if len(children) > 1:
 			assert children[1].value == 'as'
 			assert children[2].type == self.tokens.NAME
@@ -244,7 +244,7 @@ class PythonASTBuilder:
 	def handle_dotted_as_name(self, dotted_as_name):
 		children = self.children(dotted_as_name)
 		name = self.handle_dotted_name(children[0])
-		asname = None
+		asname = ''
 		if len(children) > 1:
 			assert children[1].value == 'as'
 			assert children[2].type == self.tokens.NAME
