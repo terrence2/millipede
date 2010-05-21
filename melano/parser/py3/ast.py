@@ -99,7 +99,7 @@ class arguments(AST):
 #| alias = (identifier name, identifier? asname)
 class alias:
 	__slots__ = ('name', 'asname')
-	def __init__(self, name:str, asname:str):
+	def __init__(self, name:object, asname:str):
 		self.name = name
 		self.asname = asname
 
@@ -229,7 +229,7 @@ class Import(stmt):
 
 #| ImportFrom(identifier module, alias* names, int? level)
 class ImportFrom(stmt):
-	_fields = ('names',)
+	_fields = ()
 	__slots__ = ('module', 'names', 'level')
 	def __init__(self, module, names, level, *args, **kwargs):
 		super().__init__(*args, **kwargs)
@@ -487,7 +487,7 @@ class SetComp(expr):
 
 #| Starred(expr value, expr_context ctx)
 class Starred(expr):
-	_fields = ('value')
+	_fields = ('value',)
 	__slots__ = ('value', 'ctx')
 	def __init__(self, value, ctx, *args, **kwargs):
 		super().__init__(*args, **kwargs)
