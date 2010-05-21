@@ -1061,78 +1061,6 @@ class PythonASTBuilder:
 			tup = ast.Tuple(elts, ast.Load, middle)
 			return ast.Subscript(left_expr, ast.Index(tup, middle), ast.Load, middle)
 
-	'''
-	def handle_call(self, args_node, callable_expr):
-		#FIXME needs rewrite for python3
-		arg_count = 0
-		keyword_count = 0
-		generator_count = 0
-		children = self.children(args_node)
-		for argument in children:
-			arg_children = self.children(argument)
-			if argument.type == self.syms.argument:
-				if len(children) == 1:
-					arg_count += 1
-				elif children[1].type == self.syms.comp_for:
-					generator_count += 1
-				else:
-					keyword_count += 1
-		if generator_count > 1 or \
-				(generator_count and (keyword_count or arg_count)):
-			self.error("Generator expression must be parenthesized "
-					   "if not sole argument", args_node)
-		if arg_count + keyword_count + generator_count > 255:
-			self.error("more than 255 arguments", args_node)
-		args = []
-		keywords = []
-		used_keywords = {}
-		variable_arg = None
-		keywords_arg = None
-		child_count = len(children)
-		i = 0
-		while i < child_count:
-			argument = children[i]
-			if argument.type == self.syms.argument:
-				if len(children) == 1:
-					expr_node = children[0]
-					if keywords:
-						self.error("non-keyword arg after keyword arg",
-								   expr_node)
-					args.append(self.handle_expr(expr_node))
-				elif children[1].type == self.syms.comp_for:
-					args.append(self.handle_genexp(argument))
-				else:
-					keyword_node = children[0]
-					keyword_expr = self.handle_expr(keyword_node)
-					if isinstance(keyword_expr, ast.Lambda):
-						self.error("lambda cannot contain assignment",
-								   keyword_node)
-					elif not isinstance(keyword_expr, ast.Name):
-						self.error("keyword can't be an expression",
-								   keyword_node)
-					keyword = keyword_expr.id
-					if keyword in used_keywords:
-						self.error("keyword argument repeated", keyword_node)
-					used_keywords[keyword] = None
-					#self.check_forbidden_name(keyword, keyword_node)
-					keyword_value = self.handle_expr(children[2])
-					keywords.append(ast.keyword(keyword, keyword_value, keyword_node))
-			elif argument.type == self.tokens.STAR:
-				variable_arg = self.handle_expr(children[i + 1])
-				i += 1
-			elif argument.type == self.tokens.DOUBLESTAR:
-				keywords_arg = self.handle_expr(children[i + 1])
-				i += 1
-			else:
-				raise AssertionError("Unknown callable")
-			i += 1
-		if not args:
-			args = None
-		if not keywords:
-			keywords = None
-		return ast.Call(callable_expr, args, keywords, variable_arg,
-						keywords_arg, callable_expr)
-	'''
 
 	def parse_number(self, raw):
 		try:
@@ -1147,7 +1075,6 @@ class PythonASTBuilder:
 
 
 	def handle_atom(self, atom_node):
-		#self.pretty_print(atom_node)
 		children = self.children(atom_node)
 		first_child = children[0]
 		first_child_type = first_child.type
@@ -1263,7 +1190,6 @@ class PythonASTBuilder:
 				extra_ifs, comps = self.handle_comp_if(iter_children[0])
 				ifs.extend(extra_ifs)
 		return ifs, comps
-	
 
 
 	def handle_testlist_gexp(self, gexp_node):
@@ -1271,6 +1197,7 @@ class PythonASTBuilder:
 				gexp_node.children[1].type == self.syms.comp_for:
 			return self.handle_genexp(gexp_node)
 		return self.handle_testlist(gexp_node)
+
 
 	def count_comp_fors(self, comp_node, for_type, if_type):
 		count = 0
@@ -1294,6 +1221,7 @@ class PythonASTBuilder:
 				else:
 					raise AssertionError("should not reach here")
 
+
 	def count_comp_ifs(self, iter_node, for_type):
 		count = 0
 		while True:
@@ -1304,6 +1232,7 @@ class PythonASTBuilder:
 			if len(first_child.children) == 2:
 				return count
 			iter_node = first_child.children[2]
+
 
 	#@specialize.arg(5)
 	def comprehension_helper(self, comp_node, for_type, if_type, iter_type,
