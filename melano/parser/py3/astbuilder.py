@@ -23,11 +23,6 @@ class PythonASTBuilder:
 		self.syms = _Symbols()
 		for index, name in self.parser.grammar.symbol_names.items():
 			setattr(self.syms, name, index)
-		# temp py2 compatibility
-		setattr(self.syms, 'old_test', 1000)
-		setattr(self.syms, 'old_lambdef', 1001)
-		setattr(self.syms, 'print_stmt', 1002)
-		#print(sorted(dir(self.syms)))
 
 		class _Tokens: pass
 		self.tokens = _Symbols()
@@ -82,21 +77,16 @@ class PythonASTBuilder:
 	def build(self, node):
 		assert node.type == self.syms.file_input
 
+		children = self.children(node)
 		stmts = []
-		for stmt in node.children:
+		for stmt in children:
 			ty = stmt.type
 			if ty in self.SKIPTOKENS:
-				stmts.append(stmt)
 				continue
-			sub_stmts_count = self.number_of_statements(stmt)
-			if sub_stmts_count == 1:
-				stmts.append(self.handle_stmt(stmt))
-			else:
-				for j in range(sub_stmts_count):
-					small_stmt = stmt.children[j * 2]
-					stmts.append(self.handle_stmt(small_stmt))
+			if ty == self.syms.stmt:
+				stmts.extend(self.handle_stmt(stmt))
 
-		node.endpos = stmts[-1].endpos
+		node.endpos = node.children[-1].endpos
 		return ast.Module(stmts, node)
 
 	
@@ -122,20 +112,6 @@ class PythonASTBuilder:
 				self.pretty_print(c, level+1)
 
 
-	def number_of_statements(self, stmt):
-		"""Compute the number of AST statements contained in a node."""
-		ty = stmt.type
-		if ty == self.syms.compound_stmt:
-			return 1
-		elif ty == self.syms.stmt:
-			return self.number_of_statements(stmt.children[0])
-		elif ty == self.syms.simple_stmt:
-			# Divide to remove semi-colons.
-			return len(stmt.children) // 2
-		else:
-			raise AssertionError("non-statement node: {}".format(self.type_name(stmt.type)))
-
-
 	def set_context(self, expr, ctx):
 		"""Set the context of an expression to Store or Del if possible."""
 		try:
@@ -144,23 +120,6 @@ class PythonASTBuilder:
 			self.error_ast(e.msg, e.node)
 		except misc.ForbiddenNameAssignment as e:
 			self.error_ast("assignment to %s" % (e.name,), e.node)
-
-
-	def handle_print_stmt(self, print_node):
-		dest = None
-		expressions = None
-		newline = True
-		start = 1
-		child_count = len(print_node.children)
-		if child_count > 2 and print_node.children[1].type == self.tokens.RIGHTSHIFT:
-			dest = self.handle_expr(print_node.children[2])
-			start = 4
-		if (child_count + 1 - start) // 2:
-			expressions = [self.handle_expr(print_node.children[i])
-						   for i in range(start, child_count, 2)]
-		if print_node.children[-1].type == self.tokens.COMMA:
-			newline = False
-		return ast.Print(dest, expressions, newline, print_node)
 
 
 	def handle_del_stmt(self, del_node):
@@ -201,52 +160,6 @@ class PythonASTBuilder:
 		else:
 			raise AssertionError("unknown flow statement")
 
-	"""
-	def alias_for_import_name(self, import_name, store=True):
-		#self.print_children(import_name)
-		children = self.children(import_name)
-		while True:
-			import_name_type = import_name.type
-			if import_name_type == self.syms.import_as_name:
-				name = import_name.children[0].value
-				if len(import_name.children) == 3:
-					# 'as' is not yet a keyword in Python 2.5, so the grammar
-					# just specifies a NAME token.  We check it manually here.
-					if import_name.children[1].value != "as":
-						self.error("must use 'as' in import", import_name)
-					as_name = import_name.children[2].value
-					#self.check_forbidden_name(as_name, import_name.children[2])
-					return ast.alias(name, as_name)
-				else:
-					as_name = None
-					#self.check_forbidden_name(name, import_name.children[0])
-				return ast.alias(name, as_name)
-			elif import_name_type == self.syms.dotted_as_name:
-				if len(import_name.children) == 1:
-					import_name = import_name.children[0]
-					continue
-				if import_name.children[1].value != "as":
-					self.error("must use 'as' in import", import_name)
-				alias = self.alias_for_import_name(import_name.children[0])
-				asname_node = import_name.children[2]
-				alias.asname = asname_node.value
-				#self.check_forbidden_name(alias.asname, asname_node)
-				return alias
-			elif import_name_type == self.syms.dotted_name:
-				if len(import_name.children) == 1:
-					name = import_name.children[0].value
-					#if store:
-					#	self.check_forbidden_name(name, import_name.children[0])
-					return ast.alias(name, None)
-				name_parts = [import_name.children[i].value
-							  for i in range(0, len(import_name.children), 2)]
-				name = ".".join(name_parts)
-				return ast.alias(name, None)
-			elif import_name_type == self.tokens.STAR:
-				return ast.alias("*", None)
-			else:
-				raise AssertionError("unknown import name")
-	"""
 
 	def handle_import_stmt(self, import_node):
 		children = self.children(import_node)
@@ -256,58 +169,7 @@ class PythonASTBuilder:
 			return self.handle_import_from(children[0])
 		else:
 			raise AssertionError("unknown import node")
-		"""
-		self.pretty_print(import_node)
-		import_node = import_node.children[0]
-		children = self.children(import_node)
-		if import_node.type == self.syms.import_name:
-			dotted_as_names = children[1]
-			aliases = [self.alias_for_import_name(dotted_as_names.children[i])
-					   for i in range(0, len(dotted_as_names.children), 2)]
-			return ast.Import(aliases, import_node)
-		elif import_node.type == self.syms.import_from:
-			child_count = len(children)
-			module = None
-			modname = None
-			i = 1
-			dot_count = 0
-			while i < child_count:
-				#print(children)
-				child = children[i]
-				if child.type == self.syms.dotted_name:
-					module = self.alias_for_import_name(child, False)
-					i += 1
-					break
-				elif child.type != self.tokens.DOT:
-					break
-				i += 1
-				dot_count += 1
-			i += 1
-			after_import_type = children[i].type
-			star_import = False
-			if after_import_type == self.tokens.STAR:
-				names_node = children[i]
-				star_import = True
-			elif after_import_type == self.tokens.LPAR:
-				names_node = children[i + 1]
-			elif after_import_type == self.syms.import_as_names:
-				names_node = children[i]
-				if len(names_node.children) % 2 == 0:
-					self.error("trailing comma is only allowed with "
-							   "surronding parenthesis", names_node)
-			else:
-				raise AssertionError("unknown import node")
-			if star_import:
-				aliases = [self.alias_for_import_name(names_node)]
-			else:
-				aliases = [self.alias_for_import_name(names_node.children[i])
-						   for i in range(0, len(names_node.children), 2)]
-			if module is not None:
-				modname = module.name
-			return ast.ImportFrom(modname, aliases, dot_count, import_node)
-		else:
-			raise AssertionError("unknown import node")
-		"""
+	
 	
 	def handle_import_name(self, import_name):
 		children = self.children(import_name)
@@ -402,18 +264,6 @@ class PythonASTBuilder:
 		return ast.NonLocal(names, nonlocal_node)
 
 
-	def handle_exec_stmt(self, exec_node):
-		children = self.children(exec_node)
-		child_count = len(children)
-		globs = None
-		locs = None
-		to_execute = self.handle_expr(children[1])
-		if child_count >= 4:
-			globs = self.handle_expr(children[3])
-		if child_count == 6:
-			locs = self.handle_expr(children[5])
-		return ast.Exec(to_execute, globs, locs, exec_node)
-
 	def handle_assert_stmt(self, assert_node):
 		children = self.children(assert_node)
 		child_count = len(children)
@@ -423,34 +273,114 @@ class PythonASTBuilder:
 			msg = self.handle_expr(children[3])
 		return ast.Assert(expr, msg, assert_node)
 
+
 	def handle_suite(self, suite_node):
+		'''suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT'''
 		children = self.children(suite_node)
 		first_child = children[0]
+		# e.x. -> stuff ':' simple_stmt
+		#	otherwise, we get an INDENT [stuff] DEDENT pattern
 		if first_child.type == self.syms.simple_stmt:
-			end = len(first_child.children) - 1
-			if first_child.children[end - 1].type == self.tokens.SEMI:
-				end -= 1
-			stmts = [self.handle_stmt(first_child.children[i])
-					 for i in range(0, end, 2)]
+			return self.handle_simple_stmt(first_child)
 		else:
+			assert children[0].type == self.tokens.INDENT
+			assert children[-1].type == self.tokens.DEDENT
+			children = children[1:-1]
 			stmts = []
-			for i in range(2, len(children) - 1):
-				stmt = children[i]
-				ty = stmt.type
-				if ty in self.SKIPTOKENS:
-					stmts.append(stmt)
+			for stmt in children:
+				if stmt.type in self.SKIPTOKENS:
 					continue
-				stmt_count = self.number_of_statements(stmt)
-				if stmt_count == 1:
-					stmts.append(self.handle_stmt(stmt))
-				else:
-					simple_stmt = stmt.children[0]
-					for j in range(0, len(simple_stmt.children), 2):
-						stmt = simple_stmt.children[j]
-						if not stmt.children:
-							break
-						stmts.append(self.handle_stmt(stmt))
+				assert stmt.type == self.syms.stmt
+				stmts.extend(self.handle_stmt(stmt))
 		return stmts
+
+
+	def handle_simple_stmt(self, simple_stmt) -> list:
+		'''simple_stmt: small_stmt (';' small_stmt)* [';'] NEWLINE'''
+		assert simple_stmt.type == self.syms.simple_stmt
+		stmts = []
+		children = self.children(simple_stmt)
+		for child in children:
+			if child.type == self.tokens.SEMI:
+				continue
+			stmts.append(self.handle_small_stmt(child))
+		return stmts
+
+
+	def handle_stmt(self, stmt) -> list:
+		'''Dispatch to a more specific handler.
+			Handles exactly one stmt, so this should not be called on stmt
+			or simple_stmt unless it is known to hav exactly one stmt in it.
+			
+			stmt: simple_stmt | compound_stmt
+		'''
+		assert stmt.type == self.syms.stmt
+		children = self.children(stmt)
+		assert len(children) == 1
+		if children[0].type == self.syms.simple_stmt:
+			return self.handle_simple_stmt(children[0])
+		elif children[0].type == self.syms.compound_stmt:
+			return [self.handle_compound_stmt(children[0])]
+		else:
+			raise AssertionError('Unrecognized stmt: {}'.format(
+					self.type_name(children[0].type)))
+
+
+	def handle_small_stmt(self, small_stmt):
+		'''small_stmt: (expr_stmt | del_stmt | pass_stmt | flow_stmt |
+					import_stmt | global_stmt | nonlocal_stmt | assert_stmt)'''
+		assert small_stmt.type == self.syms.small_stmt
+		children = self.children(small_stmt)
+		assert len(children) == 1
+		stmt = children[0]
+		stmt_type = stmt.type
+		if stmt_type == self.syms.expr_stmt:
+			return self.handle_expr_stmt(stmt)
+		elif stmt_type == self.syms.del_stmt:
+			return self.handle_del_stmt(stmt)
+		elif stmt_type == self.syms.pass_stmt:
+			return ast.Pass(stmt)
+		elif stmt_type == self.syms.flow_stmt:
+			return self.handle_flow_stmt(stmt)
+		elif stmt_type == self.syms.import_stmt:
+			return self.handle_import_stmt(stmt)
+		elif stmt_type == self.syms.global_stmt:
+			return self.handle_global_stmt(stmt)
+		elif stmt_type == self.syms.nonlocal_stmt:
+			return self.handle_nonlocal_stmt(stmt)
+		elif stmt_type == self.syms.assert_stmt:
+			return self.handle_assert_stmt(stmt)
+		else:
+			raise AssertionError("unhandled small statement")
+
+
+	def handle_compound_stmt(self, compound_stmt):
+		'''compound_stmt: if_stmt | while_stmt | for_stmt | try_stmt | 
+			with_stmt | funcdef | classdef | decorated'''
+		assert compound_stmt.type == self.syms.compound_stmt
+		children = self.children(compound_stmt)
+		assert len(children) == 1
+		stmt = children[0]
+		stmt_type = stmt.type
+		if stmt_type == self.syms.if_stmt:
+			return self.handle_if_stmt(stmt)
+		elif stmt_type == self.syms.while_stmt:
+			return self.handle_while_stmt(stmt)
+		elif stmt_type == self.syms.for_stmt:
+			return self.handle_for_stmt(stmt)
+		elif stmt_type == self.syms.try_stmt:
+			return self.handle_try_stmt(stmt)
+		elif stmt_type == self.syms.with_stmt:
+			return self.handle_with_stmt(stmt)
+		elif stmt_type == self.syms.funcdef:
+			return self.handle_funcdef(stmt)
+		elif stmt_type == self.syms.classdef:
+			return self.handle_classdef(stmt)
+		elif stmt_type == self.syms.decorated:
+			return self.handle_decorated(stmt)
+		else:
+			raise AssertionError("unhandled compound statement")
+
 
 	def handle_if_stmt(self, if_node):
 		children = self.children(if_node)
@@ -497,6 +427,7 @@ class PythonASTBuilder:
 		else:
 			raise AssertionError("unknown if statement configuration")
 
+
 	def handle_while_stmt(self, while_node):
 		children = self.children(while_node)
 		loop_test = self.handle_expr(children[1])
@@ -506,6 +437,7 @@ class PythonASTBuilder:
 		else:
 			otherwise = None
 		return ast.While(loop_test, body, otherwise, while_node)
+
 
 	def handle_for_stmt(self, for_node):
 		children = self.children(for_node)
@@ -523,6 +455,7 @@ class PythonASTBuilder:
 			otherwise = None
 		return ast.For(target, expr, body, otherwise, for_node)
 
+
 	def handle_except_clause(self, exc, body):
 		'''except_clause: 'except' [test ['as' NAME]]'''
 		test = None
@@ -537,6 +470,7 @@ class PythonASTBuilder:
 			#target = self.handle_expr(target_child)
 			#self.set_context(target, ast.Store)
 		return ast.excepthandler(test, target, suite, exc)
+
 
 	def handle_try_stmt(self, try_node):
 		children = self.children(try_node)
@@ -583,6 +517,7 @@ class PythonASTBuilder:
 			context_suite = ast.With(context_expr, optional_vars, context_suite, with_node)
 		return context_suite
 
+
 	def handle_with_item(self, with_item):
 		children = self.children(with_item)
 		context_expr = self.handle_testlist(children[0])
@@ -593,61 +528,6 @@ class PythonASTBuilder:
 			optional_vars = self.handle_expr(children[2])
 		return context_expr, optional_vars
 
-		'''
-		context_expr = None
-		optional_vars = None
-		body = None
-		if len(children) == 4: # 'with' test ':' suite
-			context_expr = self.handle_testlist(children[1])
-			body = self.handle_suite(children[3])
-		elif len(children) == 6: # 'with' test 'as' expr ':' suite
-			context_expr = self.handle_testlist(children[1])
-			optional_vars = self.handle_expr(children[3])
-			body = self.handle_suite(children[5])
-		else: # 'with' test ['as' expr] ',' ... ':' body
-			context_expr = self.handle_testlist(children[1])
-			if children[2].type == self.tokens.NAME and \
-					children[2].value == 'as':
-				optional_vars = self.handle_expr(children[3])
-				body = self.handle_with_stmt_remainder(children[5:], with_node)
-			else:
-				optional_vars = None
-				body = self.handle_with_stmt_remainder(children[3:], with_node)
-		return ast.With(context_expr, optional_vars, body, with_node)
-		'''
-		'''
-	def handle_with_stmt_remainder(self, with_items, with_node):
-		if len(with_items) == 2: # last item in list
-			assert with_items[0].type == self.tokens.COLON
-			return self.handle_suite(with_items[1])
-
-		context_expr = self.handle_testlist(with_items[0])
-		optional_vars = None
-		pos = 1
-		if with_items[1].type == self.tokens.NAME and \
-				with_items[1].value == 'as':
-			optional_vars = self.handle_expr(children[3])
-			pos += 2
-		body = self.handle_with_stmt_remainder(children[pos:])
-		return [ast.With(context_expr, optional_var, body, with_node)]
-		'''
-		'''
-		test = self.handle_expr(with_node.children[1])
-		if len(with_node.children) == 5:
-			target_node = with_node.children[2]
-			target = self.handle_with_var(target_node)
-			self.set_context(target, ast.Store)
-		else:
-			target = None
-		return ast.With(test, target, body, with_node)
-		'''
-	'''
-	def handle_with_var(self, with_var_node):
-		# The grammar doesn't require 'as', so check it manually.
-		if with_var_node.children[0].value != "as":
-			self.error("expected \"with [expr] as [var]\"", with_var_node)
-		return self.handle_expr(with_var_node.children[1])
-	'''
 
 	def handle_classdef(self, classdef_node, decorators=None):
 		children = self.children(classdef_node)
@@ -662,14 +542,12 @@ class PythonASTBuilder:
 			body = self.handle_suite(children[5])
 			return ast.ClassDef(name, None, None, None, None, body, decorators, classdef_node)
 		# everything else
-		#self.pretty_print(classdef_node)
 		bases, keywords, starargs, kwargs = self.handle_arglist(children[3])
 		body = self.handle_suite(children[6])
 		return ast.ClassDef(name, bases, keywords, starargs, kwargs, body, decorators, classdef_node)
 
 
 	def handle_arglist(self, arglist_node):
-		#self.pretty_print(arglist_node)
 		children = self.children(arglist_node)
 		starargs = None
 		kwargs = None
@@ -759,8 +637,6 @@ class PythonASTBuilder:
 			assert children[3].type == self.tokens.RPAR
 			dec = ast.Call(dec_name, None, None, None, None, decorator_node)
 		else:
-			#dec = self.handle_call(decorator_node.children[3], dec_name)
-			#self.pretty_print(decorator_node)
 			dec = self.handle_arglist(children[3])
 		return dec
 
@@ -789,83 +665,7 @@ class PythonASTBuilder:
 		# hand off to typedargs processing
 		args = self.handle_argslist(children[1])
 		return args
-		"""		
-		i = 0
-		child_count = len(children)
-		defaults = []
-		args = []
-		variable_arg = None
-		keywords_arg = None
-		have_default = False
-		while i < child_count:
-			argument = children[i]
-			arg_type = argument.type
-			if arg_type == self.syms.fpdef:
-				while True:
-					if i + 1 < child_count and \
-							children[i + 1].type == self.tokens.EQUAL:
-						default_node = children[i + 2]
-						defaults.append(self.handle_expr(default_node))
-						i += 2
-						have_default = True
-					elif have_default:
-						msg = "non-default argument follows default argument"
-						self.error(msg, arguments_node)
-					if len(argument.children) == 3:
-						sub_arg = argument.children[1]
-						if len(sub_arg.children) != 1:
-							args.append(self.handle_arg_unpacking(sub_arg))
-						else:
-							argument = sub_arg.children[0]
-							continue
-					if argument.children[0].type == self.tokens.NAME:
-						name_node = argument.children[0]
-						arg_name = name_node.value
-						#self.check_forbidden_name(arg_name, name_node)
-						name = ast.Name(arg_name, ast.Param, name_node)
-						args.append(name)
-					i += 2
-					break
-			elif arg_type == self.tokens.STAR:
-				name_node = children[i + 1]
-				variable_arg = name_node.value
-				#self.check_forbidden_name(variable_arg, name_node)
-				i += 3
-			elif arg_type == self.tokens.DOUBLESTAR:
-				name_node = children[i + 1]
-				keywords_arg = name_node.value
-				#self.check_forbidden_name(keywords_arg, name_node)
-				i += 3
-			else:
-				raise AssertionError("unknown node in argument list")
-		if not defaults:
-			defaults = None
-		if not args:
-			args = None
-		return ast.arguments(args, variable_arg, None, keywords_arg, defaults)
-		"""
 
-	"""
-	def handle_arg_unpacking(self, fplist_node):
-		args = []
-		for i in range((len(fplist_node.children) + 1) // 2):
-			fpdef_node = fplist_node.children[i * 2]
-			while True:
-				child = fpdef_node.children[0]
-				if child.type == self.tokens.NAME:
-					arg = ast.Name(child.value, ast.Store, child)
-					args.append(arg)
-				else:
-					child = fpdef_node.children[1]
-					if len(child.children) == 1:
-						fpdef_node = child.children[0]
-						continue
-					args.append(self.handle_arg_unpacking(child))
-				break
-		tup = ast.Tuple(args, ast.Store, fplist_node)
-		self.set_context(tup, ast.Store)
-		return tup
-	"""
 	
 	def handle_argslist(self, argslist_node):
 		'''Both typedargslist and varargslist'''
@@ -946,63 +746,6 @@ class PythonASTBuilder:
 		return ast.arg(name, annotation, tfpdef_node)
 
 
-	def handle_stmt(self, stmt):
-		'''Dispatch to a more specific handler.'''
-		stmt_type = stmt.type
-		if stmt_type == self.syms.stmt:
-			stmt = stmt.children[0]
-			stmt_type = stmt.type
-		if stmt_type == self.syms.simple_stmt:
-			stmt = stmt.children[0]
-			stmt_type = stmt.type
-		if stmt_type == self.syms.small_stmt:
-			stmt = stmt.children[0]
-			stmt_type = stmt.type
-			if stmt_type == self.syms.expr_stmt:
-				return self.handle_expr_stmt(stmt)
-			elif stmt_type == self.syms.print_stmt:
-				return self.handle_print_stmt(stmt)
-			elif stmt_type == self.syms.del_stmt:
-				return self.handle_del_stmt(stmt)
-			elif stmt_type == self.syms.pass_stmt:
-				return ast.Pass(stmt)
-			elif stmt_type == self.syms.flow_stmt:
-				return self.handle_flow_stmt(stmt)
-			elif stmt_type == self.syms.import_stmt:
-				return self.handle_import_stmt(stmt)
-			elif stmt_type == self.syms.global_stmt:
-				return self.handle_global_stmt(stmt)
-			elif stmt_type == self.syms.nonlocal_stmt:
-				return self.handle_nonlocal_stmt(stmt)
-			elif stmt_type == self.syms.assert_stmt:
-				return self.handle_assert_stmt(stmt)
-			elif stmt_type == self.syms.exec_stmt:
-				return self.handle_exec_stmt(stmt)
-			else:
-				raise AssertionError("unhandled small statement")
-		elif stmt_type == self.syms.compound_stmt:
-			stmt = stmt.children[0]
-			stmt_type = stmt.type
-			if stmt_type == self.syms.if_stmt:
-				return self.handle_if_stmt(stmt)
-			elif stmt_type == self.syms.while_stmt:
-				return self.handle_while_stmt(stmt)
-			elif stmt_type == self.syms.for_stmt:
-				return self.handle_for_stmt(stmt)
-			elif stmt_type == self.syms.try_stmt:
-				return self.handle_try_stmt(stmt)
-			elif stmt_type == self.syms.with_stmt:
-				return self.handle_with_stmt(stmt)
-			elif stmt_type == self.syms.funcdef:
-				return self.handle_funcdef(stmt)
-			elif stmt_type == self.syms.classdef:
-				return self.handle_classdef(stmt)
-			elif stmt_type == self.syms.decorated:
-				return self.handle_decorated(stmt)
-			else:
-				raise AssertionError("unhandled compound statement")
-		else:
-			raise AssertionError("unknown statment type")
 
 
 	def handle_expr_stmt(self, stmt):
@@ -1059,9 +802,9 @@ class PythonASTBuilder:
 		while True:
 			children = self.children(expr_node)
 			expr_node_type = expr_node.type
-			if expr_node_type in (self.syms.test, self.syms.old_test, self.syms.test_nocond):
+			if expr_node_type in (self.syms.test, self.syms.test_nocond):
 				first_child = children[0]
-				if first_child.type in (self.syms.lambdef, self.syms.old_lambdef, self.syms.lambdef_nocond):
+				if first_child.type in (self.syms.lambdef, self.syms.lambdef_nocond):
 					return self.handle_lambdef(first_child)
 				elif len(children) > 1:
 					return self.handle_ifexp(expr_node)
