@@ -25,7 +25,6 @@ if __name__ == '__main__':
 		config.log.info(filename)
 		try:
 			unit = MelanoCodeUnit(config, filename)
-			unit.get_scopes()
 		except ParseError as ex:
 			try:
 				print(str(ex))

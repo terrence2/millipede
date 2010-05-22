@@ -2,8 +2,7 @@
 High level analytics for a single source file at a time.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
-
-from melano.parser.common.visitor import ASTVisitor
+from .utils.symopmap import SymbolOpMapBuilder
 import hashlib
 import os.path
 
@@ -18,25 +17,42 @@ class MelanoCodeUnit:
 		self.cachefile = self.config.get_cachefile(self.filename)
 		
 		# load on demand
-		self._ast = None		
+		self._ast = None
+		self._opmap = None
 
+
+	def __get_property(self, name, onfail):
+		'''Return the given property name, or call onfail if it's not present
+			currrently and cannot be gotten from an existing source.'''
+		if not getattr(self,name):
+			try:
+				self.thaw()
+				return getattr(self, name)
+			except (ImageOutOfDate, IOError):
+				pass
+			prop = onfail(self)
+			setattr(self, name, prop)
+			return prop
+		return getattr(self, name)
+		
 
 	@property
 	def ast(self):
-		if not self._ast:
-			try:
-				self.thaw()
-				return self._ast
-			except (ImageOutOfDate, IOError):
-				self.config.log.info("Parsing %s", os.path.basename(self.filename))
+		def get_ast(self):
+			self.config.log.info("Parsing: %s", os.path.basename(self.filename))
 			parser = self.config.interpreters['3.1'].parser
-			self._ast = parser.parse_file(self.filename)
-		return self._ast
+			return parser.parse_file(self.filename)
+		return self.__get_property('_ast', get_ast)
 
 
-	def get_scopes(self):
-		visitor = ASTVisitor()
-		visitor.visit(self.ast)
+	@property
+	def opmap(self):
+		def get_opmap(self):
+			self.config.log.info("Building OpMap: %s", os.path.basename(self.filename))
+			visitor = SymbolOpMapBuilder()
+			visitor.visit(self.ast)
+			return visitor.opmap
+		return self.__get_property('_opmap', get_opmap)
 
 
 	def freeze(self):
@@ -52,6 +68,7 @@ class MelanoCodeUnit:
 		if real_md5 != parts['md5']:
 			raise ImageOutOfDate()
 		self._ast = parts['ast']
+
 
 
 
