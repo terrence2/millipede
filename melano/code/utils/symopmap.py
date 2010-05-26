@@ -47,6 +47,8 @@ class SymbolOpMap(metaclass=fwddecl):
 			act = ' <- '
 			if sym.op == Load:
 				act = ' -> '
+			elif sym.op == Del:
+				act = ' x '
 			# build the action string
 			out += pad + sym.name + act + res.__class__.__name__ + '\n'
 			# recurse if needed
