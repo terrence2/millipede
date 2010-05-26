@@ -178,6 +178,26 @@ class SymbolOpMapBuilder(ASTVisitor):
 		self.context.update(sym, scope)
 		self.context = scope
 
+		# the arg definitions are made in the new scope
+		if node.args.args:
+			for arg in node.args.args:
+				#FIXME: arg names needs to be a Name, not a str
+				arg_sym = SymbolAction(arg.arg, Store)
+				self.context.update(arg_sym, node)
+		if node.args.vararg:
+			#FIXME: vararg name needs to be a Name, not a str
+			var_sym = SymbolAction(node.args.vararg, Store)
+			self.context.update(var_sym, node)
+		if node.args.kwonlyargs:
+			for arg in node.args.kwonlyargs:
+				#FIXME: arg names needs to be a Name, not a str
+				arg_sym = SymbolAction(arg.arg, Store)
+				self.context.update(arg_sym, node)
+		if node.args.kwarg:
+			#FIXME: kwarg name needs to be a Name, not a str
+			kw_sym = SymbolAction(node.args.kwarg, Store)
+			self.context.update(kw_sym, node)
+		
 		# evaluate function body
 		for stmt in node.body:
 			self.visit(stmt)
