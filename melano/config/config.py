@@ -19,7 +19,7 @@ class MelanoConfig:
 			directory, if possible.'''
 		# log target
 		self.log = logging.getLogger("Melano")
-		self.log.setLevel(logging.DEBUG)
+		self.log.setLevel(logging.INFO)
 		self.log.addHandler(logging.StreamHandler(sys.stdout))
 
 		# discover the config directory
