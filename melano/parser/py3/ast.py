@@ -2,7 +2,7 @@
 All AST nodes.  Built manually from inspection of:
    http://docs.python.org/py3k/library/ast.html
 '''
-from melano.parser.common.ast import AST
+from melano.parser.common.ast import *
 
 ### Base Class
 
