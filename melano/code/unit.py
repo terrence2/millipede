@@ -13,6 +13,7 @@ class ImageOutOfDate(Exception): pass
 class MelanoCodeUnit:
 	def __init__(self, config, filename):
 		self.config = config
+		self.raw_filename = filename
 		self.filename = os.path.realpath(filename)
 		self.cachefile = self.config.get_cachefile(self.filename)
 		
