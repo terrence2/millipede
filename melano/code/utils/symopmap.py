@@ -153,19 +153,24 @@ class SymbolOpMapBuilder(ASTVisitor):
 		# annotations and defaults are evaluated in enclosing context
 		if node.returns:
 			self.visit(node.returns)
-		for arg in node.args.args:
-			if arg.annotation:
-				self.visit(arg.annotation)
+		if node.args.args:
+			for arg in node.args.args:
+				if arg.annotation:
+					self.visit(arg.annotation)
 		if node.args.varargannotation:
 			self.visit(node.args.varargannotation)
-		for arg in node.args.kwonlyargs:
-			self.visit(arg.annotation)
+		if node.args.kwonlyargs:
+			for arg in node.args.kwonlyargs:
+				if arg.annotation:
+					self.visit(arg.annotation)
 		if node.args.kwargannotation:
 			self.visit(node.args.kwargannotation)
-		for expr in node.args.defaults:
-			self.visit(expr)
-		for expr in node.args.kw_defaults:
-			self.visit(expr)
+		if node.args.defaults:
+			for expr in node.args.defaults:
+				self.visit(expr)
+		if node.args.kw_defaults:
+			for expr in node.args.kw_defaults:
+				self.visit(expr)
 
 		# push the function scope
 		self.context.update(sym, scope)
