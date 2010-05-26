@@ -39,7 +39,7 @@ class MelanoCodeUnit:
 	@property
 	def ast(self):
 		def get_ast(self):
-			self.config.log.info("Parsing: %s", os.path.basename(self.filename))
+			self.config.log.debug("Parsing: %s", os.path.basename(self.filename))
 			parser = self.config.interpreters['3.1'].parser
 			return parser.parse_file(self.filename)
 		return self.__get_property('_ast', get_ast)
@@ -48,7 +48,7 @@ class MelanoCodeUnit:
 	@property
 	def opmap(self):
 		def get_opmap(self):
-			self.config.log.info("Building OpMap: %s", os.path.basename(self.filename))
+			self.config.log.debug("Building OpMap: %s", os.path.basename(self.filename))
 			visitor = SymbolOpMapBuilder()
 			visitor.visit(self.ast)
 			return visitor.opmap
