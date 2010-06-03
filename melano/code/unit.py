@@ -3,6 +3,7 @@ High level analytics for a single source file at a time.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 from .utils.symopmap import SymbolOpMapBuilder
+from collections import Callable
 import hashlib
 import os.path
 
@@ -11,7 +12,7 @@ class ImageOutOfDate(Exception): pass
 
 
 class MelanoCodeUnit:
-	def __init__(self, config, filename):
+	def __init__(self, config, filename:str):
 		self.config = config
 		self.raw_filename = filename
 		self.filename = os.path.realpath(filename)
@@ -22,7 +23,7 @@ class MelanoCodeUnit:
 		self._opmap = None
 
 
-	def __get_property(self, name, onfail):
+	def __get_property(self, name:str, onfail:Callable):
 		'''Return the given property name, or call onfail if it's not present
 			currrently and cannot be gotten from an existing source.'''
 		if not getattr(self,name):

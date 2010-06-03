@@ -5,18 +5,26 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano import VERSION
 from melano.config.python_language import PythonLanguage
+from melano.config.project.project import MelanoProject
 import hashlib
 import logging
+import optparse
 import os
 import os.path
 import sys
 
 
 class MelanoConfig:
-	def __init__(self, basedir:str=''):
+	def __init__(self, basedir:str='', mode:str='lint'):
 		'''Set default configuration.  Do a 'thaw' to restore from an existing
 			configuration for the current user or given configuration 
-			directory, if possible.'''
+			directory, if possible.
+			
+			mode:str -- one of 'lint' or 'ide'
+		'''
+		# global mode switch
+		self.mode = mode
+
 		# log target
 		self.log = logging.getLogger("Melano")
 		self.log.setLevel(logging.INFO)
@@ -50,6 +58,16 @@ class MelanoConfig:
 		self.interpreters = {
 			'3.1': PythonLanguage(self, '3.1')
 		}
+
+		# parse the commandline
+		cliparse = optparse.OptionParser()
+		cliparse.add_option('-p', '--project', default=None, dest="project", 
+					metavar="PROJECT", help="The project to load.")
+		options, self.args = cliparse.parse_args()
+
+		# the project option
+		project_name = options.project or (self.mode + '-default')
+		self.project = MelanoProject(self, project_name)
 
 
 	def thaw(self):

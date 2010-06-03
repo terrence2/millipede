@@ -7,26 +7,20 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 
 if __name__ == '__main__':
-	import optparse
 	import os
 	import sys
 	from melano.config.config import MelanoConfig
-	from melano.code.unit import MelanoCodeUnit
 	from melano.parser.pgen.parser import ParseError
 	from melano.lint import lint, report
-
-	# parse the command line
-	parser = optparse.OptionParser('melinto')
-	options, args = parser.parse_args()
 
 	# load the configuration
 	config = MelanoConfig()
 
-	def lint_one_file(filename):
-		config.log.info(filename)
+	def lint_one_unit(unit):
+		config.log.info(unit.filename)
 
 		try:
-			unit = MelanoCodeUnit(config, filename)
+			msgs = lint(unit)
 		except ParseError as ex:
 			try:
 				print(str(ex))
@@ -35,7 +29,6 @@ if __name__ == '__main__':
 			sys.exit(1)
 		
 		# do the main linting business
-		msgs = lint(unit)
 		for msg in msgs:
 			report(config, unit, msg)
 
@@ -47,14 +40,16 @@ if __name__ == '__main__':
 
 	# lint each file from the command line
 	count = 0
-	for filename in args:
-		if os.path.isdir(filename):
-			for root, dirs, files in os.walk(filename):
-				for name in files:
-					if name.endswith('.py'):
-						count += lint_one_file(os.path.join(root, name))
-		else:
-			count += lint_one_file(filename)
+	for modname, unit in config.project.units.items():
+		count += lint_one_unit(unit)
+		#name = unit.filename
+		#if os.path.isdir(filename):
+		#	for root, dirs, files in os.walk(filename):
+		#		for name in files:
+		#			if name.endswith('.py'):
+		#				count += lint_one_file(os.path.join(root, name))
+		#else:
+		#	count += lint_one_file(filename)
 	
 
 	print()
