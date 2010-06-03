@@ -26,7 +26,7 @@ class MelanoConfig:
 		self.base_dir = basedir
 		if not basedir:
 			self.base_dir = os.path.join(os.path.expanduser('~'), 
-						'.config', 'melinto')
+						'.config', 'melano')
 
 		# build all configuration directories
 		self.projects_dir = os.path.join(self.base_dir, 'projects')
