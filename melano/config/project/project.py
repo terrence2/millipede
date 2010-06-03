@@ -19,6 +19,7 @@ class MelanoProject:
 		self.project_dir = os.path.join(self.config.projects_dir, self.name)
 		
 		self.base_dir = None
+		self.run_dir = None
 		self.units = {}
 
 		self.thaw()
