@@ -6,6 +6,7 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 from melano import VERSION
 from melano.config.python_language import PythonLanguage
 from melano.config.project.project import MelanoProject
+from melano.config.project.lint_default import LintDefaultProject
 import hashlib
 import logging
 import optparse
@@ -66,8 +67,10 @@ class MelanoConfig:
 		options, self.args = cliparse.parse_args()
 
 		# the project option
-		project_name = options.project or (self.mode + '-default')
-		self.project = MelanoProject(self, project_name)
+		if options.project:
+			self.project = MelanoProject(self, project_name)
+		else:
+			self.project = LintDefaultProject(self, self.mode + '-default')
 
 
 	def thaw(self):

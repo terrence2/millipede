@@ -42,14 +42,6 @@ if __name__ == '__main__':
 	count = 0
 	for modname, unit in config.project.units.items():
 		count += lint_one_unit(unit)
-		#name = unit.filename
-		#if os.path.isdir(filename):
-		#	for root, dirs, files in os.walk(filename):
-		#		for name in files:
-		#			if name.endswith('.py'):
-		#				count += lint_one_file(os.path.join(root, name))
-		#else:
-		#	count += lint_one_file(filename)
 	
 
 	print()
