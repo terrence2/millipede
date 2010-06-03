@@ -4,7 +4,7 @@ Check that method have annotations.
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano.parser.common.visitor import ASTVisitor 
-from melano.lint.message import LintWarning
+from melano.lint.message import LintStyle
 
 def analyse(unit):
 
@@ -26,14 +26,14 @@ def analyse(unit):
 					first = False
 					if not arg.annotation:
 						self.messages.append(
-							LintWarning("argument '{}' missing annotation".format(arg.arg), 
+							LintStyle("argument '{}' missing annotation".format(arg.arg), 
 								node.name, arg))
 
 			if node.args.kwonlyargs:
 				for arg in node.args.kwonlyargs:
 					if not arg.annotation:
 						self.messages.append(
-							LintWarning("argument '{}' missing annotation".format(arg.arg), 
+							LintStyle("argument '{}' missing annotation".format(arg.arg), 
 								node.name, arg))
 
 			# scan for return stmts in the body
@@ -42,7 +42,7 @@ def analyse(unit):
 
 			# lower investigation should have revealed if we have a return value
 			if self.has_return_value and not node.returns:
-				self.messages.append(LintWarning('missing return type annotation', 
+				self.messages.append(LintStyle('missing return type annotation', 
 						node.name, node))
 
 	visitor = AnnotationDetector()

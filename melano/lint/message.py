@@ -9,12 +9,6 @@ class LintMessage:
 		self.location = location
 		self.context = context
 
-	#def report(self, log):
-	#	fn = log.info
-	#	if self.level == 'warning': fn = log.warning
-	#	elif self.level == 'error': fn = log.error
-	#	fn("{} @ line: {} col: {} -> {}".format(self.msg_name, self.context.startpos[0], self.context.startpos[1], self.context.endpos))
-	
 
 class LintError(LintMessage):
 	def __init__(self, *args, **kwargs):
@@ -26,3 +20,6 @@ class LintWarning(LintMessage):
 		super().__init__('warning', *args, **kwargs)
 
 
+class LintStyle(LintMessage):
+	def __init__(self, *args, **kwargs):
+		super().__init__('coding', *args, **kwargs)
