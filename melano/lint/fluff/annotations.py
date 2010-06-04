@@ -3,49 +3,29 @@ Check that method have annotations.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
-from melano.parser.common.visitor import ASTVisitor 
-from melano.lint.message import LintStyle
+from melano.lint.message import C0113, C0114
+
+MESSAGES = {C0113, C0114}
 
 def analyse(unit):
+	for block in unit.bst.all_functions + unit.bst.all_methods:
+		node = block.ast
+		if node.args.args:
+			first = True
+			for arg in node.args.args:
+				if first and arg.arg == 'self':
+					continue
+				first = False
+				if not arg.annotation:
+					yield C0113(arg, node.name, arg.arg)
 
-	class AnnotationDetector(ASTVisitor):
-		def __init__(self):
-			self.messages = []
-			self.has_return_value = False
-	
-		def visit_Return(self, node):
-			if node.value is not None:
-				self.has_return_value = True
-	
-		def visit_FunctionDef(self, node):
-			if node.args.args:
-				first = True
-				for arg in node.args.args:
-					if first and arg.arg == 'self':
-						continue
-					first = False
-					if not arg.annotation:
-						self.messages.append(
-							LintStyle("argument '{}' missing annotation".format(arg.arg), 
-								node.name, arg))
+		if node.args.kwonlyargs:
+			for arg in node.args.kwonlyargs:
+				if not arg.annotation:
+					yield C0113(arg, node.name, arg.arg)
 
-			if node.args.kwonlyargs:
-				for arg in node.args.kwonlyargs:
-					if not arg.annotation:
-						self.messages.append(
-							LintStyle("argument '{}' missing annotation".format(arg.arg), 
-								node.name, arg))
+		for rv_node in block.returns:
+			if rv_node.value is not None and not node.returns:
+				yield C0114(node.returns, node.name)
 
-			# scan for return stmts in the body
-			for stmt in node.body:
-				self.visit(stmt)
-
-			# lower investigation should have revealed if we have a return value
-			if self.has_return_value and not node.returns:
-				self.messages.append(LintStyle('missing return type annotation', 
-						node.name, node))
-
-	visitor = AnnotationDetector()
-	visitor.visit(unit.ast)
-	return visitor.messages
 

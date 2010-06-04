@@ -2,24 +2,21 @@
 Defines an output from the linter.
 '''
 
-class LintMessage:
-	def __init__(self, level:str, msg_name:str, location:str, context):
-		self.level = level
-		self.msg_name = msg_name
-		self.location = location
+class Message:
+	def __init__(self, context, location=None, *args):
 		self.context = context
+		self.location = location
+		self.extra = args
 
+class C0111(Message):
+	'''Missing docstring'''
 
-class LintError(LintMessage):
-	def __init__(self, *args, **kwargs):
-		super().__init__('error', *args, **kwargs)
+class C0112(Message):
+	'''Empty docstring'''
 
+class C0113(Message):
+	'''Missing argument annotation: '{}' '''
 
-class LintWarning(LintMessage):
-	def __init__(self, *args, **kwargs):
-		super().__init__('warning', *args, **kwargs)
+class C0114(Message):
+	'''Missing return annotation'''
 
-
-class LintStyle(LintMessage):
-	def __init__(self, *args, **kwargs):
-		super().__init__('coding', *args, **kwargs)

@@ -6,7 +6,7 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from .common import FluffTestBase
 from ..annotations import analyse
-
+from melano.lint.message import C0113, C0114
 
 class TestLintAnnotations(FluffTestBase):
 	def test_annotations(self):
@@ -15,6 +15,7 @@ def foo(a, b, c):
 	return 'foo'
 '''
 		with self.create('ann', prog) as unit:
-			messages = analyse(unit)
+			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 4)
+
 
