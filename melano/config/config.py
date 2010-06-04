@@ -68,7 +68,7 @@ class MelanoConfig:
 
 		# the project option
 		if options.project:
-			self.project = MelanoProject(self, project_name)
+			self.project = MelanoProject(self, options.project)
 		else:
 			self.project = LintDefaultProject(self, self.mode + '-default')
 
