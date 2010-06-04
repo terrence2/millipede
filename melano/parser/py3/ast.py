@@ -331,6 +331,9 @@ class Attribute(expr):
 		self.value = value
 		self.attr = attr
 		self.ctx = ctx
+	
+	def __str__(self):
+		return str(self.value) + '.' + self.attr
 
 #| BinOp(expr left, operator op, expr right)
 class BinOp(expr):
@@ -459,6 +462,9 @@ class Name(expr):
 		super().__init__(*args, **kwargs)
 		self.id = _id
 		self.ctx = ctx
+	
+	def __str__(self):
+		return self.id
 
 #| Num(object n) -- a number as a PyObject.
 class Num(expr):
