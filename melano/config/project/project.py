@@ -47,7 +47,7 @@ class MelanoProject:
 		self.run_dir = parser.get('project', 'run_dir')
 		if self.run_dir.startswith('/'):
 			self.run_dir = os.path.realpath(self.run_dir)
-		self.run_dir = os.path.join(self.base_dir, self.run_dir)
+		self.run_dir = os.path.realpath(os.path.join(self.base_dir, self.run_dir))
 
 		# source directories
 		srcdirs = []
