@@ -2,6 +2,7 @@
 High level analytics for a single source file at a time.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
+from .bst.bstbuilder import BSTBuilder
 from .utils.symopmap import SymbolOpMapBuilder
 from collections import Callable
 import hashlib
@@ -20,6 +21,7 @@ class MelanoCodeUnit:
 		
 		# load on demand
 		self._ast = None
+		self._bst = None
 		self._opmap = None
 
 
@@ -45,6 +47,16 @@ class MelanoCodeUnit:
 			parser = self.config.interpreters['3.1'].parser
 			return parser.parse_file(self.filename)
 		return self.__get_property('_ast', get_ast)
+
+	
+	@property
+	def bst(self):
+		def get_bst(self):
+			self.config.log.debug("Building BST: %s", os.path.basename(self.filename))
+			builder = BSTBuilder()
+			builder.visit(self.ast)
+			return builder.bst
+		return self.__get_property('_bst', get_bst)
 
 
 	@property
