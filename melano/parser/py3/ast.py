@@ -470,8 +470,8 @@ class Num(expr):
 
 #| Set(expr* elts)
 class Set(expr):
-	_fields = ('elts')
-	__slots__ = ('elts')
+	_fields = ('elts',)
+	__slots__ = ('elts',)
 	def __init__(self, elts, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.elts = elts
