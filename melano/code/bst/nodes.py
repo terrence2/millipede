@@ -33,6 +33,9 @@ class ModuleBlock(BST):
 		self.all_functions = []
 		self.all_methods = []
 		self.all_classes = []
+		
+		# track all return/yield outside of function context
+		self.all_invalid = []
 
 	def print_(self):
 		print("Imports:")

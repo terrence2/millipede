@@ -71,6 +71,8 @@ class BSTBuilder(ASTVisitor):
 	def visit_Return(self, node):
 		if hasattr(self.context, 'returns'):
 			self.context.returns.append(node)
+		else:
+			self.bst.all_invalid.append(node)
 
 
 	def visit_Raise(self, node):
@@ -81,4 +83,6 @@ class BSTBuilder(ASTVisitor):
 	def visit_Yield(self, node):
 		if hasattr(self.context, 'yields'):
 			self.context.yields.append(node)
+		else:
+			self.bst.all_invalid.append(node)
 
