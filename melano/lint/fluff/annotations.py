@@ -11,11 +11,10 @@ def analyse(unit):
 	for block in unit.bst.all_functions + unit.bst.all_methods:
 		node = block.ast
 		if node.args.args:
-			first = True
-			for arg in node.args.args:
-				if first and arg.arg == 'self':
-					continue
-				first = False
+			arglist = node.args.args
+			if block in unit.bst.all_methods:
+				arglist = node.args.args[1:]
+			for arg in arglist:
 				if not arg.annotation:
 					yield C0113(arg, node.name, arg.arg)
 
