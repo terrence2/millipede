@@ -26,6 +26,6 @@ def analyse(unit):
 
 		for rv_node in block.returns:
 			if rv_node.value is not None and not node.returns:
-				yield C0114(node.returns, node.name)
+				yield C0114(rv_node, node.name)
 
 
