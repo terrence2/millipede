@@ -9,4 +9,5 @@ from melano.lint.fluff.test.test_docstrings import TestLintDocstrings
 from melano.lint.fluff.test.test_methodargs import TestLintMethodArgs
 from melano.lint.fluff.test.test_classinit import TestLintClassInit
 from melano.lint.fluff.test.test_generator import TestLintGenerator
+from melano.lint.fluff.test.test_returns import TestLintReturns
 
