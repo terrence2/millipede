@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 '''
 melinto.py
-	Lint a python source file.
+	Run melano's linting backend detached from the GUI.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
