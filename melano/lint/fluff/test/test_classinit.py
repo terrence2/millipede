@@ -22,7 +22,7 @@ class Foo:
 	def bar(self):
 		return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('cls', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 0)
 
@@ -33,7 +33,7 @@ class Foo:
 	def __init__(self):
 		yield 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('cls', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 1)
 		self.assertSameElements([E0100], [m.__class__ for m in messages])

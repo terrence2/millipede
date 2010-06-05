@@ -18,7 +18,7 @@ def foo(a, b, c):
 def bar(a, b, c):
 	yield 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('gen', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 0)
 	
@@ -33,7 +33,7 @@ def bar(a, b, c):
 	return 'foo'
 	yield 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('gen', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([E0106]*2, [m.__class__ for m in messages])

@@ -19,7 +19,7 @@ from foo import bar
 import bar
 a = 2 + 2
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('imp', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 0)
 
@@ -30,7 +30,7 @@ from bar import *
 def foo():
 	from baz import *
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('imp', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([W0401]*2, [m.__class__ for m in messages])
@@ -41,7 +41,7 @@ def foo():
 from bar import baz
 from __future__ import foo
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('imp', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 1)
 		self.assertSameElements([W0410], [m.__class__ for m in messages])

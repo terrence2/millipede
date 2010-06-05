@@ -24,7 +24,7 @@ class Foo:
 	def bas(a, b, c):
 		return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('marg', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 0)
 
@@ -38,7 +38,7 @@ class Foo:
 	def baz():
 		return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('marg', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([C0201, E0201], [m.__class__ for m in messages])
@@ -55,7 +55,7 @@ class Foo:
 	def baz():
 		return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('marg', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([C0202, E0202], [m.__class__ for m in messages])
@@ -72,7 +72,7 @@ class Foo:
 	def bar(cls, a, b, c):
 		return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('marg', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([C0203] * 2, [m.__class__ for m in messages])

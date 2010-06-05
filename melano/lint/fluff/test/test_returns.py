@@ -18,7 +18,7 @@ def foo(a, b, c):
 def foo(a, b, c):
 	yield 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('ret', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 0)
 	
@@ -30,7 +30,7 @@ class Foo:
 	return 'foo'
 	yield 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('ret', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 4)
 		self.assertSameElements([E0104, E0104, E0105, E0105], [m.__class__ for m in messages])

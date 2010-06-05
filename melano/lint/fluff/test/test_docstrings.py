@@ -14,28 +14,29 @@ class TestLintDocstrings(FluffTestBase):
 		prog = '''# this is an initial comment
 a = 2 * 2
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 1)
 		self.assertSameElements([C0111]*1, [m.__class__ for m in messages])
+
 
 	def test_module_empty_docstring(self):
 		prog = '''# this is an initial comment
 ""
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 1)
 		self.assertSameElements([C0112]*1, [m.__class__ for m in messages])
+
 
 	def test_module_ok_docstring(self):
 		prog = '''# this is an initial comment
 "the docstring"
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 0)
-
 
 
 	def test_func_docstring(self):
@@ -43,10 +44,11 @@ a = 2 * 2
 def foo(a:int, b:int, c:int) -> str:
 	return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([C0111]*2, [m.__class__ for m in messages])
+
 
 	def test_func_empty_docstring(self):
 		prog = '''""
@@ -54,7 +56,7 @@ def foo(a:int, b:int, c:int) -> str:
 	''
 	return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([C0112]*2, [m.__class__ for m in messages])
@@ -64,7 +66,7 @@ def foo(a:int, b:int, c:int) -> str:
 	'hello world'
 	return 'foo'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 1)
 		self.assertSameElements([C0111]*1, [m.__class__ for m in messages])
@@ -75,7 +77,7 @@ def foo(a:int, b:int, c:int) -> str:
 class Foo:
 	pass
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([C0111]*2, [m.__class__ for m in messages])
@@ -88,7 +90,7 @@ class Foo:
 	""
 	pass
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([C0112]*2, [m.__class__ for m in messages])
@@ -99,7 +101,7 @@ class Foo:
 class Foo:
 	'hello world'
 '''
-		with self.create('ann', prog) as unit:
+		with self.create('doc', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 1)
 		self.assertSameElements([C0111]*1, [m.__class__ for m in messages])
