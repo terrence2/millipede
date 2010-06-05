@@ -50,4 +50,9 @@ class E0105(Message):
 class E0106(Message):
 	'''Return with argument inside generator'''
 
+class W0401(Message):
+	'''Wildcard import {}'''
+
+class W0410(Message):
+	'''__future__ import is not the first non docstring statement'''
 
