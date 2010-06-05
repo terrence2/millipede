@@ -1,6 +1,7 @@
 '''
 Stores all per-project variables, or passes through to the parent project.
 '''
+__author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano.code.unit import MelanoCodeUnit
 from configparser import ConfigParser
