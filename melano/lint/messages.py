@@ -41,3 +41,7 @@ class E0100(Message):
 class E0101(Message):
 	'''Explicit return in __init__'''
 
+class E0106(Message):
+	'''Return with argument inside generator'''
+
+
