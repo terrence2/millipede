@@ -3,7 +3,7 @@ Check that modules, classes, and functions have docstrings.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
-from melano.lint.message import C0111, C0112
+from melano.lint.messages import C0111, C0112
 
 MESSAGES = {C0111, C0112}
 

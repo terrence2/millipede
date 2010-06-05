@@ -6,7 +6,7 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from .common import FluffTestBase
 from ..docstrings import analyse
-from melano.lint.message import C0111, C0112
+from melano.lint.messages import C0111, C0112
 
 
 class TestLintDocstrings(FluffTestBase):

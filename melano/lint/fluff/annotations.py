@@ -3,7 +3,7 @@ Check that method have annotations.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
-from melano.lint.message import C0113, C0114
+from melano.lint.messages import C0113, C0114
 
 MESSAGES = {C0113, C0114}
 

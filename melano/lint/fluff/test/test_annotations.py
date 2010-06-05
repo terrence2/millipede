@@ -6,7 +6,7 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from .common import FluffTestBase
 from ..annotations import analyse
-from melano.lint.message import C0113, C0114
+from melano.lint.messages import C0113, C0114
 
 
 class TestLintAnnotations(FluffTestBase):
