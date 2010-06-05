@@ -25,6 +25,7 @@ class BST:
 class ModuleBlock(BST):
 	def __init__(self, ast:AST):
 		super().__init__(ast)
+		self.futures = []
 		self.imports = []
 		self.functions = []
 		self.classes = []

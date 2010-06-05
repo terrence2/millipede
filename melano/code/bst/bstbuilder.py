@@ -17,9 +17,27 @@ class BSTBuilder(ASTVisitor):
 		assert self.bst is None
 		self.bst = ModuleBlock(node)
 		self.context = self.bst
-		
-		for stmt in node.body:
-			self.visit(stmt)
+
+		# Scan module def for valid future statements.
+		# valid things that can come before a future are:
+		#    * the module docstring (if any),
+		#    * comments,
+		#    * blank lines, and
+		#    * other future statements.
+		to_scan = node.body
+		if self.bst.docstring:
+			to_scan = node.body[1:]
+		futures_finished = False
+		for stmt in to_scan:
+			if not futures_finished:
+				if stmt.__class__.__name__ == 'ImportFrom' and \
+						str(stmt.module) == '__future__':
+					self.bst.futures.append(stmt)
+				else:
+					futures_finished = True
+					self.visit(stmt)
+			else:
+				self.visit(stmt)
 
 
 	def visit_Import(self, node):
