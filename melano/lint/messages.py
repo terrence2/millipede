@@ -35,3 +35,9 @@ class E0202(Message):
 class C0203(Message):
 	'''Static methods should not have first parameter 'cls' or 'self' '''
 
+class E0100(Message):
+	'''__init__ method is a generator'''
+
+class E0101(Message):
+	'''Explicit return in __init__'''
+
