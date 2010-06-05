@@ -5,13 +5,12 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano.code.unit import MelanoCodeUnit
 from melano.config.config import MelanoConfig
+from melano.test.filebased import FileBasedTest
 from contextlib import contextmanager
 import os
-import tempfile
-import unittest
 
 
-class FluffTestBase(unittest.TestCase):
+class FluffTestBase(FileBasedTest):
 	def setUp(self):
 		self.config = MelanoConfig()
 
@@ -24,10 +23,6 @@ class FluffTestBase(unittest.TestCase):
 
 	@contextmanager
 	def create(self, name, code):
-		fd, fn = tempfile.mkstemp('.py', 'melinto-' + name)
-		with open(fd, 'wt', encoding='utf-8') as fp:
-			fp.write(code)
-		unit = MelanoCodeUnit(self.config, fn)
-		yield unit
-		os.unlink(fn)
+		with super().create(name, code) as fn:
+			yield MelanoCodeUnit(self.config, fn)
 
