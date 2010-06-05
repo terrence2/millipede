@@ -17,7 +17,7 @@ class BST:
 		if len(ast.body) > 0 and \
 			ast.body[0].__class__.__name__ == 'Expr' and \
 			ast.body[0].value.__class__.__name__ == 'Str':
-			self.docstring = ast.body[0].value.s
+			self.docstring = ast.body[0].value.s.strip('\'').strip("\"")
 		else:
 			self.docstring = None
 
