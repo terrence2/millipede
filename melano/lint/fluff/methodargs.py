@@ -3,9 +3,9 @@ Check that method arguments do not violate naming conventions.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
-from melano.lint.messages import C0201, C0202, C0203
+from melano.lint.messages import C0201, E0201, C0202, E0202, C0203
 
-MESSAGES = {C0201, C0202, C0203}
+MESSAGES = {C0201, E0201, C0202, E0202, C0203}
 
 def analyse(unit):
 	for block in unit.bst.all_methods:
@@ -17,13 +17,13 @@ def analyse(unit):
 
 		if not is_static and not is_cls:
 			if not block.ast.args.args or len(block.ast.args.args) == 0:
-				yield C0201(block.ast)
+				yield E0201(block.ast)
 			elif block.ast.args.args[0].arg != 'self':
 				yield C0201(block.ast.args.args[0])
 
 		elif is_cls:
 			if not block.ast.args.args or len(block.ast.args.args) == 0:
-				yield C0202(block.ast)
+				yield E0202(block.ast)
 			elif block.ast.args.args[0].arg != 'cls':
 				yield C0202(block.ast.args.args[0])
 

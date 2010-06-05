@@ -1,12 +1,12 @@
 '''
-Tests for the annotations fluff.
+Tests for method argument fluff.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 
 from .common import FluffTestBase
 from ..methodargs import analyse
-from melano.lint.messages import C0201, C0202, C0203
+from melano.lint.messages import C0201, E0201, C0202, E0202, C0203
 
 
 class TestLintMethodArgs(FluffTestBase):
@@ -41,7 +41,7 @@ class Foo:
 		with self.create('ann', prog) as unit:
 			messages = list(analyse(unit))
 		self.assertEqual(len(messages), 2)
-		self.assertSameElements([C0201] * 2, [m.__class__ for m in messages])
+		self.assertSameElements([C0201, E0201], [m.__class__ for m in messages])
 
 
 	def test_class_method(self):
@@ -50,11 +50,15 @@ class Foo:
 	@classmethod
 	def bar(a, b, c):
 		return 'foo'
+
+	@classmethod
+	def baz():
+		return 'foo'
 '''
 		with self.create('ann', prog) as unit:
 			messages = list(analyse(unit))
-		self.assertEqual(len(messages), 1)
-		self.assertSameElements([C0202], [m.__class__ for m in messages])
+		self.assertEqual(len(messages), 2)
+		self.assertSameElements([C0202, E0202], [m.__class__ for m in messages])
 
 
 	def test_static_method(self):

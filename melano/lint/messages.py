@@ -23,8 +23,14 @@ class C0114(Message):
 class C0201(Message):
 	'''Methods should have first parameter 'self' '''
 
+class E0201(Message):
+	'''Method with no arguments'''
+
 class C0202(Message):
 	'''Class methods should have first parameter 'cls' '''
+
+class E0202(Message):
+	'''Class method with no arguments'''
 
 class C0203(Message):
 	'''Static methods should not have first parameter 'cls' or 'self' '''
