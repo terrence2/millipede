@@ -9,6 +9,7 @@ from .nodes import ModuleBlock, FunctionBlock, ClassBlock
 
 class BSTBuilder(ASTVisitor):
 	def __init__(self):
+		super().__init__()
 		self.bst = None
 		self.context = None
 
