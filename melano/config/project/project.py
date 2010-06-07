@@ -22,8 +22,13 @@ class MelanoProject:
 		self.base_dir = None
 		self.run_dir = None
 		self.units = {}
+		self.lint_masks = set()
 
 		self.thaw()
+
+
+	def lint_message_is_masked(self, name:str):
+		return name in self.lint_masks
 
 
 	def freeze(self):
@@ -71,4 +76,9 @@ class MelanoProject:
 						unit = MelanoCodeUnit(self.config, src)
 						self.units[src_modname] = unit
 
+		# lint message masking
+		for name, value in parser.items('lint'):
+			val = value.lower()
+			if val == 'off' or val == 'no' or val == '0':
+				self.lint_masks.add(name.upper())
 
