@@ -756,7 +756,7 @@ class PythonASTBuilder:
 		elif children[1].type == self.syms.augassign:
 			target_child = children[0]
 			target_expr = self.handle_testlist(target_child)
-			self.set_context(target_expr, ast.Store)
+			self.set_context(target_expr, ast.Aug)
 			value_child = children[2]
 			if value_child.type == self.syms.testlist:
 				value_expr = self.handle_testlist(value_child)

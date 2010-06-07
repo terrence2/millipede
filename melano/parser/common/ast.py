@@ -18,6 +18,7 @@ Del = 2
 AugLoad = 3
 AugStore = 4
 Param = 5
+Aug = 6
 
 
 ### BinOperator Types
