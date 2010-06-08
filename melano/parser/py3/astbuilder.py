@@ -200,7 +200,7 @@ class PythonASTBuilder:
 		if children[at].type == self.syms.import_as_names:
 			names = self.handle_import_as_names(children[at])
 		elif children[at].type == self.tokens.STAR:
-			names = [ast.alias("*", None)]
+			names = [ast.alias(ast.Name("*", ast.Load, children[at]), None)]
 		else:
 			assert children[at].type == self.tokens.LPAR
 			assert children[-1].type == self.tokens.RPAR
@@ -222,12 +222,12 @@ class PythonASTBuilder:
 	def handle_import_as_name(self, import_as_name):
 		children = self.children(import_as_name)
 		assert children[0].type == self.tokens.NAME
-		name = children[0].value
-		asname = ''
+		name = ast.Name(children[0].value, ast.Aug, children[0])
+		asname = None
 		if len(children) > 1:
 			assert children[1].value == 'as'
 			assert children[2].type == self.tokens.NAME
-			asname = children[2].value
+			asname = ast.Name(children[2].value, ast.Store, children[2])
 		return ast.alias(name, asname)
 
 
@@ -244,11 +244,11 @@ class PythonASTBuilder:
 	def handle_dotted_as_name(self, dotted_as_name):
 		children = self.children(dotted_as_name)
 		name = self.handle_dotted_name(children[0])
-		asname = ''
+		asname = None
 		if len(children) > 1:
 			assert children[1].value == 'as'
 			assert children[2].type == self.tokens.NAME
-			asname = children[2].value
+			asname = ast.Name(children[2].value, ast.Store, children[2])
 		return ast.alias(name, asname)
 	
 
@@ -607,7 +607,7 @@ class PythonASTBuilder:
 		assert children[2].type == self.syms.parameters
 
 		name_node = children[1]
-		name = name_node.value
+		name = ast.Name(name_node.value, ast.Store, name_node)
 		#self.check_forbidden_name(name, name_node)
 
 		args = self.handle_parameters(children[2])
@@ -690,7 +690,8 @@ class PythonASTBuilder:
 				if arg_type == self.syms.tfpdef:
 					arg = self.handle_tfpdef(argument)
 				else:
-					arg = ast.arg(argument.children[0].value, None, argument)
+					arg_name = ast.Name(argument.children[0].value, ast.Param, argument.children[0])
+					arg = ast.arg(arg_name, None, argument)
 				i += 1
 				default = None
 				if i < len(children) and children[i].type == self.tokens.EQUAL:
@@ -738,7 +739,7 @@ class PythonASTBuilder:
 		assert tfpdef_node.type == self.syms.tfpdef
 		children = self.children(tfpdef_node)
 		assert children[0].type == self.tokens.NAME
-		name = children[0].value
+		name = ast.Name(children[0].value, ast.Param, children[0])
 		annotation = None
 		if len(children) > 1:
 			assert children[1].type == self.tokens.COLON
@@ -1074,6 +1075,7 @@ class PythonASTBuilder:
 				return int(raw[2:], 2)
 
 
+	#FIXME: this can sometimes be a Store op, e.g. as optional_vars on with_stmt
 	def handle_atom(self, atom_node):
 		children = self.children(atom_node)
 		first_child = children[0]

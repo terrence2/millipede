@@ -18,18 +18,18 @@ def analyse(unit):
 		if not is_static and not is_cls:
 			if not block.ast.args.args or len(block.ast.args.args) == 0:
 				yield E0201(block.ast)
-			elif block.ast.args.args[0].arg != 'self':
+			elif block.ast.args.args[0].arg.id != 'self':
 				yield C0201(block.ast.args.args[0])
 
 		elif is_cls:
 			if not block.ast.args.args or len(block.ast.args.args) == 0:
 				yield E0202(block.ast)
-			elif block.ast.args.args[0].arg != 'cls':
+			elif block.ast.args.args[0].arg.id != 'cls':
 				yield C0202(block.ast.args.args[0])
 
 		elif is_static:
 			if block.ast.args.args and len(block.ast.args.args) > 0:
-				firstname = block.ast.args.args[0].arg
+				firstname = block.ast.args.args[0].arg.id
 				if firstname == 'self' or firstname == 'cls':
 					yield C0203(block.ast.args.args[0])
 

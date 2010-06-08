@@ -57,9 +57,9 @@ class excepthandler(AST):
 class arg(AST):
 	_fields = ('annotation',)
 	__slots__ = ('arg', 'annotation')
-	def __init__(self, arg:str, annotation:expr, *args, **kwargs):
+	def __init__(self, arg, annotation:expr, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		self.arg = arg
+		self.arg = arg # Name
 		self.annotation = annotation
 
 
