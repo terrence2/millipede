@@ -7,6 +7,9 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 def report(config, unit, msg):
 	if config.project.lint_message_is_masked(msg.__class__.__name__):
 		return
+	
+	if config.project.lint_file_is_masked(msg.__class__.__name__, unit.filename):
+		return
 
 	lvl = msg.__class__.__name__[0].capitalize()
 	doc = msg.__doc__.format(*msg.extra)

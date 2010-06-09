@@ -5,11 +5,13 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano.code.unit import MelanoCodeUnit
 from configparser import ConfigParser
+import fnmatch
 import os.path
 
 
 class NoProjectError(Exception): pass
 class ProjectCorruptError(Exception): pass
+
 
 
 class MelanoProject:
@@ -22,13 +24,27 @@ class MelanoProject:
 		self.base_dir = None
 		self.run_dir = None
 		self.units = {}
-		self.lint_masks = set()
+		self.lint_masks = set() # name:str
+		self.lint_option = {} # name:str -> str
+		self.lint_filter = {} # name:str -> [path:str]
 
 		self.thaw()
 
 
-	def lint_message_is_masked(self, name:str):
-		return name in self.lint_masks
+	def lint_message_is_masked(self, name:str) -> bool:
+		return name.lower() in self.lint_masks
+
+
+	def lint_file_is_masked(self, name:str, filename:str) -> bool:
+		name = name.lower()
+		if name not in self.lint_filter:
+			return False
+		proj_rel_filename = filename[len(self.base_dir) + 1:]
+		path_globs = self.lint_filter[name]
+		for path_glob in path_globs:
+			if fnmatch.fnmatch(proj_rel_filename, path_glob):
+				return True
+		return False
 
 
 	def freeze(self):
@@ -76,9 +92,18 @@ class MelanoProject:
 						unit = MelanoCodeUnit(self.config, src)
 						self.units[src_modname] = unit
 
-		# lint message masking
+		# lint message masking, filtering, and options
 		for name, value in parser.items('lint'):
-			val = value.lower()
-			if val == 'off' or val == 'no' or val == '0':
-				self.lint_masks.add(name.upper())
+			if name.endswith('_option'):
+				name = name[:-len('_option')]
+				self.lint_option[name] = value
+
+			elif name.endswith('_filter'):
+				name = name[:-len('_filter')]
+				self.lint_filter[name] = [v.strip() for v in value.split(';')]
+
+			else:
+				val = value.lower()
+				if val == 'off' or val == 'no' or val == '0':
+					self.lint_masks.add(name.upper())
 
