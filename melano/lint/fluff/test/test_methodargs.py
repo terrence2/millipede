@@ -26,6 +26,9 @@ class Foo:
 	
 	def __new__(cls):
 		return Foo()
+	
+	def __prepare__(mcs, name, bases, **kwargs):
+		return {}
 '''
 		with self.create('marg', prog) as unit:
 			messages = list(analyse(unit))

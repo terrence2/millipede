@@ -3,7 +3,7 @@ class fwddecl(type):
 	'''Metaclass to allow type annotations of the current class within the
 		class definition.'''
 	@classmethod
-	def __prepare__(metacls, name, bases, **kwargs):
+	def __prepare__(mcs, name, bases, **kwargs):
 		return {name: metacls}
 
 	def __new__(cls, name, bases, classdict):

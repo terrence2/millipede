@@ -35,6 +35,12 @@ class E0202(Message):
 class C0203(Message):
 	'''Static methods should not have first parameter 'cls' or 'self' '''
 
+class C0204(Message):
+	'''Metaclass methods should have first paramter 'mcs' '''
+
+class E0204(Message):
+	'''Metaclass method with no arguments'''
+
 class E0100(Message):
 	'''__init__ method is a generator'''
 
