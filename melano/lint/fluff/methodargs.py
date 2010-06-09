@@ -14,6 +14,8 @@ def analyse(unit):
 			for deco in block.ast.decorator_list:
 				if str(deco) == 'staticmethod': is_static = True
 				elif str(deco) == 'classmethod': is_cls = True
+		if str(block.ast.name) == '__new__':
+			is_cls = True
 
 		if not is_static and not is_cls:
 			if not block.ast.args.args or len(block.ast.args.args) == 0:

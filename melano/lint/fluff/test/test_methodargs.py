@@ -23,6 +23,9 @@ class Foo:
 	@staticmethod
 	def bas(a, b, c):
 		return 'foo'
+	
+	def __new__(cls):
+		return Foo()
 '''
 		with self.create('marg', prog) as unit:
 			messages = list(analyse(unit))
