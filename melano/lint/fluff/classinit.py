@@ -10,7 +10,7 @@ MESSAGES = {E0100, E0101}
 def analyse(unit):
 	for classblock in unit.bst.all_classes:
 		for block in classblock.methods:
-			if block.ast.name == '__init__':
+			if block.ast.name.id == '__init__':
 				for rv_node in block.returns:
 					if rv_node.value is not None:
 						yield E0101(rv_node.value)
