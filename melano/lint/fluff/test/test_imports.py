@@ -35,6 +35,14 @@ def foo():
 		self.assertEqual(len(messages), 2)
 		self.assertSameElements([W0401]*2, [m.__class__ for m in messages])
 
+		prog = '''
+from melano.test.tests import *
+'''
+		with self.create('imp', prog) as unit:
+			messages = list(analyse(unit))
+		self.assertEqual(len(messages), 1)
+		self.assertSameElements([W0401], [m.__class__ for m in messages])
+
 
 	def test_future_import(self):
 		prog = '''

@@ -11,7 +11,7 @@ def analyse(unit):
 	for node in unit.bst.futures + unit.bst.all_imports:
 		# NOTE: import * is a parse error, so this is ImportFrom
 		for alias in node.names:
-			if alias.name == '*':
+			if str(alias.name) == '*':
 				yield W0401(node, None, node.module)
 		
 	for node in unit.bst.all_imports:
