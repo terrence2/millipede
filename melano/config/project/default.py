@@ -8,7 +8,7 @@ from .project import MelanoProject
 import os
 
 
-class LintDefaultProject(MelanoProject):
+class DefaultProject(MelanoProject):
 	'''Provide a good value for the project base-dir and units from what
 		we can glean from the command line parsed by the config.'''
 

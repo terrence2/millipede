@@ -4,9 +4,10 @@ Load, track, and store the globally useful bits of the melano configuration.
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from melano import VERSION
-from melano.config.python_language import PythonLanguage
+from melano.config.project.default import DefaultProject
 from melano.config.project.project import MelanoProject
-from melano.config.project.lint_default import LintDefaultProject
+from melano.config.python_language import PythonLanguage
+import errno
 import hashlib
 import logging
 import optparse
@@ -15,26 +16,27 @@ import os.path
 import sys
 
 
+
 class MelanoConfig:
 	def __init__(self, basedir:str='', mode:str='lint'):
 		'''Set default configuration.  Do a 'thaw' to restore from an existing
 			configuration for the current user or given configuration 
 			directory, if possible.
 			
-			mode:str -- one of 'lint' or 'ide'
+			mode:str -- one of 'lint', 'compile', or 'ide'
 		'''
 		# global mode switch
 		self.mode = mode
 
 		# log target
 		self.log = logging.getLogger("Melano")
-		self.log.setLevel(logging.INFO)
+		self.log.setLevel(logging.WARNING)
 		self.log.addHandler(logging.StreamHandler(sys.stdout))
 
 		# discover the config directory
 		self.base_dir = basedir
 		if not basedir:
-			self.base_dir = os.path.join(os.path.expanduser('~'), 
+			self.base_dir = os.path.join(os.path.expanduser('~'),
 						'.config', 'melano')
 
 		# build all configuration directories
@@ -62,7 +64,7 @@ class MelanoConfig:
 
 		# parse the commandline
 		cliparse = optparse.OptionParser()
-		cliparse.add_option('-p', '--project', default=None, dest="project", 
+		cliparse.add_option('-p', '--project', default=None, dest="project",
 					metavar="PROJECT", help="The project to load.")
 		options, self.args = cliparse.parse_args()
 
@@ -70,7 +72,7 @@ class MelanoConfig:
 		if options.project:
 			self.project = MelanoProject(self, options.project)
 		else:
-			self.project = LintDefaultProject(self, self.mode + '-default')
+			self.project = DefaultProject(self, self.mode + '-default')
 
 
 	def thaw(self):
