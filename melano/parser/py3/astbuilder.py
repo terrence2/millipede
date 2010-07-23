@@ -532,20 +532,19 @@ class PythonASTBuilder:
 
 	def handle_classdef(self, classdef_node, decorators=None):
 		children = self.children(classdef_node)
-		name_node = children[1]
-		name = name_node.value
+		name_node = ast.Name(children[1].value, ast.Store, children[1])
 		# e.x. class foo:
 		if len(children) == 4:
 			body = self.handle_suite(children[3])
-			return ast.ClassDef(name, None, None, None, None, body, decorators, classdef_node)
+			return ast.ClassDef(name_node, None, None, None, None, body, decorators, classdef_node)
 		# e.x. class foo():
 		if children[3].type == self.tokens.RPAR:
 			body = self.handle_suite(children[5])
-			return ast.ClassDef(name, None, None, None, None, body, decorators, classdef_node)
+			return ast.ClassDef(name_node, None, None, None, None, body, decorators, classdef_node)
 		# everything else
 		bases, keywords, starargs, kwargs = self.handle_arglist(children[3])
 		body = self.handle_suite(children[6])
-		return ast.ClassDef(name, bases, keywords, starargs, kwargs, body, decorators, classdef_node)
+		return ast.ClassDef(name_node, bases, keywords, starargs, kwargs, body, decorators, classdef_node)
 
 
 	def handle_arglist(self, arglist_node):
@@ -1035,11 +1034,10 @@ class PythonASTBuilder:
 			if len(children) == 2:
 				return ast.Call(left_expr, None, None, None, None, trailer_node)
 			else:
-				#return self.handle_call(children[1], left_expr)
 				bases, keywords, starargs, kwargs = self.handle_arglist(children[1])
 				return ast.Call(left_expr, bases, keywords, starargs, kwargs, trailer_node)
 		elif first_child.type == self.tokens.DOT:
-			attr = children[1].value
+			attr = ast.Name(children[1].value, ast.Load, children[1])
 			return ast.Attribute(left_expr, attr, ast.Load, trailer_node)
 		else:
 			middle = children[1]
