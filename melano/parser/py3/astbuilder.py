@@ -261,7 +261,7 @@ class PythonASTBuilder:
 	def handle_nonlocal_stmt(self, nonlocal_node):
 		children = self.children(nonlocal_node)
 		names = [children[i].value for i in range(1, len(children), 2)]
-		return ast.NonLocal(names, nonlocal_node)
+		return ast.Nonlocal(names, nonlocal_node)
 
 
 	def handle_assert_stmt(self, assert_node):
