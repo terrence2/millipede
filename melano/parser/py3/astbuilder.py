@@ -30,9 +30,9 @@ class PythonASTBuilder:
 			setattr(self.tokens, name, index)
 
 		self.SKIPTOKENS = {
-				self.tokens.COMMENT, 
-				self.tokens.NL, 
-				self.tokens.NEWLINE, 
+				self.tokens.COMMENT,
+				self.tokens.NL,
+				self.tokens.NEWLINE,
 				self.tokens.ENDMARKER}
 
 		self.operator_map = {
@@ -48,7 +48,7 @@ class PythonASTBuilder:
 			self.tokens.DOUBLESLASH : ast.FloorDiv,
 			self.tokens.PERCENT : ast.Mod
 		}
-		
+
 		self.augassign_operator_map = {
 			'+='  : ast.Add,
 			'-='  : ast.Sub,
@@ -72,8 +72,8 @@ class PythonASTBuilder:
 		for name, index in self.parser.grammar.TOKENS.items():
 			if index == ty:
 				return name
-	
-	
+
+
 	def build(self, node):
 		assert node.type == self.syms.file_input
 
@@ -89,7 +89,7 @@ class PythonASTBuilder:
 		node.endpos = node.children[-1].endpos
 		return ast.Module(stmts, node)
 
-	
+
 	def children(self, node):
 		'''Return the 'real' children of a node -- e.g. filter skip-tokens.'''
 		if not node.children:
@@ -109,7 +109,7 @@ class PythonASTBuilder:
 		print(pad + self.type_name(node.type) + ' [' + str(node.value).strip() + ']')
 		if node.children:
 			for c in node.children:
-				self.pretty_print(c, level+1)
+				self.pretty_print(c, level + 1)
 
 
 	def set_context(self, expr, ctx):
@@ -169,15 +169,15 @@ class PythonASTBuilder:
 			return self.handle_import_from(children[0])
 		else:
 			raise AssertionError("unknown import node")
-	
-	
+
+
 	def handle_import_name(self, import_name):
 		children = self.children(import_name)
 		assert children[0].value == 'import'
 		aliases = self.handle_dotted_as_names(children[1])
 		return ast.Import(aliases, import_name)
 
-	
+
 	def handle_import_from(self, import_from):
 		children = self.children(import_from)
 		at = 0
@@ -206,7 +206,7 @@ class PythonASTBuilder:
 			assert children[-1].type == self.tokens.RPAR
 			at += 1
 			names = self.handle_import_as_names(children[at])
-		return ast.ImportFrom(module, names, level, import_from)			
+		return ast.ImportFrom(module, names, level, import_from)
 
 
 	def handle_import_as_names(self, import_as_names):
@@ -217,7 +217,7 @@ class PythonASTBuilder:
 			alias = self.handle_import_as_name(child)
 			aliases.append(alias)
 		return aliases
-			
+
 
 	def handle_import_as_name(self, import_as_name):
 		children = self.children(import_as_name)
@@ -250,7 +250,7 @@ class PythonASTBuilder:
 			assert children[2].type == self.tokens.NAME
 			asname = ast.Name(children[2].value, ast.Store, children[2])
 		return ast.alias(name, asname)
-	
+
 
 	def handle_global_stmt(self, global_node):
 		children = self.children(global_node)
@@ -476,7 +476,7 @@ class PythonASTBuilder:
 		children = self.children(try_node)
 		body = self.handle_suite(children[2])
 		child_count = len(children)
-		except_count = (child_count - 3 ) // 3
+		except_count = (child_count - 3) // 3
 		otherwise = None
 		finally_suite = None
 		possible_extra_clause = children[-3]
@@ -590,7 +590,7 @@ class PythonASTBuilder:
 			value = self.handle_testlist(children[2])
 			return ast.keyword(key, value, argument_node)
 
-	
+
 	def handle_decorated(self, decorated_node):
 		decos = self.handle_decorators(decorated_node.children[0])
 		if decorated_node.children[1].children[0].value == 'def':
@@ -659,14 +659,14 @@ class PythonASTBuilder:
 		if len(children) == 2:
 			assert children[0].type == self.tokens.LPAR
 			assert children[1].type == self.tokens.RPAR
-			return ast.arguments(None, None, None, None, 
+			return ast.arguments(None, None, None, None,
 				None, None, None, None, arguments_node)
 
 		# hand off to typedargs processing
 		args = self.handle_argslist(children[1])
 		return args
 
-	
+
 	def handle_argslist(self, argslist_node):
 		'''Both typedargslist and varargslist'''
 		assert argslist_node.type == self.syms.typedargslist or \
@@ -730,7 +730,7 @@ class PythonASTBuilder:
 		return ast.arguments(
 					args, vararg_name, vararg_annotation,
 					kwonlyargs, kwarg_name, kwarg_annotation,
-					defaults, kw_defaults, 
+					defaults, kw_defaults,
 					argslist_node)
 
 
@@ -781,7 +781,7 @@ class PythonASTBuilder:
 			else:
 				value_expr = self.handle_expr(value_child)
 			return ast.Assign(targets, value_expr, stmt)
-	
+
 
 	def get_expression_list(self, tests):
 		children = self.children(tests)
@@ -887,7 +887,7 @@ class PythonASTBuilder:
 			args = self.handle_varargslist(children[1])
 		return ast.Lambda(args, expr, lambdef_node)
 
-	
+
 	def handle_varargslist(self, varargslist_node):
 		return self.handle_argslist(varargslist_node)
 
@@ -1157,7 +1157,7 @@ class PythonASTBuilder:
 					keys.append(self.handle_testlist(children[i]))
 					values.append(self.handle_testlist(children[i + 2]))
 				return ast.Dict(keys, values, atom_node)
-		
+
 
 	def handle_comp_for(self, comp_for_node) -> [ast.comprehension]:
 		'''comp_for: 'for' exprlist 'in' or_test [comp_iter]'''
@@ -1176,8 +1176,8 @@ class PythonASTBuilder:
 				ifs, comps = self.handle_comp_if(iter_children[0])
 				return [ast.comprehension(target, iter_, ifs, comp_for_node)] + comps
 		return [ast.comprehension(target, iter_, [], comp_for_node)]
-	
-	
+
+
 	def handle_comp_if(self, comp_iter_node) -> ([ast.expr], [ast.comprehension]):
 		'''comp_if: 'if' test_nocond [comp_iter]'''
 		children = self.children(comp_iter_node)
