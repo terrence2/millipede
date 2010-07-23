@@ -526,6 +526,7 @@ class PythonASTBuilder:
 			assert children[1].type == self.tokens.NAME
 			assert children[1].value == 'as'
 			optional_vars = self.handle_expr(children[2])
+			self.set_context(optional_vars, ast.Store)
 		return context_expr, optional_vars
 
 
