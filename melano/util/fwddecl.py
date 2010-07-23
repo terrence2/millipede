@@ -4,7 +4,7 @@ class fwddecl(type):
 		class definition.'''
 	@classmethod
 	def __prepare__(mcs, name, bases, **kwargs):
-		return {name: metacls}
+		return {name: mcs}
 
 	def __new__(cls, name, bases, classdict):
 		del classdict[name]
