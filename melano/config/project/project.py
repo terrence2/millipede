@@ -88,7 +88,7 @@ class MelanoProject:
 					if filename.endswith('.py'):
 						src = os.path.join(root, filename)
 						assert src.startswith(self.run_dir), '{} not subdir of {}'.format(src, self.run_dir)
-						src_modname = src[len(self.run_dir) + 1:].replace('/', '.')
+						src_modname = src[len(self.run_dir) + 1:].replace('/', '.')[:-3]
 						unit = MelanoCodeUnit(self.config, src)
 						self.units[src_modname] = unit
 
