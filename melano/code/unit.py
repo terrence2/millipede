@@ -2,7 +2,6 @@
 High level analytics for a single source file at a time.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
-from .bst.bstbuilder import BSTBuilder
 from collections import Callable
 import hashlib
 import os.path
@@ -20,7 +19,6 @@ class MelanoCodeUnit:
 		
 		# load on demand
 		self._ast = None
-		self._bst = None
 
 
 	def __get_property(self, name:str, onfail:Callable):
@@ -47,16 +45,6 @@ class MelanoCodeUnit:
 		return self.__get_property('_ast', get_ast)
 
 	
-	@property
-	def bst(self):
-		def get_bst(self):
-			self.config.log.debug("Building BST: %s", os.path.basename(self.filename))
-			builder = BSTBuilder()
-			builder.visit(self.ast)
-			return builder.bst
-		return self.__get_property('_bst', get_bst)
-
-
 	def freeze(self):
 		pass
 
