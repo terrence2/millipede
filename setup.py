@@ -11,8 +11,8 @@ setup(
 	packages=[
 		'melano',
 		'melano/code',
-		'melano/code/utils',
 		'melano/config',
+		'melano/config/project',
 		'melano/lint',
 		'melano/lint/fluff',
 		'melano/parser',
