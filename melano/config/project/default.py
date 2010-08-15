@@ -34,7 +34,7 @@ class DefaultProject(MelanoProject):
 		# build units for all referenced files
 		for src in filenames:
 			assert src.startswith(self.run_dir)
-			src_modname = src[len(self.run_dir) + 1:].replace('/', '.')
+			src_modname = src[len(self.run_dir) + 1:].replace('/', '.')[:-3]
 			unit = MelanoCodeUnit(self.config, src)
 			self.units[src_modname] = unit
 
