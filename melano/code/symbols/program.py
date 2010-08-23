@@ -27,14 +27,14 @@ class Program(Namespace):
 			pkg = pkg.symbols[p]
 
 		# add the module
-		pkg.symbols[module] = Module(module, unit.ast)
+		pkg.symbols[module] = Module(module, None)
 
 		# parse the unit to populate the module
-		names = NameExtractor(pkg.symbols[module])
-		names.visit(unit.ast)
+		#names = NameExtractor(pkg.symbols[module])
+		#names.visit(unit.ast)
 
 		# parse the unit to populate the module
-		types = TypeExtractor(pkg.symbols[module])
-		types.visit(unit.ast)
+		#types = TypeExtractor(pkg.symbols[module])
+		#types.visit(unit.ast)
 
 
