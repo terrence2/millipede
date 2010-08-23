@@ -3,6 +3,7 @@ Stores all per-project variables, or passes through to the parent project.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
+from melano.code.symbols.program import Program
 from melano.code.unit import MelanoCodeUnit
 from configparser import ConfigParser
 import fnmatch
@@ -23,7 +24,9 @@ class MelanoProject:
 		
 		self.base_dir = None
 		self.run_dir = None
-		self.units = {}
+
+		self.db = Program(name)
+
 		self.lint_masks = set() # name:str
 		self.lint_option = {} # name:str -> str
 		self.lint_filter = {} # name:str -> [path:str]
@@ -63,7 +66,7 @@ class MelanoProject:
 		# base project directory
 		self.base_dir = parser.get('project', 'base_dir')
 		if not os.path.exists(self.base_dir):
-			raise ProjectCorruptError("No base directory for project {} at: {}".format(self.name, basedir))
+			raise ProjectCorruptError("No base directory for project {} at: {}".format(self.name, self.base_dir))
 
 		# logical run directory
 		self.run_dir = parser.get('project', 'run_dir')
@@ -90,7 +93,8 @@ class MelanoProject:
 						assert src.startswith(self.run_dir), '{} not subdir of {}'.format(src, self.run_dir)
 						src_modname = src[len(self.run_dir) + 1:].replace('/', '.')[:-3]
 						unit = MelanoCodeUnit(self.config, src)
-						self.units[src_modname] = unit
+						self.config.log.info("Found module: %s", src_modname)
+						self.db.add_module(src_modname, unit)
 
 		# lint message masking, filtering, and options
 		for name, value in parser.items('lint'):
