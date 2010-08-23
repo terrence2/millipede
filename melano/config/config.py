@@ -87,6 +87,22 @@ class MelanoConfig:
 		raise NotImplementedError()
 
 
+	def get_project_names(self):
+		'''Return a list of all known projects.'''
+		return os.listdir(self.projects_dir)
+
+
+	def get_project(self):
+		'''Return the currently loaded project.'''
+		return self.project
+
+
+	def set_project(self, project_name:str):
+		'''Create an set a new project as the current active project.'''
+		self.project = MelanoProject(self, project_name)
+		self.projectChanged.emit(project_name)
+
+
 	def get_cachefile(self, name:str):
 		'''Build a cache location that is unique for name.'''
 		tgt = hashlib.sha1(name.encode('UTF-8')).hexdigest()
