@@ -18,6 +18,14 @@ class Namespace:
 		self.symbols[str(namespace.name)] = namespace
 
 
+	def get_symbol(self, name):
+		return self.symbols[name]
+
+
+	def get_names(self):
+		return list(self.symbols.keys())
+
+
 	def as_string_list(self, level:int=0):
 		pad = '\t' * level
 		parts = []
