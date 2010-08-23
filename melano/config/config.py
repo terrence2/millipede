@@ -7,6 +7,7 @@ from melano import VERSION
 from melano.config.project.default import DefaultProject
 from melano.config.project.project import MelanoProject
 from melano.config.python_language import PythonLanguage
+from melano.util.signal import Signal
 import errno
 import hashlib
 import logging
@@ -73,6 +74,9 @@ class MelanoConfig:
 			self.project = MelanoProject(self, options.project)
 		else:
 			self.project = DefaultProject(self, self.mode + '-default')
+
+		# signals
+		self.projectChanged = Signal()
 
 
 	def thaw(self):
