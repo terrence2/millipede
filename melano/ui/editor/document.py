@@ -5,8 +5,15 @@ import tokenize
 
 
 class MelanoCodeDocument(QTextDocument):
-	def __init__(self, parent):
-		super().__init__(parent)
+	def __init__(self, module, parent):
+		self.module = module
+		self.filename = module.get_filename()
+		with open(self.filename, 'rb') as fp:
+			data = fp.read()
+		# FIXME: detect and handle encoding
+		super().__init__(data.decode('utf-8'), parent)
+			
+		
 		self.contentsChange.connect(self.onContentsChange)
 
 		self.config = QCoreApplication.instance().config

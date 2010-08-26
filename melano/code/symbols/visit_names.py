@@ -42,23 +42,29 @@ class NameExtractor(ASTVisitor):
 	def visit_ImportFrom(self, node):
 		for alias in node.names:
 			if alias.asname:
-				self.db.insert(self.name(alias.asname.id), ast)
+				self.context.add_symbol(Name(alias.asname))
 			else:
-				name = alias.name
-				while isinstance(name, ast.Attribute):
-					name = name.value
-				self.db.insert(self.name(name.id), ast)
+				self.context.add_symbol(Name(alias.name))
+
+			#	name = alias.name
+			#	while isinstance(name, ast.Attribute):
+			#		name = name.value
+			#	self.db.insert(self.name(name.id), ast)
 
 
 	def visit_Import(self, node):
 		for alias in node.names:
 			if alias.asname:
-				self.db.insert(self.name(alias.asname.id), ast)
+				self.context.add_symbol(Name(alias.asname))
 			else:
-				name = alias.name
-				while isinstance(name, ast.Attribute):
-					name = name.value
-				self.db.insert(self.name(name.id), ast)
+				self.context.add_symbol(Name(alias.name))
+			#if alias.asname:
+			#	self.db.insert(self.name(alias.asname.id), ast)
+			#else:
+			#	name = alias.name
+			#	while isinstance(name, ast.Attribute):
+			#		name = name.value
+			#	self.db.insert(self.name(name.id), ast)
 
 
 	def visit_FunctionDef(self, node):
@@ -80,7 +86,7 @@ class NameExtractor(ASTVisitor):
 
 			# visit children
 			for stmt in node.body:
-				print("VISIT:", stmt)
+				#print("VISIT:", stmt)
 				self.visit(stmt)
 
 		'''
@@ -117,12 +123,6 @@ class NameExtractor(ASTVisitor):
 		with self.location('functiondef'):
 			self.scope.bind(node.name, func_scope)
 		'''
-
-	def visit_Assign(self, node):
-		node.targets
-		node.value
-
-		self.visit(node.value)
 
 
 	def visit_Name(self, node):

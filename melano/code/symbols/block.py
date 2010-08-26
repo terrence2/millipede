@@ -15,3 +15,6 @@ class Block(Namespace):
 		super().__init__(name, *args, **kwargs)
 		self.node = node
 
+
+	def get_node(self):
+		return self.node

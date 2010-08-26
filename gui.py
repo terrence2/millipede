@@ -11,9 +11,6 @@ def main():
 	# set default sighandler (after qapp init) so we can exit with ctrl+c
 	signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-	win = MelanoMainWindow()
-	win.show()
-
 	return app.exec_()
 
 

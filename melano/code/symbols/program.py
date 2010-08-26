@@ -3,8 +3,6 @@ The top-level program symbol type.  Contains modules and packages.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
-from .visit_names import NameExtractor
-from .visit_types import TypeExtractor
 from .namespace import Namespace
 from .package import Package
 from .module import Module
@@ -27,14 +25,6 @@ class Program(Namespace):
 			pkg = pkg.symbols[p]
 
 		# add the module
-		pkg.symbols[module] = Module(module, None)
-
-		# parse the unit to populate the module
-		#names = NameExtractor(pkg.symbols[module])
-		#names.visit(unit.ast)
-
-		# parse the unit to populate the module
-		#types = TypeExtractor(pkg.symbols[module])
-		#types.visit(unit.ast)
+		pkg.symbols[module] = Module(module, unit)
 
 
