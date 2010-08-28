@@ -5,13 +5,11 @@ __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 
 
-
 class Symbol:
-	def __init__(self, name):
+	def __init__(self, name:str, ast_node):
 		self.name = name
+		self.ast_node = ast_node
 
 
-	def insert(self, name:str, ref:object):
-		print(name)
-		self.symbols[name] = ref
-
+	def get_ast_node(self):
+		return self.ast_node

@@ -19,8 +19,8 @@ class Module(Block):
 
 
 	def get_node(self):
-		if not self.node:
-			self.node = self.unit.ast
+		if not self.ast_node:
+			self.ast_node = self.unit.ast
 
 			from .visit_names import NameExtractor
 			from .visit_types import TypeExtractor
@@ -34,5 +34,5 @@ class Module(Block):
 			types.visit(self.unit.ast)
 
 
-		return super().get_node()
+		return self.ast_node
 

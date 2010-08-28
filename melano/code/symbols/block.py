@@ -11,10 +11,7 @@ class Block(Namespace):
 		represents the active values of the interpretter state, the block
 		contains the lexical scoping information.
 	'''
-	def __init__(self, name, node, *args, **kwargs):
-		super().__init__(name, *args, **kwargs)
-		self.node = node
+	def __init__(self, name:str, ast_node, *args, **kwargs):
+		super().__init__(name, ast_node, *args, **kwargs)
 
 
-	def get_node(self):
-		return self.node
