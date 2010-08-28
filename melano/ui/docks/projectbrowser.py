@@ -76,7 +76,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 					child.setText(0, name)
 					child.setData(0, self.TYPE_LOADED, True)
 					child.setData(0, self.TYPE_MODULE, module)
-					child.setData(0, self.TYPE_NODE, node)
+					child.setData(0, self.TYPE_NODE, node.get_symbol(name))
 					icon = QIcon.fromTheme("package-x-generic")
 					if node.get_symbol(name).__class__.__name__ == 'Class':
 						icon = QIcon.fromTheme("package-x-generic")
@@ -95,12 +95,13 @@ class MelanoProjectTreeWidget(QTreeWidget):
 
 	def onItemActivated(self, item:QTreeWidgetItem, col:int):
 		module = item.data(0, self.TYPE_MODULE)
+		node = item.data(0, self.TYPE_NODE)
+
+		# if we have no module, this is not a document we can open
 		if not module:
 			return
-		
-		# load and display the document
-		doc = QCoreApplication.instance().load_document(module)
-		
-		#FIXME: span to the spot in the document corresponding the the symbol we activated
+
+		# this will on-demand load the document and browse to the symbol
+		QCoreApplication.instance().show_symbol(module, node)
 
 

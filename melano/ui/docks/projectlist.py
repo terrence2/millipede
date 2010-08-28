@@ -13,6 +13,9 @@ class MelanoProjectListWidget(QListWidget):
 
 		self.itemActivated.connect(self.onItemActivated)
 	
+	
 	def onItemActivated(self, item:QListWidgetItem):
 		self.config.log.info("Selected project: %s", item.text())
 		self.config.set_project(item.text())
+	
+	
