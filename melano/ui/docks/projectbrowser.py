@@ -91,9 +91,6 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			
 			# mark us as loaded
 			item.setData(0, self.TYPE_LOADED, True)
-			
-		
-		print("expanded")
 
 
 	def onItemActivated(self, item:QTreeWidgetItem, col:int):
@@ -105,8 +102,5 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		doc = QCoreApplication.instance().load_document(module)
 		
 		#FIXME: span to the spot in the document corresponding the the symbol we activated
-		
-		
-		print("activated", doc)
 
 
