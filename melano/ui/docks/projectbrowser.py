@@ -3,7 +3,7 @@ from PyQt4.QtGui import QTreeWidget, QTreeWidgetItem, QIcon
 
 
 class MelanoProjectTreeWidget(QTreeWidget):
-	TYPE_HAVE_CHILDREN = 32
+	TYPE_LOADED = 32
 	TYPE_MODULE	 = 33
 	TYPE_NODE = 34
 
@@ -26,7 +26,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			for name in node.get_names():
 				child = QTreeWidgetItem(item)
 				child.setText(0, name)
-				child.setData(0, self.TYPE_HAVE_CHILDREN, True)
+				child.setData(0, self.TYPE_LOADED, True)
 				child.setData(0, self.TYPE_MODULE, None)
 				icon = QIcon.fromTheme("package-x-generic")
 				if node.get_symbol(name).__class__.__name__ == 'Package':
@@ -37,7 +37,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 					placeholder.setText(0, "loading...")
 					placeholder.setIcon(0, QIcon.fromTheme("process-working"))
 					child.addChild(placeholder)
-					child.setData(0, self.TYPE_HAVE_CHILDREN, False)
+					child.setData(0, self.TYPE_LOADED, False)
 					child.setData(0, self.TYPE_MODULE, node.get_symbol(name))
 					child.setData(0, self.TYPE_NODE, node.get_symbol(name))
 				child.setIcon(0, icon)
@@ -58,7 +58,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		if not module:
 			return
 		
-		if not item.data(0, self.TYPE_HAVE_CHILDREN):
+		if not item.data(0, self.TYPE_LOADED):
 			# clean out the item
 			while item.childCount() > 0:
 				child = item.child(0)
@@ -74,7 +74,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 				for name in node.get_names():
 					child = QTreeWidgetItem(item)
 					child.setText(0, name)
-					child.setData(0, self.TYPE_HAVE_CHILDREN, True)
+					child.setData(0, self.TYPE_LOADED, True)
 					child.setData(0, self.TYPE_MODULE, module)
 					child.setData(0, self.TYPE_NODE, node)
 					icon = QIcon.fromTheme("package-x-generic")
@@ -90,7 +90,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			_insert_ast_children(item, module, module)
 			
 			# mark us as loaded
-			item.setData(0, self.TYPE_HAVE_CHILDREN, True)
+			item.setData(0, self.TYPE_LOADED, True)
 			
 		
 		print("expanded")
