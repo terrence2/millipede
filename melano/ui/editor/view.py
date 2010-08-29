@@ -21,13 +21,7 @@ class MelanoCodeEdit(QTextEdit):
 		if isinstance(symbol, Function):
 			node = node.name # go to function name, not 'def'
 		
-		cursor = self.textCursor()
+		cursor = self.document().select_ast_node(node)
+		self.setTextCursor(cursor)		
 		
-		s = node.startpos
-		e = node.endpos
-		spos = self.document().findBlockByLineNumber(s[0] - 1).position() + s[1]
-		epos = self.document().findBlockByLineNumber(e[0] - 1).position() + e[1]
-		cursor.setPosition(spos, QTextCursor.MoveAnchor)
-		cursor.setPosition(epos, QTextCursor.KeepAnchor)
-		
-		self.setTextCursor(cursor)
+
