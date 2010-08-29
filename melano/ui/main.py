@@ -46,11 +46,13 @@ class MelanoMainWindow(QMainWindow):
 		self.dockProjectTree.setWidget(self.projectBrowser)
 		self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockProjectTree)
 
-		
+
+	def closeEvent(self, *args):
+		QCoreApplication.instance().onQuitTriggered()
 
 
 	def onQuitTriggered(self):
-		QCoreApplication.exit()
+		QCoreApplication.instance().onQuitTriggered()
 
 
 	def onTabCloseRequested(self, index:int):
