@@ -5,10 +5,9 @@ Abstract Syntax Tree pieces that are common between python versions.
 class AST:
 	'''Base class of all ast nodes.'''
 
-	__slots__ = ('startpos', 'endpos')
-	def __init__(self, node):
-		self.startpos = node.startpos
-		self.endpos = node.endpos
+	__slots__ = ('llnode')
+	def __init__(self, llnode):
+		self.llnode = llnode
 
 
 ### Context Types
