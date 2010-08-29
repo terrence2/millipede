@@ -5,16 +5,47 @@ from melano.code.symbols.block import Block
 from melano.code.symbols.symbol import Symbol
 from .main import MelanoMainWindow
 from .editor.document import MelanoCodeDocument
+import base64
 
 
 class MelanoApplication(QApplication):
 	def __init__(self, *args):
 		super().__init__(*args)
+		
+		# create the configuration
 		self.config = MelanoConfig()
+		self.config.thaw()
+
+		# store loaded documents
 		self.documents = {}
-	
+
+		# the main application window
 		self.window = MelanoMainWindow()
 		self.window.show()
+		try:
+			w = int(self.config.get_key('app_window_w'))
+			h = int(self.config.get_key('app_window_h'))
+			x = int(self.config.get_key('app_window_x'))
+			y = int(self.config.get_key('app_window_y'))
+			winstate = base64.b64decode(self.config.get_key('app_window_state').encode('ascii'))
+			self.window.restoreState(winstate)
+			self.window.resize(w, h)
+			self.window.move(x, y)
+		except (KeyError, ValueError):
+			pass
+
+
+	def onQuitTriggered(self):
+		data = base64.b64encode(bytes(self.window.saveState()))
+		self.config.set_key('app_window_state', data.decode('ascii'))
+		sz = self.window.size()
+		pos = self.window.pos()
+		self.config.set_key('app_window_w', str(sz.width()))
+		self.config.set_key('app_window_h', str(sz.height()))
+		self.config.set_key('app_window_x', str(pos.x()))
+		self.config.set_key('app_window_y', str(pos.y()))
+		self.config.freeze()
+		self.exit()
 
 
 	def load_document(self, module:Module):
