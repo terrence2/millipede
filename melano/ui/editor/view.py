@@ -5,10 +5,11 @@ from .document import MelanoCodeDocument
 
 
 class MelanoCodeEdit(QTextEdit):
-	def __init__(self, parent):
+	def __init__(self, doc:MelanoCodeDocument, parent):
 		super().__init__(parent)
-	
-		self.setTabStopWidth(1) #FIXME: not working!
+
+		self.setDocument(doc)
+		self.setTabStopWidth(24) # NOTE: doc has to be set first
 		self.setWordWrapMode(QTextOption.NoWrap)
 	
 		

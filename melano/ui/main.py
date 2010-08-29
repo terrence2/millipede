@@ -44,6 +44,7 @@ class MelanoMainWindow(QMainWindow):
 		self.dockProjectTree.setWidget(self.projectBrowser)
 		self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockProjectTree)
 
+		
 
 
 	def onQuitTriggered(self):
@@ -62,8 +63,7 @@ class MelanoMainWindow(QMainWindow):
 			self.tabPane.setCurrentWidget(self.views[doc.filename])
 			return self.views[doc.filename]
 		
-		self.views[doc.filename] = MelanoCodeEdit(None)
-		self.views[doc.filename].setDocument(doc)
+		self.views[doc.filename] = MelanoCodeEdit(doc, None)
 		self.tabPane.addTab(self.views[doc.filename], QIcon.fromTheme("text-x-generic"), os.path.basename(doc.filename))
 		self.tabPane.setCurrentIndex(self.tabPane.count() - 1)
 
