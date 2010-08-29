@@ -8,6 +8,14 @@ class AST:
 	__slots__ = ('llnode')
 	def __init__(self, llnode):
 		self.llnode = llnode
+	
+	@property
+	def start(self):
+		return self.llnode.startpos
+	
+	@property
+	def end(self):
+		return self.llnode.endpos
 
 
 ### Context Types
