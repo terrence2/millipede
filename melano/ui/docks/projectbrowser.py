@@ -1,5 +1,6 @@
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTreeWidget, QTreeWidgetItem, QIcon
+import os.path
 
 
 class MelanoProjectTreeWidget(QTreeWidget):
@@ -11,7 +12,15 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		super().__init__(*args, **kwargs)
 		self.config = QCoreApplication.instance().config
 		self.config.projectChanged.connect(self.onProjectChanged)
-	
+		
+		# load icon paths
+		self.icon_package = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-package.svg"))
+		self.icon_module = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-module.svg"))
+		self.icon_class = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-class.svg"))
+		self.icon_method = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-method.svg"))
+		self.icon_function = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-function.svg"))
+		self.icon_import = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-import.svg"))
+
 		self.setColumnCount(1)
 		self.setHeaderLabel('Name')
 
@@ -30,9 +39,9 @@ class MelanoProjectTreeWidget(QTreeWidget):
 				child.setData(0, self.TYPE_MODULE, None)
 				icon = QIcon.fromTheme("package-x-generic")
 				if node.get_symbol(name).__class__.__name__ == 'Package':
-					icon = QIcon.fromTheme("package-x-generic")
+					icon = self.icon_package
 				elif node.get_symbol(name).__class__.__name__ == 'Module':
-					icon = QIcon.fromTheme("application-x-executable")
+					icon = self.icon_module
 					placeholder = QTreeWidgetItem(child)
 					placeholder.setText(0, "loading...")
 					placeholder.setIcon(0, QIcon.fromTheme("process-working"))
@@ -79,9 +88,10 @@ class MelanoProjectTreeWidget(QTreeWidget):
 					child.setData(0, self.TYPE_NODE, node)
 					icon = QIcon.fromTheme("package-x-generic")
 					if node.get_symbol(name).__class__.__name__ == 'Class':
-						icon = QIcon.fromTheme("package-x-generic")
+						icon = self.icon_class
 					elif node.get_symbol(name).__class__.__name__ == 'Function':
-						icon = QIcon.fromTheme("package-x-generic")
+						#if node.get_symbol(name).is_method
+						icon = self.icon_function
 					elif node.get_symbol(name).__class__.__name__ == 'Symbol':
 						icon = QIcon.fromTheme("package-x-generic")
 					child.setIcon(0, icon)
