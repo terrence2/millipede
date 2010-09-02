@@ -22,8 +22,8 @@ class Module(Block):
 		if not self.node:
 			self.node = self.unit.ast
 
-			from .visit_names import NameExtractor
-			from .visit_types import TypeExtractor
+			from .passes.visit_names import NameExtractor
+			from .passes.visit_types import TypeExtractor
 
 			# parse the unit to populate the module
 			names = NameExtractor(self)
