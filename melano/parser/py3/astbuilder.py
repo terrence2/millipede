@@ -985,8 +985,7 @@ class PythonASTBuilder:
 			if trailer.type != self.syms.trailer:
 				break
 			tmp_atom_expr = self.handle_trailer(trailer, atom_expr)
-			tmp_atom_expr.startpos = atom_expr.startpos
-			tmp_atom_expr.endpos = atom_expr.endpos
+			tmp_atom_expr.llnode = atom_expr.llnode
 			atom_expr = tmp_atom_expr
 		if children[-1].type == self.syms.factor:
 			right = self.handle_expr(children[-1])

@@ -4,7 +4,7 @@ import os.path
 
 
 class MelanoProjectTreeWidget(QTreeWidget):
-	TYPE_HAVE_CHILDREN = 32
+	TYPE_LOADED = 32
 	TYPE_MODULE	 = 33
 	TYPE_NODE = 34
 
@@ -35,7 +35,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			for name in node.get_names():
 				child = QTreeWidgetItem(item)
 				child.setText(0, name)
-				child.setData(0, self.TYPE_HAVE_CHILDREN, True)
+				child.setData(0, self.TYPE_LOADED, True)
 				child.setData(0, self.TYPE_MODULE, None)
 				icon = QIcon.fromTheme("package-x-generic")
 				if node.get_symbol(name).__class__.__name__ == 'Package':
@@ -46,7 +46,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 					placeholder.setText(0, "loading...")
 					placeholder.setIcon(0, QIcon.fromTheme("process-working"))
 					child.addChild(placeholder)
-					child.setData(0, self.TYPE_HAVE_CHILDREN, False)
+					child.setData(0, self.TYPE_LOADED, False)
 					child.setData(0, self.TYPE_MODULE, node.get_symbol(name))
 					child.setData(0, self.TYPE_NODE, node.get_symbol(name))
 				child.setIcon(0, icon)
@@ -67,7 +67,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		if not module:
 			return
 		
-		if not item.data(0, self.TYPE_HAVE_CHILDREN):
+		if not item.data(0, self.TYPE_LOADED):
 			# clean out the item
 			while item.childCount() > 0:
 				child = item.child(0)
@@ -83,9 +83,9 @@ class MelanoProjectTreeWidget(QTreeWidget):
 				for name in node.get_names():
 					child = QTreeWidgetItem(item)
 					child.setText(0, name)
-					child.setData(0, self.TYPE_HAVE_CHILDREN, True)
+					child.setData(0, self.TYPE_LOADED, True)
 					child.setData(0, self.TYPE_MODULE, module)
-					child.setData(0, self.TYPE_NODE, node)
+					child.setData(0, self.TYPE_NODE, node.get_symbol(name))
 					icon = QIcon.fromTheme("package-x-generic")
 					if node.get_symbol(name).__class__.__name__ == 'Class':
 						icon = self.icon_class
@@ -100,23 +100,18 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			_insert_ast_children(item, module, module)
 			
 			# mark us as loaded
-			item.setData(0, self.TYPE_HAVE_CHILDREN, True)
-			
-		
-		print("expanded")
+			item.setData(0, self.TYPE_LOADED, True)
 
 
 	def onItemActivated(self, item:QTreeWidgetItem, col:int):
 		module = item.data(0, self.TYPE_MODULE)
+		node = item.data(0, self.TYPE_NODE)
+
+		# if we have no module, this is not a document we can open
 		if not module:
 			return
-		
-		# load and display the document
-		doc = QCoreApplication.instance().load_document(module)
-		
-		#FIXME: span to the spot in the document corresponding the the symbol we activated
-		
-		
-		print("activated", doc)
+
+		# this will on-demand load the document and browse to the symbol
+		QCoreApplication.instance().show_symbol(module, node)
 
 

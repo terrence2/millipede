@@ -4,15 +4,16 @@ Map names to information about them.
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
 from collections import OrderedDict
+from .symbol import Symbol
 
 
-class Namespace:
-	def __init__(self, name:str):
+class Namespace(Symbol):
+	def __init__(self, name:str, ast_node):
 		'''
 		Takes the unqualified name of this namespace.  This should be exactly
 		equal to what this namespace is inserted as in the enclosing namespace.
 		'''
-		self.name = name
+		super().__init__(name, ast_node)
 		self.symbols = OrderedDict()
 
 

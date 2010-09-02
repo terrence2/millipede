@@ -8,6 +8,7 @@ from melano.config.project.default import DefaultProject
 from melano.config.project.project import MelanoProject
 from melano.config.python_language import PythonLanguage
 from melano.util.signal import Signal
+import configparser
 import errno
 import hashlib
 import logging
@@ -63,6 +64,10 @@ class MelanoConfig:
 			'3.1': PythonLanguage(self, '3.1')
 		}
 
+		# track key/value storage
+		self._config_file = os.path.join(self.base_dir, 'config.ini')
+		self._config = {}
+
 		# parse the commandline
 		cliparse = optparse.OptionParser()
 		cliparse.add_option('-p', '--project', default=None, dest="project",
@@ -72,6 +77,7 @@ class MelanoConfig:
 		# the project option
 		if options.project:
 			self.project = MelanoProject(self, options.project)
+			self.project.thaw()
 		else:
 			self.project = DefaultProject(self, self.mode + '-default')
 
@@ -80,11 +86,38 @@ class MelanoConfig:
 
 
 	def thaw(self):
-		raise NotImplementedError()
+		cfg = configparser.RawConfigParser()
+		try:
+			with open(self._config_file, 'r', encoding='utf-8') as fp:
+				cfg.readfp(fp)
+		except IOError:
+			return
+		try:
+			for k, v in cfg.items('Melano'):
+				self._config[k] = v
+		except configparser.NoSectionError:
+			pass
 
 
 	def freeze(self):
-		raise NotImplementedError()
+		self.project.freeze()
+		
+		cfg = configparser.RawConfigParser()
+		cfg.add_section('Melano')
+		for k, v in self._config.items():
+			cfg.set('Melano', k, v)
+		with open(self._config_file, 'w', encoding='utf-8') as fp:
+			cfg.write(fp)
+
+
+	def get_key(self, name):
+		return self._config[name]
+
+
+	def set_key(self, name:str, value:str):
+		assert isinstance(name, str), str(type(name))
+		assert isinstance(value, str), str(type(value))
+		self._config[name] = value
 
 
 	def get_project_names(self):
