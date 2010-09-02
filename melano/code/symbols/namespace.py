@@ -3,6 +3,8 @@ Map names to information about them.
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
+from collections import OrderedDict
+
 
 class Namespace:
 	def __init__(self, name:str):
@@ -11,7 +13,7 @@ class Namespace:
 		equal to what this namespace is inserted as in the enclosing namespace.
 		'''
 		self.name = name
-		self.symbols = {}
+		self.symbols = OrderedDict()
 
 
 	def add_symbol(self, namespace):
