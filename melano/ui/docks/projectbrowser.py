@@ -20,6 +20,8 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		self.icon_method = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-method.svg"))
 		self.icon_function = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-function.svg"))
 		self.icon_import = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-import.svg"))
+		self.icon_symbol = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-symbol.svg"))
+		self.icon_parameter = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-parameter.svg"))
 
 		self.setColumnCount(1)
 		self.setHeaderLabel('Name')
