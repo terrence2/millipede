@@ -8,12 +8,27 @@ from melano.code.symbols.block import Block
 from melano.code.symbols.class_ import Class
 from melano.code.symbols.function import Function
 from melano.code.symbols.module import Module
-from melano.code.symbols.name import Name
+from melano.code.symbols.symbol import Symbol
 from melano.parser.common.visitor import ASTVisitor
 import melano.parser.py3.ast as ast
 
 
 class NameExtractor(ASTVisitor):
+	"""
+	Install symbols from an ast into the given module.
+		This extends the name tree for the symbol database below a module.
+
+	Attach back-references in the ast to the symbols we add to the database.  
+		We need these back-references so that our typing pass can find nodes
+		easily.  Otherwise, we need to dup all the work of this pass.  We
+		also need to do this pass fully before gathering types so that the
+		names from the lexical scope are all available to create references
+		to.
+	
+	Detect and report to the module simple name-related lint-style errors.
+		These can get displayed in a gui, printed out, etc, although not all
+		lint style errors are detected here.
+	"""
 	def __init__(self, module:Module):
 		super().__init__()
 
@@ -42,9 +57,9 @@ class NameExtractor(ASTVisitor):
 	def visit_ImportFrom(self, node):
 		for alias in node.names:
 			if alias.asname:
-				self.context.add_symbol(Name(alias.asname))
+				self.context.add_symbol(Symbol(alias.asname, node))
 			else:
-				self.context.add_symbol(Name(alias.name))
+				self.context.add_symbol(Symbol(alias.name, node))
 
 			#	name = alias.name
 			#	while isinstance(name, ast.Attribute):
@@ -55,9 +70,9 @@ class NameExtractor(ASTVisitor):
 	def visit_Import(self, node):
 		for alias in node.names:
 			if alias.asname:
-				self.context.add_symbol(Name(alias.asname))
+				self.context.add_symbol(Symbol(alias.asname, node))
 			else:
-				self.context.add_symbol(Name(alias.name))
+				self.context.add_symbol(Symbol(alias.name, node))
 			#if alias.asname:
 			#	self.db.insert(self.name(alias.asname.id), ast)
 			#else:
@@ -68,21 +83,21 @@ class NameExtractor(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
-		fn = Function(node.name.id, node)
+		fn = Function(node.name, node)
 		self.context.add_symbol(fn)
 
 		with self.location(fn):
 			# visit arg definitions
 			if node.args.args:
 				for arg in node.args.args:
-					self.context.add_symbol(Name(arg.arg))
+					self.context.add_symbol(Symbol(arg.arg, node))
 			if node.args.vararg:
-				self.context.add_symbol(Name(node.args.vararg))
+				self.context.add_symbol(Symbol(node.args.vararg, node))
 			if node.args.kwonlyargs:
 				for arg in node.args.kwonlyargs:
-					self.context.add_symbol(Name(arg.arg))
+					self.context.add_symbol(Symbol(arg.arg, node))
 			if node.args.kwarg:
-				self.context.add_symbol(Name(node.args.kwarg))
+				self.context.add_symbol(Symbol(node.args.kwarg, node))
 
 			# visit children
 			for stmt in node.body:
@@ -124,7 +139,31 @@ class NameExtractor(ASTVisitor):
 			self.scope.bind(node.name, func_scope)
 		'''
 
+	def visit_ClassDef(self, node):
+		#_fields = ('bases', 'keywords', 'starargs', 'kwargs', 'body', 'decorator_list')
+		cls = Class(node.name, node)
+		self.context.add_symbol(cls)
+		
+		with self.location(cls):
+			# visit children
+			for stmt in node.body:
+				#print("VISIT:", stmt)
+				self.visit(stmt)
+
+
+	def visit_GeneratorExp(self, node):
+		pass
+	
+	def visit_ListComp(self, node):
+		pass
+	
+	def visit_SetComp(self, node):
+		pass
+
+	def vist_DictComp(self, node):
+		pass
 
 	def visit_Name(self, node):
 		if node.ctx == ast.Store:
-			self.context.add_symbol(Name(node))
+			self.context.add_symbol(Symbol(node, node))
+

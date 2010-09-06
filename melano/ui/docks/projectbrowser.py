@@ -80,22 +80,29 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			
 			# load all children
 			def _insert_ast_children(item, node, module):
-				if node.__class__.__name__ == 'Name':
+				if node.__class__.__name__ == 'Symbol':
 					return
 				for name in node.get_names():
+					child_node = node.get_symbol(name)
 					child = QTreeWidgetItem(item)
 					child.setText(0, name)
 					child.setData(0, self.TYPE_LOADED, True)
 					child.setData(0, self.TYPE_MODULE, module)
 					child.setData(0, self.TYPE_NODE, node.get_symbol(name))
-					icon = QIcon.fromTheme("package-x-generic")
-					if node.get_symbol(name).__class__.__name__ == 'Class':
+					icon = self.icon_symbol
+					if child_node.__class__.__name__ == 'Class':
 						icon = self.icon_class
-					elif node.get_symbol(name).__class__.__name__ == 'Function':
+					elif child_node.__class__.__name__ == 'Function':
 						#if node.get_symbol(name).is_method
 						icon = self.icon_function
-					elif node.get_symbol(name).__class__.__name__ == 'Symbol':
-						icon = QIcon.fromTheme("package-x-generic")
+					elif child_node.__class__.__name__ == 'Symbol':
+						if child_node.ast_context.__class__.__name__ == 'Import' or \
+							child_node.ast_context.__class__.__name__ == 'ImportFrom':
+							icon = self.icon_import
+						elif child_node.ast_context.__class__.__name__ == 'FunctionDef':
+							icon = self.icon_parameter
+						else:
+							print(child_node.ast_context.__class__.__name__)
 					child.setIcon(0, icon)
 					item.addChild(child)
 					_insert_ast_children(child, node.get_symbol(name), module)

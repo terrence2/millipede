@@ -5,9 +5,10 @@ Abstract Syntax Tree pieces that are common between python versions.
 class AST:
 	'''Base class of all ast nodes.'''
 
-	__slots__ = ('llnode')
+	__slots__ = ('llnode', 'symbol')
 	def __init__(self, llnode):
 		self.llnode = llnode
+		self.symbol = None
 	
 	@property
 	def start(self):
