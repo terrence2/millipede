@@ -3,6 +3,8 @@ from melano.ui.editor.edit import MelanoCodeEdit
 
 
 class MelanoCodeLineStatus(QWidget):
+	ICON_SIZE = 12
+
 	def __init__(self, edit:MelanoCodeEdit, parent:QWidget):
 		super().__init__(parent)
 		self.edit = edit
@@ -49,7 +51,7 @@ class MelanoCodeLineStatus(QWidget):
 	def onDocContentsChanged(self):
 		line_count = self.edit.document().blockCount()
 		width = self.fontMetrics().width(str(line_count))
-		self.setFixedWidth(width + 16)
+		self.setFixedWidth(width + self.ICON_SIZE)
 		if line_count != self._prior_linecount:
 			self._prior_linecount = line_count
 			self.update()
@@ -81,12 +83,14 @@ class MelanoCodeLineStatus(QWidget):
 					txt)
 			
 				if lineno in self._errors:
-					centering = (blk_bounds.height() - font_height) / 2
-					self._icon_error.paint(p, 0, round(pos + centering), 16, 16)
+					centering = (blk_bounds.height() - self.ICON_SIZE) / 2
+					self._icon_error.paint(p, 0, round(pos + centering), 
+							self.ICON_SIZE, self.ICON_SIZE)
 
 				elif lineno in self._warnings:
-					centering = (blk_bounds.height() - font_height) / 2
-					self._icon_warning.paint(p, 0, round(pos + centering), 16, 16)
+					centering = (blk_bounds.height() - self.ICON_SIZE) / 2
+					self._icon_warning.paint(p, 0, round(pos + centering),
+							self.ICON_SIZE, self.ICON_SIZE)
 			
 			lineno += 1
 			blk = blk.next()
