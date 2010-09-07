@@ -70,6 +70,7 @@ class MelanoCodeDocument(QTextDocument):
 			data = fp.read()
 		# FIXME: detect and handle encoding
 		super().__init__(data.decode('utf-8'), parent)
+		self.setModified(False)
 		
 		self.contentsChange.connect(self.onContentsChange)
 
