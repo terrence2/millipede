@@ -101,8 +101,6 @@ class MelanoProjectTreeWidget(QTreeWidget):
 							icon = self.icon_import
 						elif child_node.ast_context.__class__.__name__ == 'FunctionDef':
 							icon = self.icon_parameter
-						else:
-							print(child_node.ast_context.__class__.__name__)
 					child.setIcon(0, icon)
 					item.addChild(child)
 					_insert_ast_children(child, node.get_symbol(name), module)

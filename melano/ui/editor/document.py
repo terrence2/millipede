@@ -95,7 +95,6 @@ class MelanoCodeDocument(QTextDocument):
 		
 		return cursor
 
-	
 
 	@QtCore.pyqtSlot(int, int, int)
 	def onContentsChange(self, a, b, c):
@@ -128,6 +127,7 @@ class MelanoCodeDocument(QTextDocument):
 			elif tok.type in IGNORE_TOKENS:
 				pass
 			else:
-				print(tok)
+				#print(tok)
+				pass
 
 	
