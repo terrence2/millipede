@@ -1,3 +1,4 @@
+import tokenize
 from PyQt4 import QtCore
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTextDocument, QTextCursor, QColor
