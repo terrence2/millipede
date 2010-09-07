@@ -1,4 +1,4 @@
-from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor, QTextFormat
+from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor, QTextFormat, QColor
 from melano.code.symbols.symbol import Symbol
 from melano.code.symbols.function import Function
 from .document import MelanoCodeDocument
@@ -31,7 +31,7 @@ class MelanoCodeEdit(QTextEdit):
 	def onCursorPositionChanged(self):
 		selection = QTextEdit.ExtraSelection()
 
-		clr = self.palette().highlight().color().light(385)
+		clr = QColor.fromRgb(*(0xF0,) * 3)
 		selection.format.setBackground(clr)
 		selection.format.setProperty(QTextFormat.FullWidthSelection, True)
 		selection.cursor = self.textCursor()
