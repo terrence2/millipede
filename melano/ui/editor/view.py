@@ -1,27 +1,22 @@
-from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor
-from melano.code.symbols.symbol import Symbol
-from melano.code.symbols.function import Function
-from .document import MelanoCodeDocument
+from PyQt4.QtGui import QFrame, QWidget, QHBoxLayout
+from melano.ui.editor.edit import MelanoCodeEdit
+from melano.ui.editor.document import MelanoCodeDocument
+from melano.ui.editor.line_status import MelanoCodeLineStatus
 
 
-class MelanoCodeEdit(QTextEdit):
-	def __init__(self, doc:MelanoCodeDocument, parent):
+class MelanoCodeView(QFrame):
+	def __init__(self, doc:MelanoCodeDocument, parent:QWidget):
 		super().__init__(parent)
+		self.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+		self.setLineWidth(2)
 
-		self.setDocument(doc)
-		self.setTabStopWidth(24) # NOTE: doc has to be set first
-		self.setWordWrapMode(QTextOption.NoWrap)
-	
-		
-	def show_symbol(self, symbol:Symbol):
-		if not symbol.get_ast_node():
-			return
+		self.edit = MelanoCodeEdit(doc, self)
 
-		node = symbol.get_ast_node()
-		if isinstance(symbol, Function):
-			node = node.name # go to function name, not 'def'
+		self.status = MelanoCodeLineStatus(self.edit, self)
 		
-		cursor = self.document().select_ast_node(node)
-		self.setTextCursor(cursor)		
-		
+		self.box = QHBoxLayout(self)
+		self.box.setSpacing(0)
+		self.box.setMargin(0)
+		self.box.addWidget(self.status)
+		self.box.addWidget(self.edit)
 

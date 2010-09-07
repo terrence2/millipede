@@ -2,7 +2,7 @@ from PyQt4 import QtCore
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QMainWindow
 from PyQt4.QtGui import QAction, QIcon, QLabel, QDockWidget, QTreeView, QTabWidget
-from melano.ui.editor.view import MelanoCodeEdit
+from melano.ui.editor.view import MelanoCodeView
 from melano.ui.editor.document import MelanoCodeDocument
 from melano.ui.docks.projectlist import MelanoProjectListWidget
 from melano.ui.docks.projectbrowser import MelanoProjectTreeWidget
@@ -58,16 +58,18 @@ class MelanoMainWindow(QMainWindow):
 	def onTabCloseRequested(self, index:int):
 		view = self.tabPane.widget(index)
 		self.tabPane.removeTab(index)
-		del self.views[view.document().filename]
-		QCoreApplication.instance().view_closed(view.document().filename)
+		del self.views[view.edit.document().filename]
+		QCoreApplication.instance().view_closed(view.edit.document().filename)
 	
 	
 	def show_document(self, doc:MelanoCodeDocument):
+		# show and return the existing view
 		if doc.filename in self.views:
 			self.tabPane.setCurrentWidget(self.views[doc.filename])
 			return self.views[doc.filename]
 		
-		self.views[doc.filename] = MelanoCodeEdit(doc, None)
+		# create a new view and tab for the view
+		self.views[doc.filename] = MelanoCodeView(doc, None)
 		self.tabPane.addTab(self.views[doc.filename], QIcon.fromTheme("text-x-generic"), os.path.basename(doc.filename))
 		self.tabPane.setCurrentIndex(self.tabPane.count() - 1)
 

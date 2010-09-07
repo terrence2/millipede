@@ -69,6 +69,6 @@ class MelanoApplication(QApplication):
 	def show_symbol(self, module:Module, node:Block or Symbol):
 		doc = self.load_document(module)
 		view = self.window.show_document(doc)
-		view.show_symbol(node)
+		view.edit.show_symbol(node)
 		
 		
