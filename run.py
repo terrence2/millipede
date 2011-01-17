@@ -1,17 +1,21 @@
 #!/usr/bin/python3
+from melano import MelanoProject
+import os
+import logging
+
+def main():
+	logging.basicConfig(level=logging.DEBUG)
+
+	project = MelanoProject('zeuss',
+						[os.path.expanduser('~/Projects/zeuss'),
+						 '/usr/lib/python3.1',
+						 '/usr/lib/python3.1/lib-dynload',
+						 '/usr/lib/python3.1/site-packages',
+						],
+						['format'])
+	project.locate_modules()
+
 
 if __name__ == '__main__':
-	# load the configuration
-	from melano.config.config import MelanoConfig
-	config = MelanoConfig()
-
-	# create a new symbol store
-	from melano.code.symbols.program import Program
-	db = Program(config.project.name)
-
-	# add all units to the symbol store
-	for modname, unit in config.project.units.items():
-		db.add_module(modname, unit)
-
-	print(db.as_string())
+	main()
 

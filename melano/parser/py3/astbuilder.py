@@ -1122,7 +1122,7 @@ class PythonASTBuilder:
 
 
 	#dictorsetmaker: ( (test ':' test (comp_for | (',' test ':' test)* [','])) |
-    #              (test (comp_for | (',' test)* [','])) )
+	#              (test (comp_for | (',' test)* [','])) )
 	def handle_dictorsetmaker(self, second_child, atom_node):
 		children = self.children(second_child)
 		# SET
@@ -1201,21 +1201,21 @@ class PythonASTBuilder:
 
 	def count_comp_fors(self, comp_node, for_type, if_type):
 		count = 0
-		current_for = comp_node.children[1]
+		current_for = self.children(comp_node)[1]
 		while True:
 			count += 1
-			if len(current_for.children) == 5:
-				current_iter = current_for.children[4]
+			if len(self.children(current_for)) == 5:
+				current_iter = self.children(current_for)[4]
 			else:
 				return count
 			while True:
-				first_child = current_iter.children[0]
+				first_child = self.children(current_iter)[0]
 				if first_child.type == for_type:
-					current_for = current_iter.children[0]
+					current_for = self.children(current_iter)[0]
 					break
 				elif first_child.type == if_type:
-					if len(first_child.children) == 3:
-						current_iter = first_child.children[2]
+					if len(self.children(first_child)) == 3:
+						current_iter = self.children(first_child)[2]
 					else:
 						return count
 				else:
@@ -1240,31 +1240,31 @@ class PythonASTBuilder:
 		elt = self.handle_expr(comp_node.children[0])
 		fors_count = self.count_comp_fors(comp_node, for_type, if_type)
 		comps = []
-		comp_for = comp_node.children[1]
+		comp_for = self.children(comp_node)[1]
 		for i in range(fors_count):
-			for_node = comp_for.children[1]
+			for_node = self.children(comp_for)[1]
 			for_targets = self.handle_exprlist(for_node, ast.Store)
-			expr = handle_source_expression(comp_for.children[3])
+			expr = handle_source_expression(self.children(comp_for)[3])
 			assert isinstance(expr, ast.expr)
-			if len(for_node.children) == 1:
+			if len(self.children(for_node)) == 1:
 				comp = ast.comprehension(for_targets[0], expr, None, comp_for)
 			else:
 				target = ast.Tuple(for_targets, ast.Store, comp_for)
 				comp = ast.comprehension(target, expr, None, comp_node)
-			if len(comp_for.children) == 5:
-				comp_for = comp_iter = comp_for.children[4]
+			if len(self.children(comp_for)) == 5:
+				comp_for = comp_iter = self.children(comp_for)[4]
 				assert comp_iter.type == iter_type
 				ifs_count = self.count_comp_ifs(comp_iter, for_type)
 				if ifs_count:
 					ifs = []
 					for j in range(ifs_count):
-						comp_for = comp_if = comp_iter.children[0]
-						ifs.append(self.handle_expr(comp_if.children[1]))
-						if len(comp_if.children) == 3:
-							comp_for = comp_iter = comp_if.children[2]
+						comp_for = comp_if = self.children(comp_iter)[0]
+						ifs.append(self.handle_expr(self.children(comp_if)[1]))
+						if len(self.children(comp_if)) == 3:
+							comp_for = comp_iter = self.children(comp_if)[2]
 					comp.ifs = ifs
 				if comp_for.type == iter_type:
-					comp_for = comp_for.children[0]
+					comp_for = self.children(comp_for)[0]
 			assert isinstance(comp, ast.comprehension)
 			comps.append(comp)
 		return elt, comps
