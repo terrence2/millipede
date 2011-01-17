@@ -1,5 +1,5 @@
 '''
-Walk an AST.  Copied from CPython.
+Walk an AST.  Copied and extended from CPython.
 '''
 from .ast import AST
 
@@ -35,3 +35,9 @@ class ASTVisitor:
 			elif isinstance(value, AST):
 				self.visit(value)
 
+
+	def visit_nodelist(self, nodes):
+		"""Visit all nodes in the given list."""
+		if nodes is None: return
+		for node in nodes:
+			self.visit(node)
