@@ -23,8 +23,13 @@ class MelanoModule:
 			self.source = None
 			self.checksum = None
 
+		# module-specific fields
 		self.ast = None
 		self.refs = [] # [MelanoModule]
+
+		# common fields for all namespace entries
+		self.parent = None # always nil for modules
+		self.names = {}
 
 
 	def __read_file(self):

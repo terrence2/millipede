@@ -14,6 +14,7 @@ def main():
 						],
 						['format'])
 	project.locate_modules()
+	project.locate_names()
 
 
 if __name__ == '__main__':

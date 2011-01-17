@@ -1,8 +1,6 @@
 '''
 Top-level wrapper for tokenization of python sources.
 '''
-__author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
-
 from io import StringIO
 from tokenize import _tokenize
 

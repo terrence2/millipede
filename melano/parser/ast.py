@@ -1,18 +1,86 @@
 '''
+Copyright (c) 2011-2011, Terrence Cole.
+All rights reserved.
+
 All AST nodes.  Built manually from inspection of:
    http://docs.python.org/py3k/library/ast.html
 '''
-from melano.parser.common.ast import *
+
+### Context Types
+Load = 0
+Store = 1
+Del = 2
+AugLoad = 3
+AugStore = 4
+Param = 5
+Aug = 6
+
+
+### BinOperator Types
+BitOr = 0
+BitXor = 1
+BitAnd = 2
+LShift = 3
+RShift = 4
+Add = 5
+Sub = 6
+Mult = 7
+Div = 8
+FloorDiv = 9
+Mod = 10
+Pow = 11
+
+
+### Unary Operator Types
+Invert = 0
+Not = 1
+UAdd = 2
+USub = 3
+
+
+### Comparison Types
+Eq = 0
+NotEq = 1
+Lt = 2
+LtE = 3
+Gt = 4
+GtE = 5
+Is = 6
+IsNot = 7
+In = 8
+NotIn = 9
+
+
+### Bool Ops
+And = 0
+Or = 1
+
+
+class AST:
+	'''Base class of all ast nodes.'''
+
+	__slots__ = ('llnode', 'symbol')
+	def __init__(self, llnode):
+		self.llnode = llnode
+		self.symbol = None
+
+	@property
+	def start(self):
+		return self.llnode.startpos
+
+	@property
+	def end(self):
+		return self.llnode.endpos
+
 
 ### Base Class
-
 class mod(AST):
 	__slots__ = ()
 
 
 class expr(AST):
 	__slots__ = ()
-	
+
 	def set_context(self, ctx):
 		self.ctx = ctx
 
@@ -69,14 +137,14 @@ class arg(AST):
 #                     expr* kw_defaults)
 class arguments(AST):
 	_fields = ('args', 'varargannotation',
-				'kwonlyargs', 'kwargannotation', 
+				'kwonlyargs', 'kwargannotation',
 				'defaults', 'kw_defaults')
 	__slots__ = ('args', 'vararg', 'varargannotation',
 				'kwonlyargs', 'kwarg', 'kwargannotation',
 				'defaults', 'kw_defaults')
 	def __init__(self,
-				args:[arg], vararg:str, varargannotation:expr, 
-				kwonlyargs:[arg], kwarg:str, kwargannotation:expr, 
+				args:[arg], vararg:str, varargannotation:expr,
+				kwonlyargs:[arg], kwarg:str, kwargannotation:expr,
 				defaults:[expr], kw_defaults:[expr], *_args, **_kwargs):
 		super().__init__(*_args, **_kwargs)
 		self.args = args # list: all arg up to *args, in order, as ast.arg
@@ -180,7 +248,7 @@ class Delete(stmt):
 	__slots__ = ('targets',)
 	def __init__(self, targets, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		self.targets = targets	
+		self.targets = targets
 
 #| Expr(expr value)
 class Expr(stmt):
@@ -331,7 +399,7 @@ class Attribute(expr):
 		self.value = value
 		self.attr = attr
 		self.ctx = ctx
-	
+
 	def __str__(self):
 		return str(self.value) + '.' + self.attr
 
@@ -462,7 +530,7 @@ class Name(expr):
 		super().__init__(*args, **kwargs)
 		self.id = _id
 		self.ctx = ctx
-	
+
 	def __str__(self):
 		return self.id
 

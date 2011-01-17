@@ -2,9 +2,7 @@
 Tie together all of the different parts of the python parsing process and
 expose a simple interface to parsing.
 '''
-__author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
-
-from .common.parser import PythonParser
+from .parser import PythonParser
 
 
 class PythonParserDriver:
@@ -15,9 +13,9 @@ class PythonParserDriver:
 	def __init__(self, grammar_filename):
 		self.grammar_filename = grammar_filename
 
-		from .py3.grammar import PythonGrammar
-		from .py3.tokenizer import PythonTokenizer
-		from .py3.astbuilder import PythonASTBuilder
+		from .grammar import PythonGrammar
+		from .tokenizer import PythonTokenizer
+		from .astbuilder import PythonASTBuilder
 
 		self.parser = PythonParser(self.grammar_filename, PythonGrammar)
 		self.tokenizer = PythonTokenizer(self.parser.grammar)

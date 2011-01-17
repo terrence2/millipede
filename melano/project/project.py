@@ -4,6 +4,7 @@ Toplevel tool for analyzing a source base.
 from melano.parser.driver import PythonParserDriver
 from melano.project.module import MelanoModule
 from melano.project.passes.find_links import FindLinks
+from melano.project.passes.namer import Namer
 import logging
 import os
 import pickle
@@ -47,8 +48,26 @@ class MelanoProject:
 
 
 	def locate_modules(self):
+		'''Perform static, module-level reachability analysis.'''
 		for program in self.programs:
 			self._locate_module(program, '')
+
+
+	def locate_names(self):
+		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
+		for mod in self.modules:
+			print("Visiting:", mod.filename)
+			namer = Namer(mod)
+			namer.visit(mod.ast)
+
+
+	def resolve_references(self):
+		'''Look through our module's reachability and our names databases to find
+			the actual definition points for all referenced code.'''
+
+
+	def derive_types(self):
+		'''Look up-reference and thru-call to find the types of all names.'''
 
 
 	def _locate_module(self, dottedname, contextdir=None, level=0):

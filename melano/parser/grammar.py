@@ -1,5 +1,5 @@
 '''
-The PythonGrammar class encapsulates the knowlege that pypy's parser 
+The PythonGrammar class encapsulates the knowledge that pypy's parser 
 generator needs to generate a low-level parser for the python language and
 that the low-level parser needs at runtime to parse the language.
 
@@ -11,7 +11,7 @@ NOTES for Melano:
 	- Adds skiptokens to PythonGrammar
 	- Adds TOKEN_MAP to PythonGrammar.
 '''
-from ..pgen.parser import Grammar
+from .pgen.parser import Grammar
 from .tokens import python_tokens
 from .tokens import python_opmap
 
@@ -19,7 +19,7 @@ from .tokens import python_opmap
 class PythonGrammar(Grammar):
 	KEYWORD_TOKEN = python_tokens["NAME"]
 	SKIP_TOKENS = {
-		python_tokens['COMMENT'], 
+		python_tokens['COMMENT'],
 		python_tokens['NL']}
 	TOKENS = python_tokens
 	OPERATOR_MAP = python_opmap

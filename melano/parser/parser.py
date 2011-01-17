@@ -1,10 +1,9 @@
 '''
-Wraps pypy's low-level parser and provides supporting some infrastructure.  
+Wraps pypy's low-level pgen and provides some supporting infrastructure.  
 This is original to melano, but based heavily on the equivalent class in pypy.
 '''
-
-from melano.parser.pgen.metaparser import ParserGenerator
-from melano.parser.pgen.parser import Parser, Grammar, Node
+from .pgen.metaparser import ParserGenerator
+from .pgen.parser import Parser, Grammar, Node
 import io
 
 
@@ -15,10 +14,10 @@ class PythonParser(Parser):
 			grammar_source = fp.read()
 		pgen = ParserGenerator(grammar_source)
 		pgen.start_symbol = 'file_input'
-		
+
 		# build a grammar with the generator and the grammar symbols
 		gram = pgen.build_grammar(grammar_cls)
-		
+
 		# pass on the grammar to the real parser
 		super().__init__(gram)
 
