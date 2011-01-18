@@ -5,6 +5,7 @@ All rights reserved.
 from contextlib import contextmanager
 from melano.parser.visitor import ASTVisitor
 from melano.project.class_ import MelanoClass
+from melano.project.function import MelanoFunction
 
 
 class Namer(ASTVisitor):
@@ -29,11 +30,15 @@ class Namer(ASTVisitor):
 
 
 	def visit_ClassDef(self, node):
+		self.visit_nodelist(node.bases)
+		self.visit_nodelist(node.keywords)
+		if node.starargs:
+			self.visit(node.starargs)
+		if node.kwargs:
+			self.visit(node.kwargs)
 		with self.scope(MelanoClass(node)):
-			for stmt in node.body:
-				self.generic_visit(stmt)
-		for stmt in node.decorator_list:
-			self.generic_visit(stmt)
+			self.visit_nodelist(node.body)
+		self.visit_nodelist(node.decorator_list)
 
 
 	def visit_Method(self, node):
@@ -41,7 +46,7 @@ class Namer(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
-		#with self.scope(str(node.name)) as name:
-		#	self.module.names[name] = node
 		print("FUNCTION:", node)
+		with self.scope(MelanoFunction(node)):
+			import pdb; pdb.set_trace()
 

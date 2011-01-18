@@ -26,7 +26,6 @@ class TestNamer(unittest.TestCase):
 		namer = Namer(mod)
 		namer.visit(mod.ast)
 		self.assertTrue('Foo' in mod.names)
-		self.assertTrue('Foo.Bar' in mod.names)
 		self.assertTrue('Bar' in mod.names['Foo'].names)
 
 
