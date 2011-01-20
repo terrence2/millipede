@@ -25,7 +25,7 @@ class MelanoModule:
 
 		# module-specific fields
 		self.ast = None
-		self.refs = [] # [MelanoModule]
+		self.refs = {} # {ast.Attribute or ast.Name: MelanoModule}
 
 		# common fields for all namespace entries
 		self.parent = None # always nil for modules
@@ -40,4 +40,12 @@ class MelanoModule:
 			content = fp.read()
 		content += '\n\n'
 		return content
+
+
+	def lookup_name(self, name):
+		return self.names[name]
+
+
+	def lookup_star(self):
+		return self.names
 

@@ -1,0 +1,1 @@
+def hexlify(b): return ''

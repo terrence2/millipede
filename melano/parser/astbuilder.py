@@ -129,14 +129,15 @@ class PythonASTBuilder:
 
 
 	def handle_flow_stmt(self, flow_node):
-		first_child = flow_node.children[0]
+		first_child = self.children(flow_node)[0]
 		first_child_type = first_child.type
 		if first_child_type == self.syms.break_stmt:
 			return ast.Break(flow_node)
 		elif first_child_type == self.syms.continue_stmt:
 			return ast.Continue(flow_node)
 		elif first_child_type == self.syms.yield_stmt:
-			yield_expr = self.handle_expr(first_child.children[0])
+			children = self.children(first_child)
+			yield_expr = self.handle_expr(children[0])
 			return ast.Expr(yield_expr, flow_node)
 		elif first_child_type == self.syms.return_stmt:
 			children = self.children(first_child)
@@ -148,14 +149,11 @@ class PythonASTBuilder:
 		elif first_child_type == self.syms.raise_stmt:
 			exc = None
 			value = None
-			#traceback = None
-			child_count = len(first_child.children)
-			if child_count >= 2:
-				exc = self.handle_expr(first_child.children[1])
-			if child_count >= 4:
-				value = self.handle_expr(first_child.children[3])
-			#if child_count == 6:
-			#	traceback = self.handle_expr(first_child.children[5])
+			children = self.children(first_child)
+			if len(children) >= 2:
+				exc = self.handle_expr(children[1])
+			if len(children) >= 4:
+				value = self.handle_expr(children[3])
 			return ast.Raise(exc, value, flow_node)
 		else:
 			raise AssertionError("unknown flow statement")
@@ -637,7 +635,10 @@ class PythonASTBuilder:
 			assert children[3].type == self.tokens.RPAR
 			dec = ast.Call(dec_name, None, None, None, None, decorator_node)
 		else:
-			dec = self.handle_arglist(children[3])
+			assert children[2].type == self.tokens.LPAR
+			assert children[-1].type == self.tokens.RPAR
+			args, keywords, starargs, kwargs = self.handle_arglist(children[3])
+			dec = ast.Call(dec_name, args, keywords, starargs, kwargs, decorator_node)
 		return dec
 
 
@@ -985,7 +986,7 @@ class PythonASTBuilder:
 			if trailer.type != self.syms.trailer:
 				break
 			tmp_atom_expr = self.handle_trailer(trailer, atom_expr)
-			tmp_atom_expr.llnode = atom_expr.llnode
+			tmp_atom_expr.llcopy(atom_expr)
 			atom_expr = tmp_atom_expr
 		if children[-1].type == self.syms.factor:
 			right = self.handle_expr(children[-1])

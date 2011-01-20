@@ -1,1 +1,1 @@
-#TODO: fill this out
+def _exit(c): pass

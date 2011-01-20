@@ -59,18 +59,27 @@ Or = 1
 class AST:
 	'''Base class of all ast nodes.'''
 
-	__slots__ = ('llnode', 'symbol')
+	__slots__ = ('symbol', 'hl', 'start', 'end') #'llnode')
 	def __init__(self, llnode):
-		self.llnode = llnode
+		#self.llnode = None
+		self.hl = None
 		self.symbol = None
+		self.start = llnode.startpos
+		self.end = llnode.endpos
 
-	@property
-	def start(self):
-		return self.llnode.startpos
+	def llcopy(self, other):
+		'''Take low-level parameters from the other node.'''
+		#self.llnode = other.llnode
+		self.start = other.start
+		self.end = other.end
 
-	@property
-	def end(self):
-		return self.llnode.endpos
+	#@property
+	#def start(self):
+	#	return self.llnode.startpos
+
+	#@property
+	#def end(self):
+	#	return self.llnode.endpos
 
 
 ### Base Class
@@ -399,6 +408,12 @@ class Attribute(expr):
 		self.value = value
 		self.attr = attr
 		self.ctx = ctx
+
+	def first(self):
+		'Returns the Name from the left most entry in the dotted list.'
+		if isinstance(self.value, Name):
+			return self.value
+		return self.value.first()
 
 	def __str__(self):
 		return str(self.value) + '.' + self.attr

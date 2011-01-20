@@ -1,0 +1,1 @@
+def CREATE_NEW_CONSOLE(): pass

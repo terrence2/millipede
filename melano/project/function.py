@@ -10,6 +10,9 @@ class MelanoFunction:
 		self.parent = None
 		self.names = {}
 
+		# backref, so visitors can find us
+		self.node.hl = self
+
 
 	def __str__(self):
 		return str(self.node.name)

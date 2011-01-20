@@ -20,6 +20,7 @@ def iter_fields(node):
 class ASTVisitor:
 	def visit(self, node):
 		"""Visit a node."""
+		if node is None: return
 		method = 'visit_' + node.__class__.__name__
 		visitor = getattr(self, method, self.generic_visit)
 		return visitor(node)
@@ -41,3 +42,9 @@ class ASTVisitor:
 		if nodes is None: return
 		for node in nodes:
 			self.visit(node)
+
+	def visit_nodelist_field(self, nodes, field):
+		if nodes is None: return
+		for node in nodes:
+			val = getattr(node, field, None)
+			self.visit(val)

@@ -7,3 +7,9 @@ def getweakrefs(obj):
 
 def proxy(obj, callback=None):
 	pass
+
+
+class ref: pass
+class ReferenceType(type): pass
+class ProxyType(type): pass
+class CallableProxyType(type): pass
