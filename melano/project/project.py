@@ -2,15 +2,20 @@
 Toplevel tool for analyzing a source base.
 '''
 from collections import OrderedDict
+from copy import copy
 from melano.parser.driver import PythonParserDriver
+from melano.project.const import MelanoConst
+from melano.project.lowlevel.makefile import Makefile
 from melano.project.module import MelanoModule
+from melano.project.passes.coder import Coder
 from melano.project.passes.find_links import FindLinks
 from melano.project.passes.indexer import Indexer
 from melano.project.passes.linker import Linker
-from copy import copy
+from melano.project.passes.typer import Typer
 import logging
 import os
 import pickle
+import re
 
 
 class FileNotFoundException(Exception):
@@ -25,7 +30,7 @@ class MelanoProject:
 	query the sources to build an information database about a project.
 	'''
 
-	def __init__(self, name:str, programs:[str], roots:[str], stdlib:[str], extensions:[str]):
+	def __init__(self, name:str, programs:[str], roots:[str], stdlib:[str], extensions:[str], build='./build', limit='.*'):
 		'''
 		The project root(s) is the filesystem path(s) where we should
 		start searching for modules in import statements.
@@ -34,20 +39,25 @@ class MelanoProject:
 		the project's "main" entry points.
 		'''
 		self.name = name
-		self.programs = programs
+		self.programs = {p: None for p in programs}
 		self.roots = roots
+		self.build = os.path.realpath(build)
 
 		self.stdlib = [os.path.realpath('./data/lib-dynload')] + stdlib
 		self.extensions = extensions
 		self.builtins = [os.path.realpath('./data/builtins')]
 		self.override = [os.path.realpath('./data/override')]
 
+		# limit 'local' modules to ones matching 'limit'
+		self.limit = re.compile(limit)
+
 		# maps module paths to module definitions
 		self.modules = {} # {str: MelanoModule}
 		self.order = []
 
-		# map module names to their path, so we don't have to hit the fs repeatedly 
+		# map module names to their path and type, so we don't have to hit the fs repeatedly 
 		self.name_to_path = {} # {str: str}
+		self.name_to_type = {} # {str: int}
 
 		# the core parser infrastructure
 		self.parser_driver = PythonParserDriver('data/grammar/python-3.1')
@@ -74,7 +84,9 @@ class MelanoProject:
 		logging.info("Extension Search: {}".format(self.extensions))
 		logging.info("Builtins Search: {}".format(self.builtins))
 		for program in self.programs:
-			self._locate_module(program, '')
+			mod = self._locate_module(program, '')
+			mod.names['__name__'] = '__main__'
+			self.programs[program] = mod
 
 
 	def index_names(self):
@@ -91,17 +103,55 @@ class MelanoProject:
 			the actual definition points for all referenced code.'''
 		for fn in self.order:
 			mod = self.modules[fn]
-			logging.info("Linking: {}".format(mod.filename))
-			linker = Linker(self, mod)
-			linker.visit(mod.ast)
+			if self.is_local(mod):
+				logging.info("Linking: {}".format(mod.filename))
+				linker = Linker(self, mod)
+				linker.visit(mod.ast)
 
 
 	def derive_types(self):
 		'''Look up-reference and thru-call to find the types of all names.'''
+		for fn in self.order:
+			mod = self.modules[fn]
+			if self.is_local(mod):
+				logging.info("Typing: {}".format(mod.filename))
+				typer = Typer(self, mod)
+				typer.visit(mod.ast)
+
+
+	def emit_code(self):
+		'''Look up-reference and thru-call to find the types of all names.'''
+		m = Makefile(self.build, self.roots[0])
+		for fn in self.order:
+			mod = self.modules[fn]
+			if self.is_local(mod):
+				logging.info("Emit: {}".format(mod.filename))
+				if mod.names['__name__'] != '__main__':
+					tgt = m.add_source(mod.filename)
+					v = Coder(self, mod, tgt)
+					v.visit(mod.ast)
+					tgt.emit()
+					tgt.close()
+
+		for program in self.programs:
+			mod = self.programs[program]
+			tgt = m.add_program(program, mod.filename)
+			v = Coder(self, mod, tgt)
+			v.visit(mod.ast)
+			tgt.set_entry(v.context.name)
+			tgt.emit()
+			tgt.close()
+
+		m.write()
 
 
 	def find_module(self, dottedname, module):
 		return self.modules[self.name_to_path[dottedname]]
+
+
+	def is_local(self, mod:MelanoModule) -> bool:
+		'''Return true if the module should be translated, false if bridged to.'''
+		return mod.type == MelanoModule.PROJECT and self.limit.match(mod.filename) is not None
 
 
 	def _locate_module(self, dottedname, contextdir=None, level=0):
@@ -120,7 +170,7 @@ class MelanoProject:
 	def _locate_module_inner(self, dottedname, contextdir=None, level=0):
 		# locate the module
 		logging.debug('locating:{}{}'.format('\t' * level, dottedname))
-		progpath = self.__find_module_file(dottedname, contextdir)
+		modtype, progpath = self.__find_module_file(dottedname, contextdir)
 
 		# if we found a module, but it is not one we need to parse, we are done
 		if progpath is None:
@@ -131,7 +181,8 @@ class MelanoProject:
 			return self.modules[progpath]
 
 		# create the module
-		mod = MelanoModule(progpath)
+		mod = MelanoModule(modtype, progpath)
+		mod.names['__name__'] = MelanoConst(str, dottedname)
 		self.modules[progpath] = mod
 
 		# if we don't have source, make sure the reason is sane
@@ -143,10 +194,11 @@ class MelanoProject:
 		self.__load_ast(mod)
 
 		# recurse into used modules
-		for dname, (_entry, _asname) in self.__find_outbound_links(mod):
-			contextdir = os.path.dirname(mod.filename)
-			submod = self._locate_module(dname, contextdir, level + 1)
-			mod.refs[dname] = submod
+		if self.is_local(mod):
+			for dname, (_entry, _asname) in self.__find_outbound_links(mod):
+				contextdir = os.path.dirname(mod.filename)
+				submod = self._locate_module(dname, contextdir, level + 1)
+				mod.refs[dname] = submod
 
 		self.order.append(mod.filename)
 		return mod
@@ -156,10 +208,10 @@ class MelanoProject:
 		'''Given a dotted name, locate the file that should contain the module's 
 			code.  This will look relative to the roots, and contextdir, if set.'''
 		if not dottedname:
-			return None
+			return None, None
 
 		if dottedname[0] != '.' and dottedname in self.name_to_path:
-			return self.name_to_path[dottedname]
+			return self.name_to_type[dottedname], self.name_to_path[dottedname]
 
 		# get the base sub-file-name
 		fname = os.path.join(*dottedname.split('.'))
@@ -170,24 +222,29 @@ class MelanoProject:
 			if dottedname.startswith('.'):
 				contextdir = '/'.join(contextdir.split('/')[:-1])
 		if not dottedname:
-			return None
+			return None, None
 
 		# look in the project roots
+		modtype = MelanoModule.PROJECT
 		path = self.__find_module_in_roots(self.roots, contextdir, dottedname, fname)
 		if not path:
 			# look in the extensions dir
+			modtype = MelanoModule.EXTENSION
 			path = self.__find_module_in_roots(self.extensions, contextdir, dottedname, fname)
 			if not path:
 				# look in the stdlib
+				modtype = MelanoModule.STDLIB
 				path = self.__find_module_in_roots(self.stdlib, contextdir, dottedname, fname)
 				if not path:
 					# look in the builtins
+					modtype = MelanoModule.BUILTIN
 					path = self.__find_module_in_roots(self.builtins, contextdir, dottedname, fname)
 					if not path:
 						raise FileNotFoundException(dottedname)
 
+		self.name_to_type[dottedname] = modtype
 		self.name_to_path[dottedname] = path
-		return path
+		return modtype, path
 
 
 	def __find_module_in_roots(self, baseroots, contextdir, dottedname, filename):
@@ -206,15 +263,17 @@ class MelanoProject:
 		if '.' in dottedname:
 			parts = dottedname.split('.')
 			parentname = '.'.join(parts[:-1])
-			modfile = self.__find_module_file(parentname, contextdir)
-			mod = MelanoModule(modfile)
+			modtype, modfile = self.__find_module_file(parentname, contextdir)
+			mod = MelanoModule(modtype, modfile)
+			mod.names['__name__'] = MelanoConst(str, parentname)
 			self.__load_ast(mod)
 			visitor = FindLinks()
 			visitor.visit(mod.ast)
 			for imp in visitor.imports:
 				for alias in imp.names:
 					if str(alias.asname) == parts[-1]:
-						return self.__find_module_file(str(alias.name))
+						_, path = self.__find_module_file(str(alias.name))
+						return path
 
 		return None
 

@@ -1,8 +1,7 @@
 '''
-Definitions used by more than one linter.
+Copyright (c) 2011, Terrence Cole.
+All rights reserved.
 '''
-__author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
-
 
 BUILTINS = {
 	'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'bytearray',
@@ -16,17 +15,18 @@ BUILTINS = {
 	'pow', 'print', 'property', 'range', 'repr', 'reversed',
 	'round', 'set', 'setattr', 'slice', 'sorted',
 	'staticmethod', 'str', 'sum', 'super', 'tuple', 'type',
-	'vars', 'zip', '__import__', '__debug__', '__doc__',
-	'__name__', '__package__', 'False', 'True', 'None'
+	'vars', 'zip', '__import__', 'False', 'True', 'None'
 }
+__CACHE = {}
 
-KEYWORDS = {
-	'class', 'finally', 'is', 'return',
-	'continue', 'for', 'lambda', 'try',
-	'def', 'from', 'nonlocal', 'while',
-	'and', 'del', 'global', 'not', 'with',
-	'as', 'elif', 'if', 'or', 'yield',
-	'assert', 'else', 'import', 'pass',
-	'break', 'except', 'in', 'raise'
-}
+def lookup_builtin(name):
+	if name not in BUILTINS: return None
+	if name not in __CACHE:
+		__CACHE[name] = MelanoBuiltin(name)
+	return __CACHE[name]
+
+
+class MelanoBuiltin:
+	def __init__(self, name):
+		self.name = name
 

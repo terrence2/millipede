@@ -5,6 +5,10 @@ All rights reserved.
 from contextlib import contextmanager
 from melano.parser import ast
 from melano.parser.visitor import ASTVisitor
+from melano.project.const import MelanoConst
+from melano.project.foreign import ForeignObject
+from melano.project.module import MelanoModule
+from melano.project.variable import MelanoVariable
 
 
 class Linker(ASTVisitor):
@@ -34,7 +38,7 @@ class Linker(ASTVisitor):
 		mod = self.module.refs[modname]
 		if mod is None: return
 
-		print("import from: {}".format(mod.filename))
+		#print("import from: {}".format(mod.filename))
 		for alias in node.names:
 			assert not isinstance(alias.name, ast.Attribute)
 			name = str(alias.name)
@@ -47,20 +51,23 @@ class Linker(ASTVisitor):
 					asname = str(alias.asname)
 				else:
 					asname = name
-				if asname not in self.context.names:
-					try:
-						ref = mod.lookup_name(name)
-						self.context.names[asname] = ref
-					except KeyError:
+				if self.project.is_local(mod):
+					if asname not in self.context.names:
 						try:
-							# the name could also be a sub-module under the module
-							ref = self.project.find_module(modname + '.' + name, self)
+							ref = mod.lookup_name(name)
 							self.context.names[asname] = ref
 						except KeyError:
-							if not mod.filename.endswith('.py'):
-								print("SKIPPING NAME: {} in {}".format(name, mod.filename))
-							else:
-								import pdb; pdb.set_trace()
+							try:
+								# the name could also be a sub-module under the module
+								ref = self.project.find_module(modname + '.' + name, self)
+								self.context.names[asname] = ref
+							except KeyError:
+								if not mod.filename.endswith('.py'):
+									print("SKIPPING NAME: {} in {}".format(name, mod.filename))
+								else:
+									import pdb; pdb.set_trace()
+				else:
+					self.context.names[asname] = ForeignObject(asname)
 
 
 	def visit_ClassDef(self, node):
@@ -93,4 +100,24 @@ class Linker(ASTVisitor):
 
 		self.visit_nodelist(node.decorator_list)
 
+
+	def visit_Name(self, node):
+		if node.ctx == ast.Load:
+			ref = self.context.lookup(str(node))
+			node.hl = ref
+			#print("VISIT: {} -> {} -> {}".format(str(node), type(ref), node.hl))
+
+
+	def visit_Attribute(self, node):
+		if node.ctx == ast.Load:
+			self.visit(node.value)
+			lhs = node.value.hl
+			if isinstance(lhs, MelanoModule):
+				if self.project.is_local(lhs):
+					node.hl = lhs.lookup(node.attr)
+				else:
+					node.hl = ForeignObject(node.attr)
+			else:
+				# NOTE: we only care about cross-module linkage at this point
+				pass
 

@@ -6,7 +6,9 @@ from contextlib import contextmanager
 from melano.parser import ast
 from melano.parser.visitor import ASTVisitor
 from melano.project.class_ import MelanoClass
+from melano.project.foreign import ForeignObject
 from melano.project.function import MelanoFunction
+from melano.project.module import MelanoModule
 from melano.project.variable import MelanoVariable
 import logging
 
@@ -41,20 +43,31 @@ class Indexer(ASTVisitor):
 				# e.g.: import foo(.bar.baz)? as bar
 				name = str(alias.name)
 				asname = str(alias.asname)
-				self.context.names[asname] = self.module.refs[name]
+				if self.project.is_local(self.module):
+					self.context.names[asname] = self.module.refs[name]
+				else:
+					self.context.names[asname] = ForeignObject(name)
 			else:
 				if isinstance(alias.name, ast.Attribute):
 					# e.g.: import foo.bar.baz
 					name = str(alias.name)
 					asname = str(alias.name.first())
-					self.context.names[asname] = self.project.find_module(asname, self)
+					if self.project.is_local(self.module):
+						self.context.names[asname] = self.project.find_module(asname, self)
+					else:
+						self.context.names[name] = ForeignObject(asname)
 				else:
 					# e.g.: import foo
 					name = str(alias.name)
-					self.context.names[name] = self.module.refs[name]
+					if self.project.is_local(self.module):
+						self.context.names[name] = self.module.refs[name]
+					else:
+						self.context.names[name] = ForeignObject(name)
 
 
 	def visit_ImportFrom(self, node):
+		if not self.project.is_local(self.module):
+			return
 		#NOTE: modules are be loaded in _mostly_ dependency order so that we can perform module level
 		#		lookups here.  These will also include non-module lookups, but these we can skip for now.
 		# 		We can't do full dependency ordering because of weird star/graph relationships.  We will need
@@ -63,7 +76,10 @@ class Indexer(ASTVisitor):
 
 		# find the module
 		modname = '.' * node.level + str(node.module)
-		mod = self.module.refs[modname]
+		try:
+			mod = self.module.refs[modname]
+		except:
+			import pdb;pdb.set_trace()
 		if mod is None: return
 
 		for alias in node.names:

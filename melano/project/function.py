@@ -14,5 +14,11 @@ class MelanoFunction:
 		self.node.hl = self
 
 
+	def lookup(self, name):
+		if name in self.names:
+			return self.names[name]
+		return self.parent.lookup(name)
+
+
 	def __str__(self):
 		return str(self.node.name)

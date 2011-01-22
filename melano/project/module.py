@@ -2,19 +2,26 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
-import tokenize
+from melano.project.builtin import lookup_builtin
 import hashlib
+import tokenize
 
 
 class MelanoModule:
 	'''
 	Represents one python-level module.
 	'''
-	def __init__(self, filename:str):
+	BUILTIN = 0
+	STDLIB = 1
+	EXTENSION = 2
+	PROJECT = 3
+
+	def __init__(self, modtype:int, filename:str):
 		'''
 		The source is the location (project root relative) where
 		this module can be found.
 		'''
+		self.type = modtype
 		self.filename = filename
 		if self.filename.endswith('.py'):
 			self.source = self.__read_file()
@@ -29,7 +36,9 @@ class MelanoModule:
 
 		# common fields for all namespace entries
 		self.parent = None # always nil for modules
-		self.names = {}
+		self.names = {
+					'__file__': filename
+					}
 
 
 	def __read_file(self):
@@ -43,9 +52,25 @@ class MelanoModule:
 
 
 	def lookup_name(self, name):
+		'''Query the name list for an existing reference.'''
 		return self.names[name]
 
 
 	def lookup_star(self):
 		return self.names
+
+
+	def lookup(self, name):
+		'''Query for a name.  Overflow into module builtins.'''
+		if name in self.names:
+			return self.names[name]
+		#import pdb;pdb.set_trace()
+		ref = lookup_builtin(name)
+		if ref is not None:
+			return ref
+		raise KeyError(name)
+
+
+	def __str__(self):
+		return '<Module[{}]>'.format(self.names.get('__name__', self.filename))
 

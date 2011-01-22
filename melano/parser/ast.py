@@ -411,12 +411,13 @@ class Attribute(expr):
 
 	def first(self):
 		'Returns the Name from the left most entry in the dotted list.'
-		if isinstance(self.value, Name):
+		if not isinstance(self.value, Attribute):
 			return self.value
 		return self.value.first()
 
 	def __str__(self):
-		return str(self.value) + '.' + self.attr
+		return str(self.value) + '.' + str(self.attr)
+
 
 #| BinOp(expr left, operator op, expr right)
 class BinOp(expr):
