@@ -30,7 +30,7 @@ class Typer(ASTVisitor):
 		self.visit_nodelist(node.targets)
 		self.visit(node.value)
 
-		import pdb; pdb.set_trace()
-		for tgt in node.targets:
-			tgt.hl.types.extend(node.value.hl.types)
+		#import pdb; pdb.set_trace()
+		#for tgt in node.targets:
+		#	tgt.hl.types.extend(node.value.hl.types)
 

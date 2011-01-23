@@ -32,12 +32,14 @@ class MelanoMainWindow(QMainWindow):
 		#self.fileMenu.addAction(openAct)
 		#self.fileMenu.addAction(saveAct)
 
+		'''
 		self.projectsList = MelanoProjectListWidget(self)
 		self.dockProjectList = QDockWidget("Project List", self)
 		self.dockProjectList.setObjectName('dockProjectList')
 		self.dockProjectList.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
 		self.dockProjectList.setWidget(self.projectsList)
 		self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockProjectList)
+		'''
 
 		self.projectBrowser = MelanoProjectTreeWidget(self)
 		self.dockProjectTree = QDockWidget("Project Browser", self);
@@ -60,14 +62,14 @@ class MelanoMainWindow(QMainWindow):
 		self.tabPane.removeTab(index)
 		del self.views[view.edit.document().filename]
 		QCoreApplication.instance().view_closed(view.edit.document().filename)
-	
-	
+
+
 	def show_document(self, doc:MelanoCodeDocument):
 		# show and return the existing view
 		if doc.filename in self.views:
 			self.tabPane.setCurrentWidget(self.views[doc.filename])
 			return self.views[doc.filename]
-		
+
 		# create a new view and tab for the view
 		self.views[doc.filename] = MelanoCodeView(doc, None)
 		self.tabPane.addTab(self.views[doc.filename], QIcon.fromTheme("text-x-generic"), os.path.basename(doc.filename))

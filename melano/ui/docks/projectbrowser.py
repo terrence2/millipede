@@ -10,9 +10,8 @@ class MelanoProjectTreeWidget(QTreeWidget):
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		self.config = QCoreApplication.instance().config
-		self.config.projectChanged.connect(self.onProjectChanged)
-		
+		self.project = QCoreApplication.instance().project
+
 		# load icon paths
 		self.icon_package = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-package.svg"))
 		self.icon_module = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-module.svg"))
@@ -26,10 +25,43 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		self.setColumnCount(1)
 		self.setHeaderLabel('Name')
 
-		self.itemExpanded.connect(self.onItemExpanded)
+		#self.itemExpanded.connect(self.onItemExpanded)
 		self.itemActivated.connect(self.onItemActivated)
 
-	
+		self._setup()
+
+	def _setup(self):
+		seen = set()
+		def _add_children(item, mod):
+			for ref in mod.refs:
+				childMod = self.project.find_module(ref, None)
+				child = QTreeWidgetItem(item)
+				child.setText(0, ref)
+				icon = QIcon.fromTheme("package-x-generic")
+				child.setIcon(0, icon)
+				child.setData(0, self.TYPE_MODULE, childMod)
+				child.setData(0, self.TYPE_NODE, None)
+				item.addChild(child)
+				_add_children(child, childMod)
+			for name in mod.names:
+				child = QTreeWidgetItem(item)
+				child.setText(0, name)
+				child.setData(0, self.TYPE_MODULE, mod)
+				child.setData(0, self.TYPE_NODE, mod.names[name])
+				item.addChild(child)
+
+
+		for prog in self.project.programs:
+			mod = self.project.find_module(prog, None)
+			item = QTreeWidgetItem(self)
+			item.setText(0, prog)
+			item.setIcon(0, QIcon.fromTheme("package-x-generic"))
+			item.setData(0, self.TYPE_MODULE, mod)
+			item.setData(0, self.TYPE_NODE, None)
+			self.addTopLevelItem(item)
+			_add_children(item, mod)
+
+	'''
 	def onProjectChanged(self, project_name):
 		self.clear()
 
@@ -54,7 +86,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 				child.setIcon(0, icon)
 				item.addChild(child)
 				_insert_db_children(child, node.get_symbol(name))
-		
+
 		project = self.config.get_project()
 		for name in project.db.get_names():
 			item = QTreeWidgetItem(self)
@@ -62,22 +94,23 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			item.setIcon(0, QIcon.fromTheme("package-x-generic"))
 			self.addTopLevelItem(item)
 			_insert_db_children(item, project.db.get_symbol(name))
+		'''
 
-
+	'''
 	def onItemExpanded(self, item:QTreeWidgetItem):
 		module = item.data(0, self.TYPE_MODULE)
 		if not module:
 			return
-		
+
 		if not item.data(0, self.TYPE_LOADED):
 			# clean out the item
 			while item.childCount() > 0:
 				child = item.child(0)
 				item.removeChild(child)
-			
+
 			# on-demand load the ast
 			module.get_node()
-			
+
 			# load all children
 			def _insert_ast_children(item, node, module):
 				if node.__class__.__name__ == 'Symbol':
@@ -105,10 +138,10 @@ class MelanoProjectTreeWidget(QTreeWidget):
 					item.addChild(child)
 					_insert_ast_children(child, node.get_symbol(name), module)
 			_insert_ast_children(item, module, module)
-			
+
 			# mark us as loaded
 			item.setData(0, self.TYPE_LOADED, True)
-
+	'''
 
 	def onItemActivated(self, item:QTreeWidgetItem, col:int):
 		module = item.data(0, self.TYPE_MODULE)

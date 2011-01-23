@@ -1,7 +1,9 @@
-from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor, QTextFormat, QColor
-from melano.code.symbols.symbol import Symbol
-from melano.code.symbols.function import Function
 from .document import MelanoCodeDocument
+from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor, QTextFormat, QColor, QToolTip
+from PyQt4.QtCore import QEvent
+from melano.project.variable import MelanoVariable
+#from melano.code.symbols.symbol import Symbol
+#from melano.code.symbols.function import Function
 
 
 class MelanoCodeEdit(QTextEdit):
@@ -11,21 +13,35 @@ class MelanoCodeEdit(QTextEdit):
 		self.setDocument(doc)
 		self.setTabStopWidth(24) # NOTE: doc has to be set first
 		self.setWordWrapMode(QTextOption.NoWrap)
-		
+
 		# highlight the current line on changes
 		self.cursorPositionChanged.connect(self.onCursorPositionChanged)
-		
-		
-	def show_symbol(self, symbol:Symbol):
-		if not symbol.get_ast_node():
+
+	def event(self, e):
+		if e.type() == QEvent.ToolTip:
+			print("GOT EVENT:", str(e.type()))
+			cursor = self.cursorForPosition(e.pos())
+			cursor.select(QTextCursor.WordUnderCursor)
+			if cursor.selectedText():
+				QToolTip.showText(e.globalPos(), cursor.selectedText())
+			else:
+				QToolTip.hideText()
+			return True
+		return super().event(e)
+
+
+	def show_symbol(self, symbol:MelanoVariable):
+		if not symbol: return
+
+		node = symbol.node
+		if not node:
 			return
 
-		node = symbol.get_ast_node()
-		if isinstance(symbol, Function):
-			node = node.name # go to function name, not 'def'
-		
+		#if isinstance(node, ast.FunctionDef):
+		#	node = node.name # go to function name, not 'def'
+
 		cursor = self.document().select_ast_node(node)
-		self.setTextCursor(cursor)		
+		self.setTextCursor(cursor)
 
 
 	def onCursorPositionChanged(self):
@@ -36,7 +52,7 @@ class MelanoCodeEdit(QTextEdit):
 		selection.format.setProperty(QTextFormat.FullWidthSelection, True)
 		selection.cursor = self.textCursor()
 		selection.cursor.clearSelection()
-		
+
 		self.setExtraSelections([selection])
 
 

@@ -46,9 +46,10 @@ class Coder(ASTVisitor):
 
 
 	def visit_Assign(self, node):
-		for tgt in node.targets:
-			self.context.add_variable(tgt.hl.type(), str(tgt))
-		import pdb; pdb.set_trace()
+		pass
+		#for tgt in node.targets:
+		#	self.context.add_variable(tgt.hl.type(), str(tgt))
+		#import pdb; pdb.set_trace()
 
 	"""
 	def visit_If(self, node):

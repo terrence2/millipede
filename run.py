@@ -1,8 +1,11 @@
 #!/usr/bin/python3
 from melano import MelanoProject
-import os
+from melano.ui.application import MelanoApplication
 import logging
+import os
 import pickle
+import signal
+import sys
 
 def main():
 	logging.basicConfig(level=logging.INFO)
@@ -20,6 +23,10 @@ def main():
 	project.derive_types()
 	project.emit_code()
 
+
+	app = MelanoApplication(project, sys.argv)
+	signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c
+	return app.exec_()
 
 if __name__ == '__main__':
 	main()
