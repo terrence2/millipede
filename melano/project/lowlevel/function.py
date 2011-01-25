@@ -25,3 +25,10 @@ class LLFunction(LLBlock):
 	def emit(self, fp, pad):
 		fp.write(pad + self.sig)
 		super().emit(fp, pad)
+
+
+class LLModuleFunction(LLFunction):
+	'''At the lowlevel this is a normal function, at a high-level
+		this is the module-initialization / run.'''
+	def __init__(self, name):
+		super().__init__(name, [], [], None)

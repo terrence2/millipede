@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.project.lowlevel.function import LLFunction
+from melano.project.lowlevel.function import LLFunction, LLModuleFunction
 import os.path
 
 
@@ -17,6 +17,12 @@ class Target:
 		# lower-level structures
 		self.includes = []
 		self.functions = []
+
+
+	def create_module_function(self, name):
+		fn = LLModuleFunction(name)
+		self.functions.append(fn)
+		return fn
 
 
 	def create_function(self, name, args=[], arg_tys=[], rty='void'):
