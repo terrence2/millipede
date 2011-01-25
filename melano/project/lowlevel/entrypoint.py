@@ -21,7 +21,9 @@ class Entrypoint(Target):
 		self.body.write("""
 int main(int argc, char **argv) {{
 	Py_Initialize();
+	PySys_SetArgv(argc, argv);
 	{}();
+	Py_Finalize();
 	return 0;
 }}
 """.format(self.entry))
