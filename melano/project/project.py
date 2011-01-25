@@ -121,7 +121,7 @@ class MelanoProject:
 
 	def emit_code(self):
 		'''Look up-reference and thru-call to find the types of all names.'''
-		m = Makefile(self.build, self.roots[0])
+		m = Makefile(self.build, self.roots)
 		for fn in self.order:
 			mod = self.modules[fn]
 			if self.is_local(mod):

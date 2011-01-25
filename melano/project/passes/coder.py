@@ -35,6 +35,15 @@ class Coder(ASTVisitor):
 		self.visit_nodelist(node.body)
 
 
+	def visit_Import(self, node):
+		import pdb;pdb.set_trace()
+		self.context.import_(node.name)
+
+	#def visit_ImportFrom(self, node):
+	#	#import pdb;pdb.set_trace()
+	#	self.context.import_from(node.level, str(node.module), [str(n) for n in node.names])
+
+
 	def visit_FunctionDef(self, node):
 		ctx = self.target.create_function(self.name(str(node.name)))
 		with self.scope(ctx):

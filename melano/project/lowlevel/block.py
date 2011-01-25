@@ -17,6 +17,10 @@ class LLBlock:
 		self.stmts = []
 
 
+	def import_from(self, level:int, module:str, names:[str]):
+		pass
+
+
 	def add_variable(self, ty, name):
 		self.vars.append((ty, name))
 
