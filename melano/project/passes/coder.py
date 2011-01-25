@@ -31,11 +31,7 @@ class Coder(ASTVisitor):
 
 	def visit_Module(self, node):
 		entryname = self.name()
-		self.context = self.target.create_function(entryname)
-
-		# add import section
-		#import pdb; pdb.set_trace()
-
+		self.context = self.target.create_module_function(entryname)
 		self.visit_nodelist(node.body)
 
 
