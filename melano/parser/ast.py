@@ -73,6 +73,9 @@ class AST:
 		self.start = other.start
 		self.end = other.end
 
+	def __repr__(self):
+		return '<' + self.__class__.__name__ + '>'
+
 	#@property
 	#def start(self):
 	#	return self.llnode.startpos
