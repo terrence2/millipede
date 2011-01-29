@@ -32,6 +32,11 @@ class Linker(ASTVisitor):
 		self.context = prior
 
 
+	def visit_Module(self, node):
+		node.hl = self.module
+		self.visit_nodelist(node.body)
+
+
 	def visit_ImportFrom(self, node):
 		# find the module
 		modname = '.' * node.level + str(node.module)

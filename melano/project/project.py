@@ -30,7 +30,7 @@ class MelanoProject:
 	query the sources to build an information database about a project.
 	'''
 
-	def __init__(self, name:str, programs:[str], roots:[str], stdlib:[str], extensions:[str], build='./build', limit='.*'):
+	def __init__(self, name:str, programs:[str], roots:[str]):
 		'''
 		The project root(s) is the filesystem path(s) where we should
 		start searching for modules in import statements.
@@ -41,15 +41,15 @@ class MelanoProject:
 		self.name = name
 		self.programs = {p: None for p in programs}
 		self.roots = roots
-		self.build = os.path.realpath(build)
+		self.build = os.path.realpath('./build')
 
-		self.stdlib = [os.path.realpath('./data/lib-dynload')] + stdlib
-		self.extensions = extensions
+		self.stdlib = [os.path.realpath('./data/lib-dynload'), '/usr/lib/python3.1', '/usr/lib/python3.1/lib-dynload']
+		self.extensions = ['/usr/lib/python3.1/site-packages']
 		self.builtins = [os.path.realpath('./data/builtins')]
 		self.override = [os.path.realpath('./data/override')]
 
 		# limit 'local' modules to ones matching 'limit'
-		self.limit = re.compile(limit)
+		self.limit = re.compile('.*')
 
 		# maps module paths to module definitions
 		self.modules = {} # {str: MelanoModule}
@@ -73,6 +73,25 @@ class MelanoProject:
 		# mark uses of the stdlib and builtins in our code for reference
 		self.use_stdlib = []
 		self.use_builtins = []
+
+		# record used names so we don't dup them
+		self.global_names = []
+
+
+	def configure(self, *, stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[], builddir='./build', limit='.*'):
+		'''
+		Set up this project.
+		stdlib, extensions, builtins, overrides : extra directories to search before the standard paths
+		builddir : the target build directory
+		limit : only files matching this regex as part of the program set
+		'''
+		self.stdlib = stdlib + self.stdlib
+		self.extensions = extensions + self.extensions
+		self.builtins = builtins + self.builtins
+		self.override = override + self.override
+
+		self.build = os.path.realpath(builddir)
+		self.limit = re.compile(limit)
 
 
 	def locate_modules(self):

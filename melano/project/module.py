@@ -3,6 +3,8 @@ Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
 from melano.project.builtin import lookup_builtin
+from melano.project.type.object import PyObject
+from melano.project.type.ptr import Ptr
 import hashlib
 import tokenize
 
@@ -70,6 +72,10 @@ class MelanoModule:
 			return ref
 		raise KeyError(name)
 
+
+	def get_type(self):
+		'''FIXME: this should depend on whether we are loaded from py, and local or not.'''
+		return Ptr(PyObject())
 
 	def __str__(self):
 		return '<Module[{}]>'.format(self.names.get('__name__', self.filename))

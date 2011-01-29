@@ -247,6 +247,8 @@ class PythonASTBuilder:
 			assert children[1].value == 'as'
 			assert children[2].type == self.tokens.NAME
 			asname = ast.Name(children[2].value, ast.Store, children[2])
+		else:
+			name.set_context(ast.Store)
 		return ast.alias(name, asname)
 
 

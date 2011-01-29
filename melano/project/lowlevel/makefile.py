@@ -2,13 +2,12 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.project.lowlevel.entrypoint import Entrypoint
-from melano.project.lowlevel.target import Target
+from melano.project.lowlevel.target import Target, EntryPoint
 import os.path
 
 
 class Makefile:
-	def __init__(self, builddir, roots):
+	def __init__(self, builddir:str, roots:[str]):
 		self.builddir = builddir
 		self.roots = roots
 		self.filename = os.path.join(builddir, 'Makefile')
@@ -29,16 +28,16 @@ class Makefile:
 	def __canonical_names(self, root, filename):
 		if not filename.endswith('.py'):
 			raise ValueError("Trying to emit next to non-py module")
-		fn = filename[len(root) + 1:-3]
-		fn.replace('/', '_')
-		fn = os.path.join(self.builddir, fn)
-		return fn + '.c', fn + '.h'
+		base = filename[len(root) + 1:-3]
+		base.replace('/', '_')
+		fn = os.path.join(self.builddir, base)
+		return base, fn + '.c', fn + '.h'
 
 
 	def add_program(self, program, filename):
 		root = self.__find_root(filename)
-		body, hdr = self.__canonical_names(root, filename)
-		tgt = Entrypoint(program, body, hdr)
+		base, body, hdr = self.__canonical_names(root, filename)
+		tgt = EntryPoint(program, base, body, hdr)
 		self.targets.append(tgt)
 		self.programs.append(program)
 		return tgt
@@ -50,8 +49,8 @@ class Makefile:
 			generated sources.  Returns a target instance to use when emitting code..
 		'''
 		root = self.__find_root(filename)
-		body, hdr = self.__canonical_names(root, filename)
-		tgt = Target(body, hdr)
+		base, body, hdr = self.__canonical_names(root, filename)
+		tgt = Target(base, body, hdr)
 		self.targets.append(tgt)
 		return tgt
 

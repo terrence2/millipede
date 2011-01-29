@@ -5,7 +5,8 @@ All rights reserved.
 from melano.project.lowlevel.block import LLBlock
 
 class LLFunction(LLBlock):
-	def __init__(self, name, args, arg_types, ret_type):
+	def __init__(self, name, args, arg_types, ret_type, *args_, **kwargs):
+		super().__init__(*args_, **kwargs)
 		self.name = name
 		self.args = args
 		self.arg_types = arg_types
@@ -23,12 +24,18 @@ class LLFunction(LLBlock):
 
 
 	def emit(self, fp, pad):
-		fp.write(pad + self.sig)
+		fp.write(pad + self.sig + ' ')
 		super().emit(fp, pad)
 
 
 class LLModuleFunction(LLFunction):
 	'''At the lowlevel this is a normal function, at a high-level
 		this is the module-initialization / run.'''
-	def __init__(self, name):
-		super().__init__(name, [], [], None)
+	def __init__(self, name, *args, **kwargs):
+		super().__init__(name, [], [], 'void', *args, **kwargs)
+
+
+	def import_(self, module:str):
+		'''In addition to doing the import, we need to expose the name of the module at the top-level.'''
+		name = super().import_(module)
+		self.target.add_static('PyObject*', name)

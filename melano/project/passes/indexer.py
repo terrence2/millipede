@@ -47,15 +47,16 @@ class Indexer(ASTVisitor):
 					self.context.names[asname] = self.module.refs[name]
 				else:
 					self.context.names[asname] = ForeignObject(name)
+				alias.asname.hl = self.context.names[asname]
 			else:
 				if isinstance(alias.name, ast.Attribute):
 					# e.g.: import foo.bar.baz
 					name = str(alias.name)
 					asname = str(alias.name.first())
 					if self.project.is_local(self.module):
-						self.context.names[asname] = self.project.find_module(asname, self)
+						alias.name.hl = self.context.names[asname] = self.project.find_module(asname, self)
 					else:
-						self.context.names[name] = ForeignObject(asname)
+						alias.name.hl = self.context.names[name] = ForeignObject(asname)
 				else:
 					# e.g.: import foo
 					name = str(alias.name)
@@ -63,6 +64,7 @@ class Indexer(ASTVisitor):
 						self.context.names[name] = self.module.refs[name]
 					else:
 						self.context.names[name] = ForeignObject(name)
+					alias.name.hl = self.context.names[name]
 
 
 	def visit_ImportFrom(self, node):
@@ -129,6 +131,13 @@ class Indexer(ASTVisitor):
 			self.visit_nodelist(node.body)
 
 		self.visit_nodelist(node.decorator_list)
+
+
+	def visit_Attribute(self, node):
+		name = str(node).replace('.', '_')
+		if node.ctx == ast.Store:
+			if name not in self.context.names:
+				self.context.names[name] = MelanoVariable(node, self.context)
 
 
 	def visit_Name(self, node):
