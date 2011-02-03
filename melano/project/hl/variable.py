@@ -2,8 +2,8 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.project.type.object import PyObject
-from melano.project.type.ptr import Ptr
+from melano.project.lowlevel.type.object import PyObject
+from melano.project.lowlevel.type.ptr import Ptr
 
 
 class MelanoVariable:

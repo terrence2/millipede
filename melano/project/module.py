@@ -2,9 +2,9 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
-from melano.project.builtin import lookup_builtin
-from melano.project.type.object import PyObject
-from melano.project.type.ptr import Ptr
+#from melano.project.builtin import lookup_builtin
+from melano.project.lowlevel.type.object import PyObject
+from melano.project.lowlevel.type.ptr import Ptr
 import hashlib
 import tokenize
 
@@ -32,8 +32,10 @@ class MelanoModule:
 			self.source = None
 			self.checksum = None
 
-		# module-specific fields
+		# the ast.Module for this module
 		self.ast = None
+
+
 		self.refs = {} # {ast.Attribute or ast.Name: MelanoModule}
 
 		# common fields for all namespace entries
@@ -61,12 +63,11 @@ class MelanoModule:
 	def lookup_star(self):
 		return self.names
 
-
+	"""
 	def lookup(self, name):
 		'''Query for a name.  Overflow into module builtins.'''
 		if name in self.names:
 			return self.names[name]
-		#import pdb;pdb.set_trace()
 		ref = lookup_builtin(name)
 		if ref is not None:
 			return ref
@@ -79,4 +80,4 @@ class MelanoModule:
 
 	def __str__(self):
 		return '<Module[{}]>'.format(self.names.get('__name__', self.filename))
-
+	"""

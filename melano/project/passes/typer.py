@@ -4,7 +4,7 @@ All rights reserved.
 '''
 from melano.parser.visitor import ASTVisitor
 from melano.project.foreign import ForeignObject
-from melano.project.type.object import PyObject
+from melano.project.lowlevel.type.object import PyObject
 
 class Typer(ASTVisitor):
 	def __init__(self, project, module):

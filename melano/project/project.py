@@ -3,19 +3,20 @@ Toplevel tool for analyzing a source base.
 '''
 from collections import OrderedDict
 from copy import copy
+from melano.c.py2c import Py2C
 from melano.parser.driver import PythonParserDriver
-from melano.project.const import MelanoConst
 from melano.project.lowlevel.makefile import Makefile
-from melano.project.module import MelanoModule
-from melano.project.passes.coder import Coder
 from melano.project.passes.find_links import FindLinks
-from melano.project.passes.indexer import Indexer
-from melano.project.passes.linker import Linker
-from melano.project.passes.typer import Typer
+from melano.project.module import MelanoModule
 import logging
+import melano.parser.ast as ast
 import os
 import pickle
 import re
+#from melano.project.passes.indexer import Indexer
+#from melano.project.passes.linker import Linker
+#from melano.project.passes.typer import Typer
+#from melano.project.passes.coder import Coder
 
 
 class FileNotFoundException(Exception):
@@ -108,6 +109,13 @@ class MelanoProject:
 			self.programs[program] = mod
 
 
+	def transform_lowlevel_0(self):
+		visitor = Py2C()
+		for mod in self.modules.values():
+			ll = visitor.visit(mod.ast)
+		return ll
+
+
 	def index_names(self):
 		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
 		for fn in self.order:
@@ -168,9 +176,23 @@ class MelanoProject:
 		return self.modules[self.name_to_path[dottedname]]
 
 
-	def is_local(self, mod:MelanoModule) -> bool:
+	def is_local(self, mod:ast.Module) -> bool:
 		'''Return true if the module should be translated, false if bridged to.'''
 		return mod.type == MelanoModule.PROJECT and self.limit.match(mod.filename) is not None
+
+
+	def __name_for_module_path(self, path):
+		'''Map backwards from a path to a canonical name.  A module may be loaded under
+			many different paths and in many different ways, even through its import and
+			rename in another module.'''
+		paths = self.roots + self.stdlib + self.extensions + self.builtins + self.override
+		paths.sort(key=lambda p: len(p.split('/')))
+		for base in reversed(paths):
+			if path.startswith(base):
+				path = path[len(base) + 1:]
+				path = os.path.splitext(path)[0]
+				path = path.replace('/', '.')
+				return path
 
 
 	def _locate_module(self, dottedname, contextdir=None, level=0):
@@ -201,7 +223,7 @@ class MelanoProject:
 
 		# create the module
 		mod = MelanoModule(modtype, progpath)
-		mod.names['__name__'] = MelanoConst(str, dottedname)
+		mod.name = self.__name_for_module_path(progpath)
 		self.modules[progpath] = mod
 
 		# if we don't have source, make sure the reason is sane
