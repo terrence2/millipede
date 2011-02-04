@@ -1,9 +1,7 @@
 '''
 Copied from Eli Benderski's LGPL pycparser.
 '''
-
-class AST:
-	_fields = ()
+from melano.parser.ast import AST
 
 
 class ArrayDecl(AST):
@@ -53,10 +51,15 @@ class Cast(AST):
 		self.expr = expr
 
 
+class Comment(AST):
+	def __init__(self, value):
+		self.value = value
+
+
 class Compound(AST):
 	_fields = ('block_items',)
 	def __init__(self, *items):
-		self.block_items = items
+		self.block_items = list(items)
 
 
 class CompoundLiteral(AST):
@@ -77,7 +80,7 @@ class Continue(AST): pass
 
 class Decl(AST):
 	_fields = ('type', 'init', 'bitsize')
-	def __init__(self, name, quals, storage, funcspec, type, init, bitsize):
+	def __init__(self, name, type, quals=[], storage=[], funcspec=[], init=None, bitsize=None):
 		self.name = name # name: the variable being declared
 		self.quals = quals # quals: list of qualifiers (const, volatile)
 		self.storage = storage # storage: list of storage specifiers (extern, register, etc.)
@@ -165,6 +168,14 @@ class FuncDef(AST):
 	def __init__(self, decl, body):
 		self.decl = decl
 		self.body = body
+		self._vars_pos = 0
+
+	def add_variable(self, decl):
+		self.body.block_items.insert(self._vars_pos, decl)
+		self._vars_pos += 1
+
+	def add(self, node):
+		self.body.block_items.append(node)
 
 
 class Goto(AST):
@@ -178,7 +189,7 @@ class ID(AST):
 
 
 class IdentifierType(AST):
-	def __init__(self, names):
+	def __init__(self, *names):
 		self.names = names
 
 
@@ -188,6 +199,12 @@ class If(AST):
 		self.cond = cond
 		self.iftrue = iftrue
 		self.iffalse = iffalse
+
+
+class Include(AST):
+	def __init__(self, name, is_system=False):
+		self.name = name
+		self.is_system = is_system
 
 
 class Label(AST):
@@ -213,7 +230,7 @@ class ParamList(AST):
 
 class PtrDecl(AST):
 	_fields = ('type',)
-	def __init__(self, quals, type):
+	def __init__(self, type, quals=[]):
 		self.quals = quals
 		self.type = type
 
@@ -258,12 +275,12 @@ class TernaryOp(AST):
 class TranslationUnit(AST):
 	_fields = ('ext',)
 	def __init__(self, *ext):
-		self.ext = ext # declarations (Decl), Typedef or function definitions (FuncDef)
+		self.ext = list(ext) # declarations (Decl), Typedef or function definitions (FuncDef)
 
 
 class TypeDecl(AST):
 	_fields = ('type',)
-	def __init__(self, declname, quals, type):
+	def __init__(self, declname, type, quals=[]):
 		self.declname = declname
 		self.quals = quals
 		self.type = type

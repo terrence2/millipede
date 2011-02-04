@@ -1,6 +1,7 @@
 '''
 Walk an AST.  Copied and extended from CPython.
 '''
+from collections import Iterable
 from .ast import AST
 
 
@@ -29,7 +30,7 @@ class ASTVisitor:
 	def generic_visit(self, node):
 		"""Called if no explicit visitor function exists for a node."""
 		for field, value in iter_fields(node):
-			if isinstance(value, list):
+			if isinstance(value, Iterable):
 				for item in value:
 					if isinstance(item, AST):
 						self.visit(item)

@@ -58,7 +58,7 @@ Or = 1
 
 class AST:
 	'''Base class of all ast nodes.'''
-
+	_fields = ()
 	__slots__ = ('symbol', 'hl', 'start', 'end') #'llnode')
 	def __init__(self, llnode):
 		#self.llnode = None

@@ -2,10 +2,11 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from . import ast as c
 from contextlib import contextmanager
 from melano.parser import ast as py
 from melano.parser.visitor import ASTVisitor
-from . import ast as c
+import itertools
 
 
 
@@ -13,59 +14,116 @@ class Py2C(ASTVisitor):
 	'''
 	Use the type information to lay out low-level code (or high-level code as needed).
 	'''
-	def __init__(self):
-		self.entryfunc = c.FunctionDef()
+	def __init__(self, *, docstrings=True):
+		super().__init__()
 
-		self.tu = c.TranslationUnit()
-		self.tu.functions.add(self.entryfunc)
+		# options
+		self.emit_docstrings = docstrings
 
+		# the main unit where we put top-level entries
+		self.translation_unit = c.TranslationUnit()
+		imp = c.Include('Python.h', True)
+		self.translation_unit.ext.insert(0, imp)
 
-	@contextmanager
-	def scope(self, ctx):
-		prior = self.context
-		self.context = ctx
-		yield
-		self.context = prior
+		# entry point that creates the module namespace
+		self.entry = c.FuncDef(
+			c.Decl('entryfunc',
+				c.FuncDecl(c.ParamList(), c.PtrDecl(c.TypeDecl('entryfunc', c.IdentifierType('PyObject'))))),
+			c.Compound()
+		)
+		self.translation_unit.ext.append(self.entry)
 
+		# the main function -- handles init, cleanup, and error printing at top level
+		# int main(int argc, char** argv) {
+		#		Py_Initialize();
+		#		entryfunc();
+		#		Py_Terminate();
+		# }
+		self.main = c.FuncDef(
+			c.Decl('main',
+				c.FuncDecl(c.ParamList(
+						c.Decl('argc', c.TypeDecl('argc', c.IdentifierType('int'))),
+						c.Decl('argv', c.PtrDecl(c.PtrDecl(c.TypeDecl('argv', c.IdentifierType('char')))))),
+					c.TypeDecl('main', c.IdentifierType('int')))
+			),
+			c.Compound(
+					c.Decl('rv', c.PtrDecl(c.TypeDecl('rv', c.IdentifierType('PyObject')))),
+					c.FuncCall(c.ID('Py_Initialize'), c.ExprList()),
+					c.Assignment('=', c.ID('rv'), c.FuncCall(c.ID('entryfunc'), c.ExprList())),
+					c.If(c.UnaryOp('!', c.ID('rv')), c.Compound(
+							c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
+							c.Return(c.Constant('integer', 1))
+						), None),
+					c.FuncCall(c.ID('Py_Finalize'), c.ExprList()),
+					c.Return(c.Constant('integer', 0))
+			)
+		)
+		self.translation_unit.ext.append(self.main)
+
+		# keep all public names to ensure we don't alias
+		self.namespaces = []
+		self.tmp_offset = itertools.count()
+
+	def close(self):
+		self.entry.body.block_items.append(c.ID('Py_RETURN_NONE'))
+
+	def tmpname(self):
+		'''Return a unique temporary variable name'''
+		return 'tmp' + str(next(self.tmp_offset))
+
+	def str2c(self, value):
+		return value.replace('\n', '\\n').strip("'").strip('"')
+
+	def PyObjectP(self, name):
+		return c.PtrDecl(c.TypeDecl(name, c.IdentifierType('PyObject')))
+
+	def _get_docstring(self, nodes):
+		if nodes and isinstance(nodes[0], py.Expr) and isinstance(nodes[0].value, py.Str):
+			return nodes[0].value.s, nodes[1:]
+		return None, nodes
 
 	def visit_Module(self, node):
-		"""
-		static PyMethodDef SpamMethods[] = {
-		    ...
-		    {"system",  spam_system, METH_VARARGS,
-		     "Execute a shell command."},
-		    ...
-		    {NULL, NULL, 0, NULL}        /* Sentinel */
-		};
-		
-		static struct PyModuleDef spammodule = {
-		   PyModuleDef_HEAD_INIT,
-		   "spam",   /* name of module */
-		   spam_doc, /* module documentation, may be NULL */
-		   -1,       /* size of per-interpreter state of the module,
-		                or -1 if the module keeps state in global variables. */
-		   SpamMethods
-		};
-		
-		PyMODINIT_FUNC
-		PyInit_spam(void)
-		{
-		    return PyModule_Create(&spammodule);
-		}
-		----------
-		mod = PyModuleNew(<name>);
-		
-		"""
+		# /* module for <filename> */
+		# PyObject *<name> = PyModule_New("<name>");
+		# if(!<name>) return NULL;
+		name = node.hl.name
+		self.entry.add_variable(c.Decl(name, self.PyObjectP(name)))
+		self.entry.add(c.Comment('module for ' + node.hl.filename))
+		self.entry.add(c.Assignment('=', c.ID(name), c.FuncCall(c.ID('PyModule_New'), c.ExprList(c.Constant('string', name)))))
+		self.entry.add(c.If(c.UnaryOp('!', c.ID(name)), c.Return(c.ID('NULL')), None))
 
-		#self.visit_nodelist(node.body)
+		self.namespaces.append(name)
+
+		# try to add a doc string, if present
+		docstring, body = self._get_docstring(node.body)
+		if docstring and self.emit_docstrings:
+			#/* docstring for module <name> */
+			#PyObject *<tmp0> = PyUnicode_FromString(<docstring>);
+			#if(!<tmp0>) return NULL;
+			#PyObject *<tmp1> = PyModule_GetDict(<name>); // borrowed ref
+			#if(!<tmp1>) return NULL;
+			#PyDict_SetItemString(<tmp1>, "__doc__", <tmp0>);
+			self.entry.add(c.Comment('docstring for module ' + name))
+			tmp0 = self.tmpname()
+			self.entry.add_variable(c.Decl(tmp0, self.PyObjectP(tmp0)))
+			self.entry.add(c.Assignment('=', c.ID(tmp0), c.FuncCall(c.ID('PyUnicode_FromString'), c.ExprList(c.Constant('string', self.str2c(docstring))))))
+			self.entry.add(c.If(c.UnaryOp('!', c.ID(tmp0)), c.Return(c.ID('NULL')), None))
+			tmp1 = self.tmpname()
+			self.entry.add_variable(c.Decl(tmp1, self.PyObjectP(tmp1)))
+			self.entry.add(c.Assignment('=', c.ID(tmp1), c.FuncCall(c.ID('PyModule_GetDict'), c.ExprList(c.ID(name)))))
+			self.entry.add(c.If(c.UnaryOp('!', c.ID(tmp1)), c.Return(c.ID('NULL')), None))
+			tmp2 = self.tmpname()
+			self.entry.add_variable(c.Decl(tmp2, c.TypeDecl(tmp2, c.IdentifierType('int'))))
+			self.entry.add(c.Assignment('=', c.ID(tmp2), c.FuncCall(c.ID('PyDict_SetItemString'), c.ExprList(
+											c.ID(tmp1), c.Constant('string', '__doc__'), c.ID(tmp0)))))
+			self.entry.add(c.If(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(tmp2)), c.Return(c.ID('NULL')), None))
+
+		# visit rest of body
+		self.visit_nodelist(body)
 
 
 
 	"""
-	def visit_Module(self, node):
-		self.context = self.target.create_module_function()
-		self.visit_nodelist(node.body)
-
 
 	def visit_Attribute(self, node):
 		if node.ctx == ast.Store:

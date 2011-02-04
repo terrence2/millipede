@@ -6,14 +6,14 @@ from copy import copy
 from melano.c.py2c import Py2C
 from melano.parser.driver import PythonParserDriver
 from melano.project.lowlevel.makefile import Makefile
-from melano.project.passes.find_links import FindLinks
 from melano.project.module import MelanoModule
+from melano.project.passes.find_links import FindLinks
 import logging
 import melano.parser.ast as ast
 import os
 import pickle
 import re
-#from melano.project.passes.indexer import Indexer
+from melano.project.passes.indexer import Indexer
 #from melano.project.passes.linker import Linker
 #from melano.project.passes.typer import Typer
 #from melano.project.passes.coder import Coder
@@ -112,8 +112,10 @@ class MelanoProject:
 	def transform_lowlevel_0(self):
 		visitor = Py2C()
 		for mod in self.modules.values():
-			ll = visitor.visit(mod.ast)
-		return ll
+			if self.is_local(mod):
+				visitor.visit(mod.ast)
+		visitor.close()
+		return visitor.translation_unit
 
 
 	def index_names(self):
@@ -233,6 +235,7 @@ class MelanoProject:
 
 		# load the ast
 		self.__load_ast(mod)
+		mod.ast.hl = mod
 
 		# recurse into used modules
 		if self.is_local(mod):

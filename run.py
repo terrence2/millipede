@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 from melano import MelanoProject
-#from melano.ui.application import MelanoApplication
+from melano.c.out import COut
 import logging
 import os
 import pickle
 import signal
 import sys
+#from melano.ui.application import MelanoApplication
 
 def main():
 	logging.basicConfig(level=logging.INFO)
@@ -13,11 +14,14 @@ def main():
 	project = MelanoProject('zeuss', programs=['format'], roots=[os.path.expanduser('~/Projects/zeuss')])
 	project.configure(limit=os.path.expanduser('~/Projects/zeuss') + '/format.py')
 	project.locate_modules()
-	#project.index_names()
+	project.index_names()
 	#project.link_references()
 	#project.derive_types()
 	#project.emit_code()
-	project.transform_lowlevel_0()
+	c = project.transform_lowlevel_0()
+
+	with COut('test.c') as v:
+		v.visit(c)
 
 
 	#app = MelanoApplication(project, sys.argv)
