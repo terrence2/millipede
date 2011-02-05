@@ -5,12 +5,14 @@ All rights reserved.
 from contextlib import contextmanager
 from melano.parser import ast
 from melano.parser.visitor import ASTVisitor
-from melano.project.class_ import MelanoClass
-from melano.project.foreign import ForeignObject
-from melano.project.function import MelanoFunction
-from melano.project.module import MelanoModule
-from melano.project.variable import MelanoVariable
+from melano.project.name import Name
+from melano.project.scope import Scope
 import logging
+#from melano.project.class_ import MelanoClass
+#from melano.project.foreign import ForeignObject
+#from melano.project.function import MelanoFunction
+#from melano.project.module import MelanoModule
+#from melano.project.variable import MelanoVariable
 
 
 class Indexer(ASTVisitor):

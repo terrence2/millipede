@@ -11,6 +11,17 @@ import sys
 def main():
 	logging.basicConfig(level=logging.INFO)
 
+	for root, dirs, files in os.walk('test'):
+		for fn in files:
+			if fn.endswith('.py'):
+				path = os.path.join(root, fn)
+				project = MelanoProject('test', programs=[fn], roots=[root])
+				project.configure(limit=path)
+				project.locate_modules()
+				project.index_names()
+
+	return
+
 	project = MelanoProject('zeuss', programs=['format'], roots=[os.path.expanduser('~/Projects/zeuss')])
 	project.configure(limit=os.path.expanduser('~/Projects/zeuss') + '/format.py')
 	project.locate_modules()
