@@ -28,15 +28,21 @@ class Indexer(ASTVisitor):
 
 
 	@contextmanager
-	def scope(self, metype):
+	def scope(self, node):
 		# insert node into parent scope
-		self.context.names[str(metype)] = metype
+		sym = self.context.add_symbol(str(node.name))
+		sym.scope = Scope(sym)
 
 		# push a new scope
-		prior = metype.parent = self.context
-		self.context = metype
+		prior = self.context
+		self.context = sym.scope
 		yield
 		self.context = prior
+
+
+	def visit_Module(self, node):
+		assert node.hl is self.module
+		self.visit_nodelist(node.body)
 
 
 	def visit_Import(self, node):
@@ -46,27 +52,33 @@ class Indexer(ASTVisitor):
 				name = str(alias.name)
 				asname = str(alias.asname)
 				if self.project.is_local(self.module):
-					self.context.names[asname] = self.module.refs[name]
+					self.context.add_symbol(asname)
+					#self.context.names[asname] = self.module.refs[name]
 				else:
-					self.context.names[asname] = ForeignObject(name)
-				alias.asname.hl = self.context.names[asname]
+					self.context.add_symbol(asname)
+					#self.context.names[asname] = ForeignObject(name)
+				#alias.asname.hl = self.context.names[asname]
 			else:
 				if isinstance(alias.name, ast.Attribute):
 					# e.g.: import foo.bar.baz
 					name = str(alias.name)
 					asname = str(alias.name.first())
 					if self.project.is_local(self.module):
-						alias.name.hl = self.context.names[asname] = self.project.find_module(asname, self)
+						self.context.add_symbol(asname)
+						#alias.name.hl = self.context.names[asname] = self.project.find_module(asname, self)
 					else:
-						alias.name.hl = self.context.names[name] = ForeignObject(asname)
+						self.context.add_symbol(name)
+						#alias.name.hl = self.context.names[name] = ForeignObject(asname)
 				else:
 					# e.g.: import foo
 					name = str(alias.name)
 					if self.project.is_local(self.module):
-						self.context.names[name] = self.module.refs[name]
+						self.context.add_symbol(name)
+						#self.context.names[name] = self.module.refs[name]
 					else:
-						self.context.names[name] = ForeignObject(name)
-					alias.name.hl = self.context.names[name]
+						self.context.add_symbol(name)
+						#self.context.names[name] = ForeignObject(name)
+					#alias.name.hl = self.context.names[name]
 
 
 	def visit_ImportFrom(self, node):
@@ -91,15 +103,17 @@ class Indexer(ASTVisitor):
 			name = str(alias.name)
 			if name == '*':
 				for n, ref in mod.lookup_star().items():
-					self.context.names[n] = ref
+					#self.context.names[n] = ref
+					self.context.add_symbol(n)
 			else:
 				if alias.asname:
 					asname = str(alias.asname)
 				else:
 					asname = name
 				try:
-					ref = mod.lookup_name(name)
-					self.context.names[asname] = ref
+					self.context.add_symbol(asname)
+					#ref = mod.lookup_name(name)
+					#self.context.names[asname] = ref
 				except KeyError:
 					logging.critical("MISSING: {} in {} @ {}".format(name, mod.filename, self.module.filename))
 
@@ -109,7 +123,7 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.keywords)
 		self.visit(node.starargs)
 		self.visit(node.kwargs)
-		with self.scope(MelanoClass(node)):
+		with self.scope(node):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
 
@@ -123,7 +137,7 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
-		with self.scope(MelanoFunction(node)):
+		with self.scope(node):
 			# arg name defs are inside the func
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)
@@ -135,16 +149,16 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
-	def visit_Attribute(self, node):
-		name = str(node).replace('.', '_')
-		if node.ctx == ast.Store:
-			if name not in self.context.names:
-				self.context.names[name] = MelanoVariable(node, self.context)
+	#def visit_Attribute(self, node):
+	#	name = str(node).replace('.', '_')
+	#	if node.ctx == ast.Store:
+	#		if name not in self.context.names:
+	#			self.context.names[name] = MelanoVariable(node, self.context)
 
 
 	def visit_Name(self, node):
 		name = str(node)
 		if node.ctx == ast.Param or node.ctx == ast.Store:
-			if name not in self.context.names:
-				self.context.names[name] = MelanoVariable(node, self.context)
+			if name not in self.context.symbols:
+				self.context.add_symbol(name)
 

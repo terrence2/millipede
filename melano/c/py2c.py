@@ -22,16 +22,7 @@ class Py2C(ASTVisitor):
 
 		# the main unit where we put top-level entries
 		self.translation_unit = c.TranslationUnit()
-		imp = c.Include('Python.h', True)
-		self.translation_unit.ext.insert(0, imp)
-
-		# entry point that creates the module namespace
-		self.entry = c.FuncDef(
-			c.Decl('entryfunc',
-				c.FuncDecl(c.ParamList(), c.PtrDecl(c.TypeDecl('entryfunc', c.IdentifierType('PyObject'))))),
-			c.Compound()
-		)
-		self.translation_unit.ext.append(self.entry)
+		self.translation_unit.add_include(c.Include('Python.h', True))
 
 		# the main function -- handles init, cleanup, and error printing at top level
 		# int main(int argc, char** argv) {
@@ -58,7 +49,8 @@ class Py2C(ASTVisitor):
 					c.Return(c.Constant('integer', 0))
 			)
 		)
-		self.translation_unit.ext.append(self.main)
+		self.translation_unit.add_fwddecl(self.main.decl)
+		self.translation_unit.add(self.main)
 
 		# keep all public names to ensure we don't alias
 		self.namespaces = []
@@ -83,6 +75,23 @@ class Py2C(ASTVisitor):
 		return None, nodes
 
 	def visit_Module(self, node):
+		mod = node.hl
+		modname = mod.owner.ll_name
+
+		# entry point that creates the module namespace
+		self.entry = c.FuncDef(
+			c.Decl(modname,
+				c.FuncDecl(c.ParamList(), c.PtrDecl(c.TypeDecl(modname, c.IdentifierType('PyObject'))))),
+			c.Compound()
+		)
+		self.translation_unit.add_fwddecl(self.entry.decl)
+		self.translation_unit.add(self.entry)
+
+		# add all names in the entry
+		for name, sym in mod.symbols.items():
+			self.entry.add_variable(c.Decl(sym.ll_name, self.PyObjectP(sym.ll_name)))
+
+		'''
 		# /* module for <filename> */
 		# PyObject *<name> = PyModule_New("<name>");
 		# if(!<name>) return NULL;
@@ -117,9 +126,9 @@ class Py2C(ASTVisitor):
 			self.entry.add(c.Assignment('=', c.ID(tmp2), c.FuncCall(c.ID('PyDict_SetItemString'), c.ExprList(
 											c.ID(tmp1), c.Constant('string', '__doc__'), c.ID(tmp0)))))
 			self.entry.add(c.If(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(tmp2)), c.Return(c.ID('NULL')), None))
-
+		'''
 		# visit rest of body
-		self.visit_nodelist(body)
+		self.visit_nodelist(node.body)
 
 
 

@@ -3,6 +3,9 @@ Copied from Eli Benderski's LGPL pycparser.
 '''
 from melano.parser.ast import AST
 
+class CPP(AST):
+	'''type for preprocessor nodes'''
+
 
 class ArrayDecl(AST):
 	_fields = ('type', 'dim')
@@ -201,7 +204,7 @@ class If(AST):
 		self.iffalse = iffalse
 
 
-class Include(AST):
+class Include(CPP):
 	def __init__(self, name, is_system=False):
 		self.name = name
 		self.is_system = is_system
@@ -276,6 +279,20 @@ class TranslationUnit(AST):
 	_fields = ('ext',)
 	def __init__(self, *ext):
 		self.ext = list(ext) # declarations (Decl), Typedef or function definitions (FuncDef)
+		self._inc_pos = 0
+		self._fwddecl_pos = 0
+
+	def add_include(self, inc):
+		self.ext.insert(self._inc_pos, inc)
+		self._inc_pos += 1
+		self._fwddecl_pos += 1
+
+	def add_fwddecl(self, decl):
+		self.ext.insert(self._fwddecl_pos, decl)
+		self._fwddecl_pos += 1
+
+	def add(self, node):
+		self.ext.append(node)
 
 
 class TypeDecl(AST):

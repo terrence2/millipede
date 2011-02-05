@@ -2,14 +2,13 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
-#from melano.project.builtin import lookup_builtin
-from melano.project.lowlevel.type.object import PyObject
-from melano.project.lowlevel.type.ptr import Ptr
+from melano.project.name import Name
+from melano.project.scope import Scope
 import hashlib
 import tokenize
 
 
-class MelanoModule:
+class MelanoModule(Scope):
 	'''
 	Represents one python-level module.
 	'''
@@ -18,11 +17,14 @@ class MelanoModule:
 	EXTENSION = 2
 	PROJECT = 3
 
-	def __init__(self, modtype:int, filename:str):
+
+	def __init__(self, modtype:int, filename:str, dottedname:str):
 		'''
 		The source is the location (project root relative) where
 		this module can be found.
 		'''
+		super().__init__(Name(dottedname.replace('.', '_'), None))
+
 		self.type = modtype
 		self.filename = filename
 		if self.filename.endswith('.py'):
@@ -35,14 +37,13 @@ class MelanoModule:
 		# the ast.Module for this module
 		self.ast = None
 
+		# add names common
+		self.add_symbol('__name__', dottedname)
+		self.add_symbol('__file__', filename)
 
-		self.refs = {} # {ast.Attribute or ast.Name: MelanoModule}
-
-		# common fields for all namespace entries
-		self.parent = None # always nil for modules
-		self.names = {
-					'__file__': filename
-					}
+		# the refs table contains referenced modules (not the symbols they pull in, just a 
+		#	mapping from the accessing module name to the module itself).
+		self.refs = {}
 
 
 	def __read_file(self):
@@ -62,6 +63,11 @@ class MelanoModule:
 
 	def lookup_star(self):
 		return self.names
+
+
+	def show(self, level=0):
+		print(self.owner.name)
+		super().show(level)
 
 	"""
 	def lookup(self, name):

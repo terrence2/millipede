@@ -4,6 +4,7 @@ All rights reserved.
 '''
 from . import ast as c
 from contextlib import contextmanager
+from melano.c.ast import CPP, FuncDef
 from melano.parser.visitor import ASTVisitor
 
 
@@ -133,6 +134,8 @@ class COut(ASTVisitor):
 	def visit_TranslationUnit(self, node):
 		for n in node.ext:
 			self.visit(n)
+			if not isinstance(n, (CPP, FuncDef)):
+				self.fp.write(';')
 			self.fp.write('\n')
 
 	def visit_TypeDecl(self, node):

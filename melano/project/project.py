@@ -79,7 +79,8 @@ class MelanoProject:
 		self.global_names = []
 
 
-	def configure(self, *, stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[], builddir='./build', limit='.*'):
+	def configure(self, *, stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[], builddir='./build',
+				limit='.*', verbose=False):
 		'''
 		Set up this project.
 		stdlib, extensions, builtins, overrides : extra directories to search before the standard paths
@@ -94,18 +95,20 @@ class MelanoProject:
 		self.build = os.path.realpath(builddir)
 		self.limit = re.compile(limit)
 
+		self.verbose = verbose
+		if verbose:
+			logging.info("Name: {}".format(self.name))
+			logging.info("Programs: {}".format(self.programs))
+			logging.info("Project Roots: {}".format(self.roots))
+			logging.info("Stdlib Search: {}".format(self.stdlib))
+			logging.info("Extension Search: {}".format(self.extensions))
+			logging.info("Builtins Search: {}".format(self.builtins))
+
 
 	def locate_modules(self):
 		'''Perform static, module-level reachability analysis.'''
-		logging.info("Name: {}".format(self.name))
-		logging.info("Programs: {}".format(self.programs))
-		logging.info("Project Roots: {}".format(self.roots))
-		logging.info("Stdlib Search: {}".format(self.stdlib))
-		logging.info("Extension Search: {}".format(self.extensions))
-		logging.info("Builtins Search: {}".format(self.builtins))
 		for program in self.programs:
-			mod = self._locate_module(program, '')
-			mod.names['__name__'] = '__main__'
+			mod = self._locate_module(program, '', is_main=True)
 			self.programs[program] = mod
 
 
@@ -174,6 +177,16 @@ class MelanoProject:
 		m.write()
 
 
+
+	def show(self):
+		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
+		for fn in self.order:
+			mod = self.modules[fn]
+			if self.is_local(mod):
+				mod.show()
+
+
+
 	def find_module(self, dottedname, module):
 		return self.modules[self.name_to_path[dottedname]]
 
@@ -197,7 +210,7 @@ class MelanoProject:
 				return path
 
 
-	def _locate_module(self, dottedname, contextdir=None, level=0):
+	def _locate_module(self, dottedname, contextdir=None, level=0, is_main=False):
 		# QUIRK: filter out jython names from the stdlib
 		if dottedname.startswith('org.python'):
 			return None
@@ -206,11 +219,11 @@ class MelanoProject:
 		parts = dottedname.split('.')
 		for i in range(len(parts)):
 			name = '.'.join(parts[0:i + 1])
-			mod = self._locate_module_inner(name, contextdir, level)
+			mod = self._locate_module_inner(name, contextdir, level, is_main)
 		return mod
 
 
-	def _locate_module_inner(self, dottedname, contextdir=None, level=0):
+	def _locate_module_inner(self, dottedname, contextdir=None, level=0, is_main=False):
 		# locate the module
 		logging.debug('locating:{}{}'.format('\t' * level, dottedname))
 		modtype, progpath = self.__find_module_file(dottedname, contextdir)
@@ -224,7 +237,7 @@ class MelanoProject:
 			return self.modules[progpath]
 
 		# create the module
-		mod = MelanoModule(modtype, progpath)
+		mod = MelanoModule(modtype, progpath, dottedname if not is_main else '__main__')
 		mod.name = self.__name_for_module_path(progpath)
 		self.modules[progpath] = mod
 
@@ -308,8 +321,7 @@ class MelanoProject:
 			parts = dottedname.split('.')
 			parentname = '.'.join(parts[:-1])
 			modtype, modfile = self.__find_module_file(parentname, contextdir)
-			mod = MelanoModule(modtype, modfile)
-			mod.names['__name__'] = MelanoConst(str, parentname)
+			mod = MelanoModule(modtype, modfile, parentname)
 			self.__load_ast(mod)
 			visitor = FindLinks()
 			visitor.visit(mod.ast)
