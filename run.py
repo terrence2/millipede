@@ -12,7 +12,7 @@ def main():
 	logging.basicConfig(level=logging.INFO)
 
 	# some tests
-	files = ['test/import/from_module.py']
+	files = ['test/assignment/ints.py']
 	for path in files:
 		base = os.path.dirname(path)
 		fn = os.path.basename(path)

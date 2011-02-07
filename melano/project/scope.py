@@ -15,6 +15,10 @@ class Scope:
 		self.owner = owner
 
 
+	def lookup(self, name:str) -> Name:
+		return self.symbols[name]
+
+
 	def add_symbol(self, name:str, init:object=None):
 		self.symbols[name] = Name(name, self)
 		return self.symbols[name]

@@ -280,11 +280,18 @@ class TranslationUnit(AST):
 	def __init__(self, *ext):
 		self.ext = list(ext) # declarations (Decl), Typedef or function definitions (FuncDef)
 		self._inc_pos = 0
+		self._var_pos = 0
 		self._fwddecl_pos = 0
 
 	def add_include(self, inc):
 		self.ext.insert(self._inc_pos, inc)
 		self._inc_pos += 1
+		self._var_pos += 1
+		self._fwddecl_pos += 1
+
+	def add_variable(self, decl):
+		self.ext.insert(self._var_pos, decl)
+		self._var_pos += 1
 		self._fwddecl_pos += 1
 
 	def add_fwddecl(self, decl):
