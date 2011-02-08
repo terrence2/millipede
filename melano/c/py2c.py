@@ -188,13 +188,14 @@ class Py2C(ASTVisitor):
 
 		for target in node.targets:
 			name = self.visit(target)
-			print(name)
+			self.entry.add(c.Assignment('=', c.ID(name), c.ID(val)))
 
 
 	def visit_Name(self, node):
-		sym = self.context.lookup(str(node))
-		self.entry.add_variable(c.Decl(sym.ll_name, self.PyObjectP(sym.ll_name)))
-		return sym.ll_name
+		if node.ctx == py.Store:
+			sym = self.context.lookup(str(node))
+			self.entry.add_variable(c.Decl(sym.ll_name, self.PyObjectP(sym.ll_name)))
+			return sym.ll_name
 
 
 	def visit_Num(self, node):
@@ -210,6 +211,9 @@ class Py2C(ASTVisitor):
 		self.entry.cleanup.append(tmp)
 
 		return tmp
+
+	def visit_FunctionDef(self, node):
+		print("FUNC")
 
 	"""
 
