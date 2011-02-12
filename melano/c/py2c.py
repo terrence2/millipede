@@ -213,7 +213,29 @@ class Py2C(ASTVisitor):
 		return tmp
 
 	def visit_FunctionDef(self, node):
-		print("FUNC")
+		'''
+		self.visit(node.returns) # return annotation
+		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
+		self.visit(node.args.varargannotation) # *args annotation
+		self.visit_nodelist_field(node.args.kwonlyargs, 'annotation') # kwargs annotation
+		self.visit(node.args.kwargannotation) # **args annotation
+		self.visit_nodelist(node.args.defaults) # positional arg default values
+		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
+
+		with self.scope(node):
+			# arg name defs are inside the func
+			self.visit_nodelist_field(node.args.args, 'arg')
+			self.visit(node.args.vararg)
+			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
+			self.visit(node.args.kwarg)
+
+			self.visit_nodelist(node.body)
+
+		self.visit_nodelist(node.decorator_list)
+		'''
+		hl = self.context.symbols[str(node.name)]
+		#import pdb; pdb.set_trace()
+		print(hl.name, hl.ll_name)
 
 	"""
 
