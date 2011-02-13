@@ -131,6 +131,15 @@ class COut(ASTVisitor):
 		self.fp.write('return ');
 		self.visit(node.expr)
 
+	def visit_Struct(self, node):
+		self.fp.write('struct ' + node.name)
+		if node.decls:
+			self.fp.write('{')
+			for n in node.decls:
+				self.visit(n)
+				self.fp.write(';')
+			self.fp.write('}')
+
 	def visit_TranslationUnit(self, node):
 		for n in node.ext:
 			self.visit(n)

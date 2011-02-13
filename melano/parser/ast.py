@@ -64,8 +64,11 @@ class AST:
 		#self.llnode = None
 		self.hl = None
 		self.symbol = None
-		self.start = llnode.startpos
-		self.end = llnode.endpos
+		if llnode:
+			self.start = llnode.startpos
+			self.end = llnode.endpos
+		else:
+			self.start = self.end = None
 
 	def llcopy(self, other):
 		'''Take low-level parameters from the other node.'''

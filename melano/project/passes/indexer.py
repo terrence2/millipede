@@ -32,6 +32,7 @@ class Indexer(ASTVisitor):
 		# insert node into parent scope
 		sym = self.context.add_symbol(str(node.name))
 		sym.scope = Scope(sym)
+		node.hl = sym
 
 		# push a new scope
 		prior = self.context
@@ -129,6 +130,8 @@ class Indexer(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
+		self.visit(node.name)
+
 		self.visit(node.returns) # return annotation
 		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
 		self.visit(node.args.varargannotation) # *args annotation
@@ -146,6 +149,10 @@ class Indexer(ASTVisitor):
 
 			self.visit_nodelist(node.body)
 
+		# insert the assumed return None if we fall off the end without a return
+		if not isinstance(node.body[-1], ast.Return):
+			node.body.append(ast.Return(ast.Name('None', ast.Load, None), None))
+
 		self.visit_nodelist(node.decorator_list)
 
 
@@ -160,5 +167,6 @@ class Indexer(ASTVisitor):
 		name = str(node)
 		if node.ctx == ast.Param or node.ctx == ast.Store:
 			if name not in self.context.symbols:
-				self.context.add_symbol(name)
+				sym = self.context.add_symbol(name)
+				node.hl = sym
 

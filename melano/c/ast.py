@@ -172,6 +172,8 @@ class FuncDef(AST):
 		self.decl = decl
 		self.body = body
 		self._vars_pos = 0
+		# track variable names that need cleanup in this scope
+		self.cleanup = []
 
 	def add_variable(self, decl):
 		self.body.block_items.insert(self._vars_pos, decl)
@@ -248,7 +250,7 @@ class Struct(AST):
 	_fields = ('decls',)
 	def __init__(self, name, *decls):
 		self.name = name
-		self.decls = decls
+		self.decls = list(decls)
 
 
 class StructRef(AST):
