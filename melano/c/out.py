@@ -74,7 +74,12 @@ class COut(ASTVisitor):
 			self.fp.write(': ' + str(node.bitsize))
 		if node.init:
 			self.fp.write(' = ')
-			self.visit(node.init)
+			if isinstance(node.init, c.ExprList):
+				self.fp.write('{')
+				self.visit(node.init)
+				self.fp.write('}')
+			else:
+				self.visit(node.init)
 
 	def visit_ExprList(self, node):
 		if not len(node.exprs): return

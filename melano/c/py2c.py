@@ -64,8 +64,10 @@ class Py2C(ASTVisitor):
 	@contextmanager
 	def local_scope(self, ctx):
 		prior = self.locals
+		print("IN LOCALS:", ctx)
 		self.locals = ctx
 		yield
+		print("OUT LOCALS:", prior)
 		self.locals = prior
 
 	def tmpname(self):
@@ -188,6 +190,56 @@ class Py2C(ASTVisitor):
 			self.entry.cleanup.append(name)
 
 
+	def visit_Attribute(self, node):
+		lhs = self.visit(node.value)
+
+		# pick a good name for ourself, if we have one
+		name = node.hl.name if node.hl else self.tmpname()
+		self.entry.add_variable(c.Decl(name, self.PyObjectP(name)))
+
+		# short circuit the Name derefernce and use GetAttrString here
+		assert isinstance(node.attr, py.Name)
+		self.entry.add(c.Assignment('=', c.ID(name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(lhs), c.Constant('string', node.attr.id)))))
+		self.entry.add(self._error_if_null(name, self.entry.cleanup))
+		self.entry.cleanup.append(name)
+		return name
+
+
+	def visit_Call(self, node):
+		#TODO: direct calling, keywords calling, etc
+		#TODO: track "type" so we can dispatch to PyCFunction_Call or PyFunction_Call instead of PyObject_Call 
+		#TODO: track all call methods (callsite usage types) and see if we can't unpack into a direct c call
+
+		# get id of func
+		funcname = self.visit(node.func)
+
+		# get id of positional args
+		id_of_args = []
+		if node.args:
+			for arg in node.args:
+				id_of_args.append(self.visit(arg))
+
+		# build a tuple with our positional args	
+		#NOTE: Pack increfs the args, so we only need to delete the tuple later
+		args = funcname + '_args'
+		self.entry.add_variable(c.Decl(args, self.PyObjectP(args)))
+		to_pack = [c.ID(n) for n in id_of_args]
+		self.entry.add(c.Assignment('=', c.ID(args), c.FuncCall(c.ID('PyTuple_Pack'), c.ExprList(c.Constant('integer', len(id_of_args)), *to_pack))))
+		self.entry.add(self._error_if_null(args, self.entry.cleanup))
+		self.entry.cleanup.append(args)
+
+		# make the call
+		rv = funcname + '_rv'
+		self.entry.add_variable(c.Decl(rv, self.PyObjectP(rv)))
+		self.entry.add(c.Assignment('=', c.ID(rv), c.FuncCall(c.ID('PyObject_Call'), c.ExprList(c.ID(funcname), c.ID(args), c.ID('NULL')))))
+		self.entry.add(self._error_if_null(rv, self.entry.cleanup))
+		self.entry.cleanup.append(rv)
+
+		# cleanup the call tuple
+		self.entry.add(c.FuncCall(c.ID('Py_DECREF'), c.ID(args)))
+		self.entry.cleanup.remove(args)
+
+
 	def visit_FunctionDef(self, node):
 		'''
 		self.visit(node.returns) # return annotation
@@ -211,6 +263,7 @@ class Py2C(ASTVisitor):
 		'''
 		funcname = node.name.hl.global_name
 		funcname_local = node.name.hl.ll_name + '_py'
+		funcname_local_def = funcname_local + '_def'
 
 		prior = self.entry
 
@@ -227,23 +280,33 @@ class Py2C(ASTVisitor):
 		# query the docstring -- we actually want to declare it once in the module, but need to get the real bodylist here
 		docstring, body = self._get_docstring(node.body)
 
+		print(1, funcname)
 		with self.local_scope(node.hl.scope):
+			print(2, funcname)
 			self.visit_nodelist(body)
-
-
-		#funcname = self.visit(node.name)
-		#hl = self.context.symbols[str(node.name)]
+			print(3, funcname)
+		print(4, funcname)
 
 		# reset our context and add declaration there
 		self.entry = prior
-		self.entry.add_variable(c.Decl(funcname_local, self.PyObjectP(funcname_local)))
+
+		#TODO: keyword functions and other call types
 
 		# wrap the function in a PyCFunction
-		#TODO: keyword functions and other call types
-		mdef = self.tmpname()
-		self.entry.add_variable(c.Decl(mdef, c.Struct('PyMethodDef')))
-		self.entry.add(c.Assignment('=', c.ID(mdef), c.Struct('PyMethodDef',
-								c.Constant('string', str(node.name)), c.ID(funcname), c.ID('METH_VARARGS'), c.ID('NULL'))))
+		self.entry.add_variable(c.Decl(funcname_local_def, c.TypeDecl(funcname_local_def, c.Struct('PyMethodDef')),
+									init=c.ExprList(c.Constant('string', str(node.name)), c.ID(funcname), c.ID('METH_VARARGS'), c.ID('NULL'))))
+
+		# create the function
+		self_name = 'self' if self.locals else 'NULL'
+		mod_name = self.globals.owner.name + '_local'
+		self.entry.add_variable(c.Decl(funcname_local, self.PyObjectP(funcname_local)))
+		self.entry.add(c.Assignment('=', c.ID(funcname_local), c.FuncCall(c.ID('PyCFunction_NewEx'), c.ExprList(
+																c.UnaryOp('&', c.ID(funcname_local_def)), c.ID(self_name), c.ID(mod_name)))))
+		self.entry.add(self._error_if_null(funcname_local, self.entry.cleanup))
+		self.entry.cleanup.append(funcname_local)
+
+		# add the function to the surrounding namespace
+		#self._attach_name(str(node.name), funcname_local)
 
 		# add the docstring
 		if docstring and self.emit_docstrings:

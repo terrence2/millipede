@@ -156,11 +156,16 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
-	#def visit_Attribute(self, node):
-	#	name = str(node).replace('.', '_')
-	#	if node.ctx == ast.Store:
-	#		if name not in self.context.names:
-	#			self.context.names[name] = MelanoVariable(node, self.context)
+	def visit_Attribute(self, node):
+		#FIXME: this generates names for Load and Store... we need a way to guarantee we don't clash
+		self.visit(node.value)
+		self.visit(node.attr)
+		name = str(node).replace('.', '_')
+		if node.ctx == ast.Store:
+			if name not in self.context.symbols:
+				sym = self.context.add_symbol(name)
+				node.hl = sym
+
 
 
 	def visit_Name(self, node):
