@@ -19,6 +19,13 @@ class Scope:
 		return self.symbols[name]
 
 
+	def has_closure(self) -> bool:
+		for sym in self.symbols.values():
+			if sym.scope:
+				return True
+		return False
+
+
 	def add_symbol(self, name:str, init:object=None):
 		self.symbols[name] = Name(name, self)
 		return self.symbols[name]

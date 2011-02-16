@@ -1,0 +1,1 @@
+tmp0 = 'hello'

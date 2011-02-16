@@ -118,7 +118,7 @@ class MelanoProject:
 			if self.is_local(mod):
 				visitor.visit(mod.ast)
 		visitor.close()
-		return visitor.translation_unit
+		return visitor.tu
 
 
 	def index_names(self):

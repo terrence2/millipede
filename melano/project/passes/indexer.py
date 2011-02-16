@@ -32,7 +32,7 @@ class Indexer(ASTVisitor):
 		# insert node into parent scope
 		sym = self.context.add_symbol(str(node.name))
 		sym.scope = Scope(sym)
-		node.hl = sym
+		node.hl = node.name.hl = sym
 
 		# push a new scope
 		prior = self.context
@@ -130,8 +130,6 @@ class Indexer(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
-		self.visit(node.name)
-
 		self.visit(node.returns) # return annotation
 		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
 		self.visit(node.args.varargannotation) # *args annotation
@@ -151,27 +149,30 @@ class Indexer(ASTVisitor):
 
 		# insert the assumed return None if we fall off the end without a return
 		if not isinstance(node.body[-1], ast.Return):
-			node.body.append(ast.Return(ast.Name('None', ast.Load, None), None))
+			node.body.append(ast.Return(None, None))
 
 		self.visit_nodelist(node.decorator_list)
 
 
 	def visit_Attribute(self, node):
-		#FIXME: this generates names for Load and Store... we need a way to guarantee we don't clash
 		self.visit(node.value)
 		self.visit(node.attr)
-		name = str(node).replace('.', '_')
-		if node.ctx == ast.Store:
-			if name not in self.context.symbols:
-				sym = self.context.add_symbol(name)
-				node.hl = sym
+		#name = str(node).replace('.', '_')
+		name = str(node)
+		#if node.ctx == ast.Store:
+		if name not in self.context.symbols:
+			sym = self.context.add_symbol(name)
+			node.hl = sym
+		else:
+			node.hl = self.context.lookup(name)
 
 
 
 	def visit_Name(self, node):
 		name = str(node)
-		if node.ctx == ast.Param or node.ctx == ast.Store:
-			if name not in self.context.symbols:
-				sym = self.context.add_symbol(name)
-				node.hl = sym
-
+		#if node.ctx == ast.Param or node.ctx == ast.Store:
+		if name not in self.context.symbols:
+			sym = self.context.add_symbol(name)
+			node.hl = sym
+		else:
+			node.hl = self.context.lookup(name)

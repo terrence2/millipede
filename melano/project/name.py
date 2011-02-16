@@ -16,7 +16,7 @@ class Name:
 		self.parent = parent
 
 		# TODO: this definitely needs some identifier translation, at least to remove unicode
-		self.ll_name = name
+		self.ll_name = self._as_lowlevel(name)
 
 		# this name should be globally unique in all the project
 		if parent and parent.owner:
@@ -27,6 +27,8 @@ class Name:
 		# a name can have a child scope (class/functions, etc)
 		self.scope = None
 
+	def _as_lowlevel(self, name):
+		return name.replace('.', '_')
 
 	def show(self, level):
 		print('{}{:20}{:20}'.format('\t' * level, self.name, self.global_name))

@@ -174,6 +174,30 @@ class FuncDef(AST):
 		self._vars_pos = 0
 		# track variable names that need cleanup in this scope
 		self.cleanup = []
+		# map from ll variable names to hl symbols (and existence markers)
+		self.names = {}
+
+	def reserve_name(self, name, sym, tu):
+		'''
+		Try to ensure uniqueness in the local scope and against the global scope.  We _should_ only
+		ever care about names in the global scope that we use in the local scope, so if someone
+		introduces a name into the global scope later that aliases with something we've already
+		added to the local scope, then it shouldn't matter because we don't have interest in that 
+		global name, only the local one we are aliasing.
+		'''
+		cnt = 0
+		nm = name
+		while nm in self.names or nm in tu.names:
+			nm = name + '_' + str(cnt)
+			cnt += 1
+		self.names[nm] = sym
+		return nm
+
+	def has_name(self, name):
+		return name in self.names
+
+	def has_symbol(self, sym):
+		return sym in set(self.names.values())
 
 	def add_variable(self, decl):
 		self.body.block_items.insert(self._vars_pos, decl)
@@ -284,6 +308,17 @@ class TranslationUnit(AST):
 		self._inc_pos = 0
 		self._var_pos = 0
 		self._fwddecl_pos = 0
+		# map from ll variable names to hl symbols (and existence markers)
+		self.names = {}
+
+	def reserve_name(self, name, sym):
+		cnt = 0
+		nm = name
+		while nm in self.names:
+			nm = name + '_' + str(cnt)
+			cnt += 1
+		self.names[nm] = sym
+		return nm
 
 	def add_include(self, inc):
 		self.ext.insert(self._inc_pos, inc)
