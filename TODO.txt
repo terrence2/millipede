@@ -1,0 +1,6 @@
+py2c:
+* Make as much static as possible
+* Make builtins const?
+* __warn_unused_result__?
+* Track namespaces so we can avoid collisions
+

@@ -2,10 +2,13 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
+from melano.c.types.lltype import LLType
+from melano.c.types.pymodule import PyModuleType
 from melano.project.name import Name
 from melano.project.scope import Scope
 import hashlib
 import tokenize
+
 
 
 class MelanoModule(Scope):
@@ -25,7 +28,7 @@ class MelanoModule(Scope):
 		'''
 		super().__init__(Name(dottedname.replace('.', '_'), None))
 
-		self.type = modtype
+		self.modtype = modtype
 		self.filename = filename
 		if self.filename.endswith('.py'):
 			self.source = self.__read_file()
@@ -69,6 +72,8 @@ class MelanoModule(Scope):
 		print(self.owner.name)
 		super().show(level)
 
+
+
 	"""
 	def lookup(self, name):
 		'''Query for a name.  Overflow into module builtins.'''
@@ -80,9 +85,6 @@ class MelanoModule(Scope):
 		raise KeyError(name)
 
 
-	def get_type(self):
-		'''FIXME: this should depend on whether we are loaded from py, and local or not.'''
-		return Ptr(PyObject())
 
 	def __str__(self):
 		return '<Module[{}]>'.format(self.names.get('__name__', self.filename))

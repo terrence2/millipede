@@ -193,7 +193,7 @@ class MelanoProject:
 
 	def is_local(self, mod:ast.Module) -> bool:
 		'''Return true if the module should be translated, false if bridged to.'''
-		return mod.type == MelanoModule.PROJECT and self.limit.match(mod.filename) is not None
+		return mod.modtype == MelanoModule.PROJECT and self.limit.match(mod.filename) is not None
 
 
 	def __name_for_module_path(self, path):

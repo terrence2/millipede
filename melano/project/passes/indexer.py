@@ -3,8 +3,11 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
+from melano.c.types.pyinteger import PyIntegerType
+from melano.c.types.pymodule import PyModuleType
 from melano.parser import ast
 from melano.parser.visitor import ASTVisitor
+from melano.project.constant import Constant
 from melano.project.name import Name
 from melano.project.scope import Scope
 import logging
@@ -43,6 +46,7 @@ class Indexer(ASTVisitor):
 
 	def visit_Module(self, node):
 		assert node.hl is self.module
+		node.hl.owner.types = [PyModuleType]
 		self.visit_nodelist(node.body)
 
 
@@ -176,3 +180,9 @@ class Indexer(ASTVisitor):
 			node.hl = sym
 		else:
 			node.hl = self.context.lookup(name)
+
+
+	def visit_Num(self, node):
+		#TODO: expand this to discover the minimum sized int that will cover the value.
+		#TODO: does Num also cover PyFloatTypes?
+		node.hl = Constant(PyIntegerType)

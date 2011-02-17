@@ -12,7 +12,7 @@ def main():
 	logging.basicConfig(level=logging.INFO)
 
 	# some tests
-	files = ['test/functions/nested_func.py']
+	files = ['test/assignment/module_globals.py']
 	for path in files:
 		base = os.path.dirname(path)
 		fn = os.path.basename(path)

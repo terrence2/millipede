@@ -3,6 +3,8 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from collections import OrderedDict
+from melano.c.types.lltype import LLType
+from melano.c.types.pydict import PyDictType
 from melano.project.name import Name
 
 
@@ -13,6 +15,18 @@ class Scope:
 	def __init__(self, owner:Name):
 		self.symbols = OrderedDict()
 		self.owner = owner
+
+		# the name of the global variable used to reference this scope
+		self.ll_scope = None
+
+		# the name of the low-level function used to build the scope 
+		self.ll_builder = None
+
+		# scopes can have a single type, and it is almost only a simple PyDictType
+		self.type = PyDictType
+
+		# will be set with the instance when we declare it
+		self.inst = None
 
 
 	def lookup(self, name:str) -> Name:
@@ -34,3 +48,17 @@ class Scope:
 	def show(self, level=0):
 		for name in self.symbols:
 			self.symbols[name].show(level + 1)
+
+
+	def get_type(self) -> type:
+		'''
+		Query the type list to find the most appropriate type for this name.
+		'''
+		return self.type
+
+
+	def create_instance(self, name:str):
+		'''
+		Instance the type with a name.  Sets the new instance on the 'inst' variable.
+		'''
+		self.inst = self.get_type()(name)

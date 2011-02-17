@@ -2,6 +2,7 @@
 Copied from Eli Benderski's LGPL pycparser.
 '''
 from melano.parser.ast import AST
+import itertools
 
 class CPP(AST):
 	'''type for preprocessor nodes'''
@@ -176,6 +177,12 @@ class FuncDef(AST):
 		self.cleanup = []
 		# map from ll variable names to hl symbols (and existence markers)
 		self.names = {}
+		# counter for tmp items
+		self.tmpcount = itertools.count()
+
+	def tmpname(self):
+		n = self.reserve_name('tmp' + str(next(self.tmpcount)), None, None)
+		return n
 
 	def reserve_name(self, name, sym, tu):
 		'''
@@ -185,9 +192,10 @@ class FuncDef(AST):
 		added to the local scope, then it shouldn't matter because we don't have interest in that 
 		global name, only the local one we are aliasing.
 		'''
+		if not tu: tu = set()
 		cnt = 0
 		nm = name
-		while nm in self.names or nm in tu.names:
+		while nm in self.names or (tu and nm in tu.names):
 			nm = name + '_' + str(cnt)
 			cnt += 1
 		self.names[nm] = sym
