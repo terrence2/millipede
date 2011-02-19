@@ -1,1 +1,2 @@
-' foo '.strip()
+print(' foo '.strip())
+#out: foo

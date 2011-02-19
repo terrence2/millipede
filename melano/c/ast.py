@@ -64,6 +64,23 @@ class Compound(AST):
 	_fields = ('block_items',)
 	def __init__(self, *items):
 		self.block_items = list(items)
+		self.owner = None
+
+	@property
+	def cleanup(self):
+		return self.owner.cleanup
+
+	def reserve_name(self, name, sym, tu):
+		return self.owner.reserve_name(name, sym, tu)
+	def has_name(self, name):
+		return self.owner.has_name(name)
+	def has_symbol(self, sym):
+		return self.owner.has_symbol(sym)
+	def add_variable(self, node):
+		return self.owner.add_variable(node)
+
+	def add(self, node):
+		self.block_items.append(node)
 
 
 class CompoundLiteral(AST):
@@ -74,9 +91,11 @@ class CompoundLiteral(AST):
 
 
 class Constant(AST):
-	def __init__(self, type, value):
+	def __init__(self, type, value, prefix='', postfix=''):
 		self.type = type
 		self.value = value
+		self.prefix = prefix
+		self.postfix = postfix
 
 
 class Continue(AST): pass
@@ -170,8 +189,10 @@ class FuncDecl(AST):
 class FuncDef(AST):
 	_fields = ('decl', 'body')
 	def __init__(self, decl, body):
+		assert isinstance(body, Compound), "Techically the body could be any stmt... but it's going to be a compound anyway."
 		self.decl = decl
 		self.body = body
+		self.body.owner = self
 		self._vars_pos = 0
 		# track variable names that need cleanup in this scope
 		self.cleanup = []
@@ -246,7 +267,7 @@ class Include(CPP):
 
 class Label(AST):
 	_fields = ('stmt',)
-	def __init__(self, name, stmt):
+	def __init__(self, name, stmt=None):
 		self.name = name
 		self.stmt = stmt
 

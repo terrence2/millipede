@@ -5,3 +5,4 @@ def foo():
 		print(a + b)
 	bar()
 foo()
+#out: Hello, World!

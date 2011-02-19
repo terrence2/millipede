@@ -12,7 +12,7 @@ def main():
 	logging.basicConfig(level=logging.INFO)
 
 	# some tests
-	files = ['test/assignment/module_globals.py']
+	files = sys.argv[1:]
 	for path in files:
 		base = os.path.dirname(path)
 		fn = os.path.basename(path)
@@ -20,6 +20,7 @@ def main():
 		project.configure(limit=path, verbose=False)
 		project.locate_modules()
 		project.index_names()
+		project.derive_types()
 		project.show()
 		c = project.transform_lowlevel_0()
 		with COut('test.c') as v:

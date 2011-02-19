@@ -1,6 +1,3 @@
-#prints:
-#1
-#0
 a = 0
 def foo():
 	def bar():
@@ -9,3 +6,5 @@ def foo():
 	bar()
 foo()
 print(a)
+#out: 1
+#out: 0

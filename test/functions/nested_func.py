@@ -10,3 +10,6 @@ def foo():
 		baz()
 	bar()
 foo()
+#out: 0
+#out: 1
+#out: 2

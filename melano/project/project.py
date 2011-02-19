@@ -7,16 +7,16 @@ from melano.c.py2c import Py2C
 from melano.parser.driver import PythonParserDriver
 from melano.project.lowlevel.makefile import Makefile
 from melano.project.module import MelanoModule
+#from melano.project.passes.coder import Coder
 from melano.project.passes.find_links import FindLinks
+from melano.project.passes.indexer import Indexer
+#from melano.project.passes.linker import Linker
+from melano.project.passes.typer import Typer
 import logging
 import melano.parser.ast as ast
 import os
 import pickle
 import re
-from melano.project.passes.indexer import Indexer
-#from melano.project.passes.linker import Linker
-#from melano.project.passes.typer import Typer
-#from melano.project.passes.coder import Coder
 
 
 class FileNotFoundException(Exception):

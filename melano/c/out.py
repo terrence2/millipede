@@ -51,16 +51,19 @@ class COut(ASTVisitor):
 		self.fp.write(' {\n')
 		with self.tab():
 			for item in node.block_items:
-				self.fp.write(self.level * '\t')
+				if not isinstance(item, c.Label):
+					self.fp.write(self.level * '\t')
 				self.visit(item)
-				self.fp.write(';\n')
+				if not isinstance(item, (c.Label, c.Compound)):
+					self.fp.write(';')
+				self.fp.write('\n')
 		self.fp.write(self.level * '\t' + '}')
 
 	def visit_Constant(self, node):
 		if node.type == 'string':
-			self.fp.write('"' + node.value + '"')
+			self.fp.write(node.prefix + '"' + node.value + '"' + node.postfix)
 		elif node.type == 'integer':
-			self.fp.write(str(node.value))
+			self.fp.write(node.prefix + str(node.value) + node.postfix)
 		else:
 			raise NotImplementedError
 
@@ -94,6 +97,19 @@ class COut(ASTVisitor):
 			self.fp.write(', ')
 		self.visit(node.exprs[-1])
 
+	def visit_FuncCall(self, node):
+		self.visit(node.name)
+		self.fp.write('(')
+		self.visit(node.args)
+		self.fp.write(')')
+
+	def visit_FuncDef(self, node):
+		self.visit(node.decl)
+		self.visit(node.body)
+
+	def visit_Goto(self, node):
+		self.fp.write('goto ' + node.name)
+
 	def visit_ID(self, node):
 		self.fp.write(node.name)
 
@@ -115,15 +131,9 @@ class COut(ASTVisitor):
 		else:
 			self.fp.write('#include "{}"'.format(node.name))
 
-	def visit_FuncCall(self, node):
-		self.visit(node.name)
-		self.fp.write('(')
-		self.visit(node.args)
-		self.fp.write(')')
-
-	def visit_FuncDef(self, node):
-		self.visit(node.decl)
-		self.visit(node.body)
+	def visit_Label(self, node):
+		self.fp.write(node.name + ':')
+		self.visit(node.stmt)
 
 	def visit_ParamList(self, node):
 		if not len(node.params): return

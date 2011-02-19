@@ -1,3 +1,9 @@
+#fail
 def foo():
 	class Foo:
-		pass
+		print('a')
+	return Foo()
+	print('b')
+foo()
+#out: a
+#out: b

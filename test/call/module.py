@@ -1,3 +1,4 @@
+#out: a
 def foo():
-	pass
+	print('a')
 foo()

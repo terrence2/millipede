@@ -35,7 +35,11 @@ class Name:
 		self.types = []
 
 		# the ll instance
-		self.ll_inst = None
+		self.inst = None
+
+		# property flags
+		self.is_global = False
+		self.is_nonlocal = False
 
 
 	def get_type(self) -> type:
@@ -56,7 +60,7 @@ class Name:
 
 
 	def _as_lowlevel(self, name):
-		return name.replace('.', '_')
+		return name.replace('.', '_').replace('<', '_').replace('>', '_')
 
 
 	def show(self, level):

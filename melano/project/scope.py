@@ -19,8 +19,8 @@ class Scope:
 		# the name of the global variable used to reference this scope
 		self.ll_scope = None
 
-		# the name of the low-level function used to build the scope 
-		self.ll_builder = None
+		# the name of the low-level function used to build/run the scope 
+		self.ll_runner = None
 
 		# scopes can have a single type, and it is almost only a simple PyDictType
 		self.type = PyDictType
@@ -28,9 +28,20 @@ class Scope:
 		# will be set with the instance when we declare it
 		self.inst = None
 
+		# track which symbols are defined in our scope, rather than just referenced
+		self.ownership = set()
+
 
 	def lookup(self, name:str) -> Name:
 		return self.symbols[name]
+
+
+	def has_name(self, name:str) -> bool:
+		return name in self.symbols
+
+
+	def owns_name(self, name:str) -> bool:
+		return name in self.ownership
 
 
 	def has_closure(self) -> bool:
@@ -43,6 +54,10 @@ class Scope:
 	def add_symbol(self, name:str, init:object=None):
 		self.symbols[name] = Name(name, self)
 		return self.symbols[name]
+
+
+	def mark_ownership(self, name:str):
+		self.ownership.add(name)
 
 
 	def show(self, level=0):

@@ -5,9 +5,11 @@ All rights reserved.
 from contextlib import contextmanager
 from melano.c.types.pyinteger import PyIntegerType
 from melano.c.types.pymodule import PyModuleType
+from melano.c.types.pystring import PyStringType
 from melano.parser import ast
 from melano.parser.visitor import ASTVisitor
 from melano.project.constant import Constant
+from melano.project.intermediate import Intermediate
 from melano.project.name import Name
 from melano.project.scope import Scope
 import logging
@@ -35,7 +37,8 @@ class Indexer(ASTVisitor):
 		# insert node into parent scope
 		sym = self.context.add_symbol(str(node.name))
 		sym.scope = Scope(sym)
-		node.hl = node.name.hl = sym
+		node.hl = sym.scope
+		node.name.hl = sym
 
 		# push a new scope
 		prior = self.context
@@ -134,6 +137,7 @@ class Indexer(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
+		self.visit(node.name)
 		self.visit(node.returns) # return annotation
 		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
 		self.visit(node.args.varargannotation) # *args annotation
@@ -161,28 +165,46 @@ class Indexer(ASTVisitor):
 	def visit_Attribute(self, node):
 		self.visit(node.value)
 		self.visit(node.attr)
-		#name = str(node).replace('.', '_')
 		name = str(node)
-		#if node.ctx == ast.Store:
 		if name not in self.context.symbols:
 			sym = self.context.add_symbol(name)
 			node.hl = sym
 		else:
 			node.hl = self.context.lookup(name)
 
+
+	def visit_Global(self, node):
+		for name in node.names:
+			if name not in self.context.symbols:
+				self.context.add_symbol(name)
+			self.context.lookup(name).is_global = True
+
+
+	def visit_Nonlocal(self, node):
+		for name in node.names:
+			if name not in self.context.symbols:
+				self.context.add_symbol(name)
+			self.context.lookup(name).is_nonlocal = True
 
 
 	def visit_Name(self, node):
 		name = str(node)
-		#if node.ctx == ast.Param or node.ctx == ast.Store:
 		if name not in self.context.symbols:
 			sym = self.context.add_symbol(name)
 			node.hl = sym
 		else:
 			node.hl = self.context.lookup(name)
+		if node.ctx == ast.Store and not node.hl.is_nonlocal and not node.hl.is_global:
+			self.context.mark_ownership(name)
 
 
 	def visit_Num(self, node):
 		#TODO: expand this to discover the minimum sized int that will cover the value.
 		#TODO: does Num also cover PyFloatTypes?
 		node.hl = Constant(PyIntegerType)
+
+
+	def visit_Str(self, node):
+		#TODO: discover if we can use a non-unicode or c string type?
+		node.s = node.s.strip('"').strip("'")
+		node.hl = Constant(PyStringType)
