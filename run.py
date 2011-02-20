@@ -29,25 +29,12 @@ def main():
 	'''
 	'''
 
-	# all tests
-	for root, dirs, files in os.walk('test'):
-		for fn in files:
-			if fn.endswith('.py'):
-				path = os.path.join(root, fn)
-				project = MelanoProject('test', programs=[fn[:-3]], roots=[root])
-				project.configure(limit=path, verbose=False)
-				project.locate_modules()
-				project.index_names()
-				project.show()
-
-	return
-
 	project = MelanoProject('zeuss', programs=['format'], roots=[os.path.expanduser('~/Projects/zeuss')])
 	project.configure(limit=os.path.expanduser('~/Projects/zeuss') + '/format.py')
 	project.locate_modules()
 	project.index_names()
 	#project.link_references()
-	#project.derive_types()
+	project.derive_types()
 	#project.emit_code()
 	c = project.transform_lowlevel_0()
 

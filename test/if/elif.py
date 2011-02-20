@@ -1,4 +1,3 @@
-#fail
 def foo():
 	if A == 'a':
 		print(1)

@@ -3,6 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
+from melano.c.types.integer import CIntegerType
 from melano.c.types.lltype import LLType
 
 
@@ -18,6 +19,10 @@ class PyObjectType(LLType):
 
 	def incref(self, ctx):
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ID(self.name)))
+
+
+	def as_pyobject(self, ctx):
+		return self
 
 
 	def assign_none(self, ctx):
@@ -61,4 +66,29 @@ class PyObjectType(LLType):
 		ctx.add_variable(c.Decl(tmp, c.TypeDecl(tmp, c.IdentifierType('int'))), False)
 		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyObject_IsTrue'), c.ExprList(c.ID(self.name)))))
 		return tmp
+
+
+	def rich_compare_bool(self, ctx, rhs, opid):
+		out = CIntegerType(ctx.tmpname())
+		out.declare(ctx)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_RichCompareBool'), c.ExprList(
+																				c.ID(self.name), c.ID(rhs.name), c.ID(opid)))))
+		self.fail_if_negative(ctx, out.name)
+		return out
+
+
+	def sequence_contains(self, ctx, item):
+		out = CIntegerType(ctx.tmpname())
+		out.declare(ctx)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_Contains'), c.ExprList(
+																				c.ID(self.name), c.ID(item.name)))))
+		self.fail_if_negative(ctx, out.name)
+		return out
+
+
+	def is_(self, ctx, other):
+		out = CIntegerType(ctx.tmpname())
+		out.declare(ctx)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.BinaryOp('==', c.ID(self.name), c.ID(other.name))))
+		return out
 

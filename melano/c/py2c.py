@@ -5,6 +5,7 @@ All rights reserved.
 from . import ast as c
 from contextlib import contextmanager
 from melano.c.pybuiltins import PY_BUILTINS
+from melano.c.types.integer import CIntegerType
 from melano.c.types.pycfunction import PyCFunctionType
 from melano.c.types.pyobject import PyObjectType
 from melano.c.types.pystring import PyStringType
@@ -29,8 +30,34 @@ class Py2C(ASTVisitor):
 										the files we are processing.  If set, we can use c-level vars for globals, 
 										instead of the globals dict.
 	'''
+	# map from ast comparison types to rich comparator values
+	COMPARATORS_RICH = {
+		py.Lt: 'Py_LT',
+		py.LtE: 'Py_LE',
+		py.Eq: 'Py_EQ',
+		py.NotEq: 'Py_NE',
+		py.Gt: 'Py_GT',
+		py.GtE: 'Py_GE',
+	}
+	COMPARATORS_PRETTY = {
+		py.Lt: '<',
+		py.LtE: '<=',
+		py.Eq: '==',
+		py.NotEq: '!=',
+		py.Gt: '>',
+		py.GtE: '>=',
+		py.Is: 'is',
+		py.IsNot: 'is not',
+		py.In: 'in',
+		py.NotIn: 'not in',
+	}
+
+
 	def __init__(self, **kwargs):
 		super().__init__()
+
+		# Emit helpful source-level comments
+		self.debug = True
 
 		# options
 		self.opt_elide_docstrings = kwargs.get('elide_docstrings', False)
@@ -63,11 +90,11 @@ class Py2C(ASTVisitor):
 					c.TypeDecl('main', c.IdentifierType('int')))
 			),
 			c.Compound(
-					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp('==', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('Py_UNICODE'))), c.Constant('integer', 4)))),
-					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp('==', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('wchar_t'))), c.Constant('integer', 4)))),
+					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('Py_UNICODE'))), c.Constant('integer', 4)))),
+					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('wchar_t'))), c.Constant('integer', 4)))),
 					c.FuncCall(c.ID('Py_Initialize'), c.ExprList()),
-					c.Assignment('=', c.ID('builtins'), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(c.Constant('string', 'builtins')))),
-					c.Assignment('=', c.ID('None'), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID('builtins'), c.Constant('string', 'None')))),
+					c.Assignment(' = ', c.ID('builtins'), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(c.Constant('string', 'builtins')))),
+					c.Assignment(' = ', c.ID('None'), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID('builtins'), c.Constant('string', 'None')))),
 			)
 		)
 		self.tu.add_fwddecl(self.main.decl)
@@ -122,6 +149,12 @@ class Py2C(ASTVisitor):
 		return self.scopes[-1]
 
 
+	def comment(self, cmt):
+		'''Optionally add a comment node to the source at the current location.'''
+		if self.debug:
+			self.context.add(c.Comment(cmt))
+
+
 	def split_docstring(self, nodes:[py.AST]) -> (tc.Nonable(str), [py.AST]):
 		'''Given the body, will pull off the docstring node and return it and the rest of the body.'''
 		if nodes and isinstance(nodes[0], py.Expr) and isinstance(nodes[0].value, py.Str):
@@ -157,7 +190,7 @@ class Py2C(ASTVisitor):
 
 		# set the initial context
 		self.context = self.module_func.body
-		self.context.add(c.Comment('Create module "{}" as "{}"'.format(modscope.name, modname.name)))
+		self.comment('Create module "{}" as "{}"'.format(modscope.name, modname.name))
 
 		# create the module
 		modname.create_instance(modname.global_name)
@@ -244,7 +277,7 @@ class Py2C(ASTVisitor):
 				else:
 					#TODO: completely elide this step if we have no closure that could ref vars in this scope
 					#		note: this opt needs to continue always putting things in the global scope
-					self.scope.inst.set_item(self.context, str(target), node.value.hl.inst.name)
+					self.scope.inst.set_item(self.context, str(target), val.name)
 
 					# also create a node in the local namespace to speed up access to the node
 					tgt.assign_name(self.context, val)
@@ -261,7 +294,7 @@ class Py2C(ASTVisitor):
 		elif node.ctx == py.Load:
 			# load the attr into a local temp variable
 			inst = self.visit(node.value)
-			self.context.add(c.Comment('Load Attribute "{}.{}"'.format(str(node.value), str(node.attr))))
+			self.comment('Load Attribute "{}.{}"'.format(str(node.value), str(node.attr)))
 			tmp = PyObjectType(self.context.tmpname())
 			tmp.declare(self.context)
 			inst.get_attr(self.context, str(node.attr), tmp.name)
@@ -299,11 +332,12 @@ class Py2C(ASTVisitor):
 		if node.args:
 			for arg in node.args:
 				idinst = self.visit(arg)
+				idinst = idinst.as_pyobject(self.context)
 				idinst.incref(self.context) # pytuple pack will steal the ref, but we want to be able to cleanup the node later
 				pos_args.append(idinst.name)
 
 		# begin call output
-		self.context.add(c.Comment('Call function "{}"'.format(str(node.func))))
+		self.comment('Call function "{}"'.format(str(node.func)))
 
 		# build the output variable
 		rv = PyObjectType(self.context.reserve_name(funcinst.name + '_rv', None, self.tu))
@@ -324,7 +358,55 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Compare(self, node):
-		raise NotImplementedError
+		# format and print the op we are doing for sanity sake
+		s = 'Compare ' + str(node.left)
+		for o, b in zip(node.ops, node.comparators):
+			s += ' {} {}'.format(self.COMPARATORS_PRETTY[o], str(b))
+		self.comment(s)
+
+		# initialize new tmp variable with default value of false
+		out = CIntegerType(self.context.tmpname(), is_a_bool=True)
+		out.declare(self.context, init=0)
+
+		# store this because when we bail we will come all the way back to our starting context at once
+		base_context = self.context
+
+		# make each comparison in order
+		a = self.visit(node.left)
+		a = a.as_pyobject(self.context)
+		for op, b in zip(node.ops, node.comparators):
+			b = self.visit(b)
+			b = b.as_pyobject(self.context)
+
+			# do one compare; only continue to next scope if we succeed
+			if op in self.COMPARATORS_RICH:
+				rv = a.rich_compare_bool(self.context, b, self.COMPARATORS_RICH[op])
+			elif op == py.In:
+				rv = b.sequence_contains(self.context, a)
+			elif op == py.NotIn:
+				rv = b.sequence_contains(self.context, a)
+				rv = rv.not_(self.context)
+			elif op == py.Is:
+				rv = a.is_(self.context, b)
+			elif op == py.IsNot:
+				rv = a.is_(self.context, b)
+				rv = rv.not_(self.context)
+			else:
+				raise NotImplementedError("unimplemented comparator in visit_compare: {}".format(op))
+			stmt = c.If(c.ID(rv.name), c.Compound(), None)
+			self.context.add(stmt)
+			self.context = stmt.iftrue
+
+			# next lhs is current rhs
+			a = b
+
+		# we are in our deepest nested context now, where all prior statements have been true
+		self.context.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 1)))
+
+		# reset the context
+		self.context = base_context
+
+		return out
 
 
 	def visit_FunctionDef(self, node):
@@ -373,9 +455,7 @@ class Py2C(ASTVisitor):
 		)
 		self.tu.add_fwddecl(func.decl)
 		self.tu.add(func)
-
 		self.module_func.body.add(c.Comment('Declare Function "{}"'.format(funcname.name)))
-		#self.tu.add_variable(c.Decl(funcname.global_name, c.PtrDecl(c.TypeDecl(funcname.global_name, c.IdentifierType('PyObject')))))
 
 		# create the local scope dict
 		funcscope.create_instance(funcscope.ll_scope)
@@ -422,12 +502,17 @@ class Py2C(ASTVisitor):
 		if isinstance(inst, PyObjectType):
 			tmpvar = inst.is_true(self.context)
 			test = c.BinaryOp('==', c.Constant('integer', 1), c.ID(tmpvar))
+		elif isinstance(inst, CIntegerType):
+			test = c.ID(inst.name)
 		else:
 			raise NotImplementedError('Non-pyobject as value for If test')
 
 		stmt = c.If(test, c.Compound(), c.Compound() if node.orelse else None)
 		with self.new_context(stmt.iftrue):
 			self.visit_nodelist(node.body)
+		if node.orelse:
+			with self.new_context(stmt.iffalse):
+				self.visit_nodelist(node.orelse)
 
 		self.context.add(stmt)
 
@@ -473,10 +558,10 @@ class Py2C(ASTVisitor):
 				# note; unless we declare that module globals are static (and thus fully discovered and unoverridable, we need
 				#		to check them first... the best op in this case is checking if the override is likely or not.
 				if name in PY_BUILTINS:
-					self.context.add(c.Comment('Load (probable) builtin "{}"'.format(name)))
+					self.comment('Load (probable) builtin "{}"'.format(name))
 					mode = 'likely'
 				else:
-					self.context.add(c.Comment('Load (probable) global "{}"'.format(name)))
+					self.comment('Load (probable) global "{}"'.format(name))
 					mode = 'unlikely'
 
 				# access globals first, fall back to builtins -- remember to ref the global if we get it, since dict get item borrows

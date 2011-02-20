@@ -1,4 +1,3 @@
-#fail
 if True:
 	print('a')
 else:
