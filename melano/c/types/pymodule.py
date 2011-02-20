@@ -7,12 +7,11 @@ from melano.c.types.pyobject import PyObjectType
 
 
 class PyModuleType(PyObjectType):
-	def new(self, func, modname):
-		func.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyModule_New'), c.ExprList(c.Constant('string', modname)))))
-		self.fail_if_null(self.name, func)
-		func.cleanup.append(self.name)
+	def new(self, ctx, modname):
+		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyModule_New'), c.ExprList(c.Constant('string', modname)))))
+		self.fail_if_null(ctx, self.name)
 
-	def get_dict(self, name, func):
-		func.add(c.Assignment('=', c.ID(name), c.FuncCall(c.ID('PyModule_GetDict'), c.ExprList(c.ID(self.name)))))
-		self.fail_if_null(self.name, func)
+	def get_dict(self, ctx, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyModule_GetDict'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out.name)
 

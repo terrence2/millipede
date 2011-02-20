@@ -5,6 +5,7 @@ All rights reserved.
 from . import ast as c
 from contextlib import contextmanager
 from melano.c.pybuiltins import PY_BUILTINS
+from melano.c.types.pycfunction import PyCFunctionType
 from melano.c.types.pyobject import PyObjectType
 from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
@@ -73,12 +74,12 @@ class Py2C(ASTVisitor):
 		self.tu.add(self.main)
 
 		# the low-level statment emission context... e.g. the Compound for functions, ifs, etc.
-		self.func = self.main.body
+		self.context = self.main.body
 
 
 	def close(self):
-		self.main.add(c.FuncCall(c.ID('Py_Finalize'), c.ExprList()))
-		self.main.add(c.Return(c.Constant('integer', 0)))
+		self.main.body.add(c.FuncCall(c.ID('Py_Finalize'), c.ExprList()))
+		self.main.body.add(c.Return(c.Constant('integer', 0)))
 
 
 	@contextmanager
@@ -93,27 +94,27 @@ class Py2C(ASTVisitor):
 
 
 	@contextmanager
-	def new_scope(self, ctx):
-		self.scopes.append(ctx)
+	def new_scope(self, scope, ctx):
+		# add the new scope and set the scope's context
+		self.scopes.append(scope)
+		scope.context = ctx
+		# set the new global output context
+		prior_ctx = self.context
+		self.context = ctx
 		yield
+		# drop the scope
 		self.scopes.pop()
-
-
-	@contextmanager
-	def new_func(self, func):
-		prior = self.func
-		self.func = func
-		with self.new_context(func.body):
-			yield
-		self.func = prior
+		# reset context
+		self.context = prior_ctx
 
 
 	@contextmanager
 	def new_context(self, ctx):
-		#prior = self.func
-		#self.func = ctx
+		'''Sets a new context (e.g. C-level {}), without adjusting the python scope or the c scope-context'''
+		prior = self.context
+		self.context = ctx
 		yield
-		#self.func = prior
+		self.context = prior
 
 
 	@property
@@ -144,58 +145,65 @@ class Py2C(ASTVisitor):
 		modscope.ll_runner = self.tu.reserve_name(modname.global_name + '_builder', modscope)
 
 		# create the module creation function
-		self.module_func = self.func = c.FuncDef(
+		self.module_func = c.FuncDef(
 			c.Decl(modscope.ll_runner,
 				c.FuncDecl(
 						c.ParamList(),
 						c.PtrDecl(c.TypeDecl(modscope.ll_runner, c.IdentifierType('PyObject'))))),
 			c.Compound()
 		)
-		self.tu.add_fwddecl(self.func.decl)
-		self.tu.add(self.func)
+		self.tu.add_fwddecl(self.module_func.decl)
+		self.tu.add(self.module_func)
+
+		# set the initial context
+		self.context = self.module_func.body
+		self.context.add(c.Comment('Create module "{}" as "{}"'.format(modscope.name, modname.name)))
 
 		# create the module
 		modname.create_instance(modname.global_name)
 		modname.inst.declare(self.tu, ['static'])
-		modname.inst.new(self.func, modname.name)
+		modname.inst.new(self.context, modname.name)
 
 		# load the module dict from the module to the scope
 		modscope.create_instance(modscope.ll_scope)
 		modscope.inst.declare(self.tu, ['static'])
-		modname.inst.get_dict(modscope.ll_scope, self.func)
+		modname.inst.get_dict(self.context, modscope.inst)
 
 		# load and attach special attributes to the module dict
 		docstring, body = self.split_docstring(node.body)
 		for name, s in [('__name__', modname.name), ('__file__', modscope.filename), ('__doc__', docstring)]:
 			if s is not None:
-				ps = PyStringType(self.func.reserve_name(name, None, self.tu))
-				ps.new(self.func, s)
+				ps = PyStringType(self.context.reserve_name(name, None, self.tu))
+				ps.new(self.context, s)
 			else:
-				ps = PyObjectType(self.func.reserve_name(name, None, self.tu))
-				ps.assign_none(self.func)
-			ps.declare(self.func) # note: this can come after we use the name, it just has to happen
-			modscope.inst.set_item(self.func, name, ps.name)
+				ps = PyObjectType(self.context.reserve_name(name, None, self.tu))
+				ps.assign_none(self.context)
+			ps.declare(self.context) # note: this can come after we use the name, it just has to happen
+			modscope.inst.set_item(self.context, name, ps.name)
 
 		# the return value
-		self.func.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')))
+		self.context.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
 		# visit all children
 		with self.global_scope(modscope):
+			# record the top-level context in the scope, so we can declare toplevel variables when in a sub-contexts
+			self.scope.context = self.context
+
+			# visit all children
 			self.visit_nodelist(body)
 
 		# return the module
-		self.func.add(c.Assignment('=', c.ID('__return_value__'), c.ID(modname.global_name)))
-		self.func.add(c.Label('end'))
-		self.func.cleanup.remove(modname.global_name)
-		for name in reversed(self.func.cleanup):
-			self.func.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
-		self.func.add(c.Return(c.ID('__return_value__')))
+		self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(modname.global_name)))
+		self.context.add(c.Label('end'))
+		for name in reversed(self.context.cleanup):
+			self.context.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+		self.context.add(c.Return(c.ID('__return_value__')))
 
 		# add the function call to the main to set the module's global name
-		tmp = self.main.reserve_name(self.main.tmpname(), modname, self.tu)
-		self.main.add_variable(c.Decl(tmp, c.PtrDecl(c.TypeDecl(tmp, c.IdentifierType('PyObject')))))
-		self.main.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(modscope.ll_runner), c.ExprList())))
-		self.main.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
+		tmp = self.main.body.reserve_name(self.main.body.tmpname(), modname, self.tu)
+		self.main.body.add_variable(c.Decl(tmp, c.PtrDecl(c.TypeDecl(tmp, c.IdentifierType('PyObject')))))
+		self.main.body.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(modscope.ll_runner), c.ExprList())))
+		self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
 								c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
 								c.Return(c.Constant('integer', 1),
 							)), None))
@@ -220,26 +228,26 @@ class Py2C(ASTVisitor):
 
 			if isinstance(target, py.Attribute):
 				# set the value on the attribute, under the hl name of the attr
-				target.value.hl.inst.set_attr(self.func, str(target.attr), val.name)
+				target.value.hl.inst.set_attr(self.context, str(target.attr), val)
 
 			elif isinstance(target, py.Name):
 				if target.hl.is_global and self.scope != self.globals:
-					self.globals.inst.set_item(self.func, str(target), node.value.hl.inst.name)
+					self.globals.inst.set_item(self.context, str(target), node.value.hl.inst.name)
 
 				elif target.hl.is_nonlocal:
 					pos, ctx = self.find_owning_parent_scope(target)
 					if pos >= 0:
-						ctx.inst.set_item(self.func, str(target), node.value.hl.inst.name)
+						ctx.inst.set_item(self.context, str(target), node.value.hl.inst.name)
 					elif pos == -1:
 						raise NotImplementedError('overriding builtin with nonlocal keyword')
 
 				else:
 					#TODO: completely elide this step if we have no closure that could ref vars in this scope
 					#		note: this opt needs to continue always putting things in the global scope
-					self.scope.inst.set_item(self.func, str(target), node.value.hl.inst.name)
+					self.scope.inst.set_item(self.context, str(target), node.value.hl.inst.name)
 
 					# also create a node in the local namespace to speed up access to the node
-					tgt.assign_name(self.func, val.name)
+					tgt.assign_name(self.context, val)
 
 			else:
 				raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
@@ -253,9 +261,10 @@ class Py2C(ASTVisitor):
 		elif node.ctx == py.Load:
 			# load the attr into a local temp variable
 			inst = self.visit(node.value)
-			tmp = PyObjectType(self.func.tmpname())
-			tmp.declare(self.func)
-			inst.get_attr(self.func, str(node.attr), tmp.name)
+			self.context.add(c.Comment('Load Attribute "{}.{}"'.format(str(node.value), str(node.attr))))
+			tmp = PyObjectType(self.context.tmpname())
+			tmp.declare(self.context)
+			inst.get_attr(self.context, str(node.attr), tmp.name)
 			return tmp
 
 
@@ -265,12 +274,12 @@ class Py2C(ASTVisitor):
 
 		#FIXME: the node's hl already has the coerced type; do coercion to that type before oping
 
-		node.hl.create_instance(self.func.tmpname())
-		node.hl.inst.declare(self.func)
+		node.hl.create_instance(self.context.tmpname())
+		node.hl.inst.declare(self.context)
 
 		if node.op == py.Add:
 			#NOTE: python detects str + str at runtime and skips dispatch through PyNumber_Add
-			l.add(self.func, r.name, node.hl.inst.name)
+			l.add(self.context, r, node.hl.inst)
 		else:
 			raise NotImplementedError
 
@@ -290,20 +299,32 @@ class Py2C(ASTVisitor):
 		if node.args:
 			for arg in node.args:
 				idinst = self.visit(arg)
+				idinst.incref(self.context) # pytuple pack will steal the ref, but we want to be able to cleanup the node later
 				pos_args.append(idinst.name)
 
+		# begin call output
+		self.context.add(c.Comment('Call function "{}"'.format(str(node.func))))
+
+		# build the output variable
+		rv = PyObjectType(self.context.reserve_name(funcinst.name + '_rv', None, self.tu))
+		rv.declare(self.context)
+
 		# build a tuple with our positional args	
-		args = PyTupleType(self.func.reserve_name(funcinst.name + '_args', None, self.tu))
-		args.declare(self.func)
-		args.pack(self.func, *pos_args)
+		args = PyTupleType(self.context.reserve_name(funcinst.name + '_args', None, self.tu))
+		args.declare(self.context)
+		args.pack(self.context, *pos_args)
 
 		# make the call
-		rv = funcinst.call(self.func, args, None)
+		funcinst.call(self.context, args, None, rv)
 
 		# cleanup the args
-		args.delete(self.func)
+		args.delete(self.context)
 
 		return rv
+
+
+	def visit_Compare(self, node):
+		raise NotImplementedError
 
 
 	def visit_FunctionDef(self, node):
@@ -339,7 +360,7 @@ class Py2C(ASTVisitor):
 		funcname.global_name = self.tu.reserve_name(funcname.global_name, funcname)
 		funcscope.ll_scope = self.tu.reserve_name(funcname.global_name + '_dict', funcscope)
 		funcscope.ll_runner = self.tu.reserve_name(funcname.global_name + '_runner', funcscope)
-		funcdef_name = self.module_func.reserve_name(funcname.ll_name + '_def', None, self.tu)
+		funcdef_name = self.module_func.body.reserve_name(funcname.ll_name + '_def', None, self.tu)
 
 		# create the runner function
 		func = c.FuncDef(
@@ -353,14 +374,13 @@ class Py2C(ASTVisitor):
 		self.tu.add_fwddecl(func.decl)
 		self.tu.add(func)
 
-		# declare the PyCFunction globally
-		self.tu.add_variable(c.Decl(funcname.global_name, c.PtrDecl(c.TypeDecl(funcname.global_name, c.IdentifierType('PyObject')))))
+		self.module_func.body.add(c.Comment('Declare Function "{}"'.format(funcname.name)))
+		#self.tu.add_variable(c.Decl(funcname.global_name, c.PtrDecl(c.TypeDecl(funcname.global_name, c.IdentifierType('PyObject')))))
 
 		# create the local scope dict
 		funcscope.create_instance(funcscope.ll_scope)
 		funcscope.inst.declare(self.tu, ['static'])
-		funcscope.inst.new(self.module_func)
-		self.module_func.cleanup.remove(funcscope.inst.name) # don't cleanup when module scope ends
+		funcscope.inst.new(self.module_func.body)
 		#TODO: do we want to do cleanup of our locals dicts in main before PyFinalize()?
 
 		# query the docstring -- we actually want to declare it once in the module, but need to get the real bodylist here
@@ -371,29 +391,28 @@ class Py2C(ASTVisitor):
 		# Note: this is awkward since we don't want to create type classes for low-level details.
 		#FIXME: do we want to pass our own dict as self here?  What is the role for the last param?  Just the module name?
 		#FIXME: find a way to clean this up -- maybe we do want ll type objects for non-exposed types
-		self.module_func.add_variable(c.Decl(funcdef_name, c.TypeDecl(funcdef_name, c.Struct('PyMethodDef')),
-				init=c.ExprList(c.Constant('string', str(node.name)), c.ID(funcscope.ll_runner), c.ID('METH_VARARGS'), c_docstring)))
-		self.module_func.add(c.Assignment('=', c.ID(funcname.global_name), c.FuncCall(c.ID('PyCFunction_NewEx'), c.ExprList(
-																c.UnaryOp('&', c.ID(funcdef_name)), c.ID(self.scope.ll_scope), c.ID('NULL')))))
-		self.module_func.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(funcname.global_name)))), c.Compound(c.Goto('end')), None))
+		self.module_func.body.add_variable(c.Decl(funcdef_name, c.TypeDecl(funcdef_name, c.Struct('PyMethodDef')),
+				init=c.ExprList(c.Constant('string', str(node.name)), c.ID(funcscope.ll_runner), c.ID('METH_VARARGS'), c_docstring)), False)
+		cfunc_inst = PyCFunctionType(funcname.global_name)
+		cfunc_inst.declare(self.tu, ['static'])
+		cfunc_inst.new(self.module_func.body, funcdef_name, funcscope.inst, 'NULL')
 
 		# put the function into the scope where it was defined
-		self.scope.inst.set_item(self.func, str(node.name), funcname.global_name)
+		self.scope.inst.set_item(self.context, str(node.name), funcname.global_name)
 
-		# set self.func for the duration of our stay in it		
-		with self.new_func(func):
+		# set self.context for the duration of our stay in it		
+		with self.new_scope(funcscope, func.body):
 			# add the return variable annotation -- we need to use a goto for exit so we can do cleanup in one place (cleaner) and
 			#	so that we can handle the control flow needed for exception handler much more easily.
-			self.func.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')))
+			self.context.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
-			with self.new_scope(funcscope):
-				self.visit_nodelist(body)
+			self.visit_nodelist(body)
 
 			# exit handler
-			self.func.add(c.Label('end'))
-			for name in func.cleanup:
-				self.func.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
-			self.func.add(c.Return(c.ID('__return_value__')))
+			self.context.add(c.Label('end'))
+			for name in func.body.cleanup:
+				self.context.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+			self.context.add(c.Return(c.ID('__return_value__')))
 
 		return funcname
 
@@ -401,16 +420,16 @@ class Py2C(ASTVisitor):
 	def visit_If(self, node):
 		inst = self.visit(node.test)
 		if isinstance(inst, PyObjectType):
-			tmpvar = inst.is_true(self.func)
+			tmpvar = inst.is_true(self.context)
 			test = c.BinaryOp('==', c.Constant('integer', 1), c.ID(tmpvar))
 		else:
 			raise NotImplementedError('Non-pyobject as value for If test')
 
-		stmt = c.If(test, c.Compound(), None)
+		stmt = c.If(test, c.Compound(), c.Compound() if node.orelse else None)
 		with self.new_context(stmt.iftrue):
 			self.visit_nodelist(node.body)
 
-		self.func.add(stmt)
+		self.context.add(stmt)
 
 
 	def visit_Name(self, node):
@@ -418,11 +437,10 @@ class Py2C(ASTVisitor):
 		if node.ctx == py.Store:
 			#NOTE: names will not get out of sync here because they share the same underlying Name, so the rename
 			#		happens for all shared names in a Scope.
-			if not self.func.has_symbol(node.hl) and not node.hl.is_global and not node.hl.is_nonlocal:
-				node.hl.ll_name = self.func.reserve_name(node.hl.ll_name, node.hl, self.tu)
+			if not node.hl.inst:
+				node.hl.ll_name = self.scope.context.reserve_name(node.hl.ll_name, node.hl, self.tu)
 				node.hl.create_instance(node.hl.ll_name)
-				node.hl.inst.declare(self.func)
-
+				node.hl.inst.declare(self.scope.context)
 			return node.hl.inst
 
 		# if we are loading a name, we have to search for the name's location 
@@ -438,7 +456,7 @@ class Py2C(ASTVisitor):
 
 			# if the node is declared and stored into from this scope; and there is no closure which could modify us;
 			#	and the scope is not globals; then we can use it directly
-			if node.hl.inst and not self.scope.has_closure() and self.scope != self.globals and self.scope.owns_name(name) and self.func.has_name(node.hl.inst.name):
+			if node.hl.inst and not self.scope.has_closure() and self.scope != self.globals and self.scope.owns_name(name) and self.scope.context.has_name(node.hl.inst.name):
 				return node.hl.inst
 
 			# find the proper scope for access
@@ -448,38 +466,46 @@ class Py2C(ASTVisitor):
 
 			if lvl <= 0:
 				#NOTE: we have to create fully generic code to access globals and builtins, since they can change under us
-				tmp = self.func.tmpname()
+				tmp = self.scope.context.tmpname()
 				node.hl.inst = PyObjectType(tmp)
-				node.hl.inst.declare(self.func)
+				node.hl.inst.declare(self.scope.context)
 
-				# access globals first, fall back to builtins -- remember to ref the global if we get it, sine dict get item borrows
-				self.func.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(self.globals.ll_scope), c.Constant('string', name)))))
-				self.func.add(c.If(c.UnaryOp('!', c.ID(tmp)),
+				# note; unless we declare that module globals are static (and thus fully discovered and unoverridable, we need
+				#		to check them first... the best op in this case is checking if the override is likely or not.
+				if name in PY_BUILTINS:
+					self.context.add(c.Comment('Load (probable) builtin "{}"'.format(name)))
+					mode = 'likely'
+				else:
+					self.context.add(c.Comment('Load (probable) global "{}"'.format(name)))
+					mode = 'unlikely'
+
+				# access globals first, fall back to builtins -- remember to ref the global if we get it, since dict get item borrows
+				self.context.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(self.globals.ll_scope), c.Constant('string', name)))))
+				self.context.add(c.If(c.FuncCall(c.ID(mode), c.ExprList(c.UnaryOp('!', c.ID(tmp)))),
 						c.Compound(
 							c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyObject_GetAttrString'),
 																c.ExprList(c.ID('builtins'), c.Constant('string', name)))),
-							c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(c.Goto('end')), None)
+							c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(tmp)))), c.Compound(c.Goto('end')), None)
 						),
 						c.Compound(
 							c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(tmp)))
 						)))
-				node.hl.inst.fail_if_null(tmp, self.func)
-				self.func.cleanup.append(tmp)
+				node.hl.inst.fail_if_null(self.context, tmp)
 			else:
 				#For higher non-local scopes, we can access directly
 				assert scope.has_name(name)
-				tmp = self.func.tmpname()
+				tmp = self.context.tmpname()
 				node.hl.create_instance(tmp)
-				node.hl.inst.declare(self.func)
-				scope.inst.get_item(self.func, name, node.hl.inst.name)
+				node.hl.inst.declare(self.context)
+				scope.inst.get_item(self.context, name, node.hl.inst)
 
 			return node.hl.inst
 
 
 	def visit_Num(self, node):
-		node.hl.create_instance(self.func.tmpname())
-		node.hl.inst.declare(self.func)
-		node.hl.inst.new(self.func, node.n)
+		node.hl.create_instance(self.context.tmpname())
+		node.hl.inst.declare(self.context)
+		node.hl.inst.new(self.context, node.n)
 		return node.hl.inst
 
 
@@ -487,17 +513,17 @@ class Py2C(ASTVisitor):
 		if node.value:
 			# return a specific value
 			inst = self.visit(node.value)
-			self.func.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
-			self.func.add(c.Goto('end'))
+			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
+			self.context.add(c.Goto('end'))
 		else:
-			self.func.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
-			self.func.add(c.Goto('end'))
+			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
+			self.context.add(c.Goto('end'))
 
 
 	def visit_Str(self, node):
-		node.hl.create_instance(self.func.tmpname())
-		node.hl.inst.declare(self.func)
-		node.hl.inst.new(self.func, node.s)
+		node.hl.create_instance(self.context.tmpname())
+		node.hl.inst.declare(self.context)
+		node.hl.inst.new(self.context, node.s)
 		return node.hl.inst
 
 
@@ -517,18 +543,18 @@ class Py2C(ASTVisitor):
 				raise NotImplementedError
 				self.target.import_local(str(alias.name))
 			else:
-				#self.func.import_python(str(alias.name))
+				#self.context.import_python(str(alias.name))
 				print('IMP:', alias.name.hl.name)
 
 	#def visit_ImportFrom(self, node):
 	#	#import pdb;pdb.set_trace()
-	#	self.func.import_from(node.level, str(node.module), [str(n) for n in node.names])
+	#	self.context.import_from(node.level, str(node.module), [str(n) for n in node.names])
 
 
 	def visit_If(self, node):
 		self.visit(node.test)
 		print(node.test.hl.name)
-		#ctx = self.func.create_if():
+		#ctx = self.context.create_if():
 		#with self.scope(ctx):
 		#	self.visit_nodelist(nodes)
 
@@ -536,12 +562,12 @@ class Py2C(ASTVisitor):
 		self.visit(node.left)
 
 	def visit_If(self, node):
-		with self.scope(self.func.if_stmt()):
+		with self.scope(self.context.if_stmt()):
 			self.visit(node.test)
-		with self.scope(self.func.block()):
+		with self.scope(self.context.block()):
 			self.visit_nodelist(node.body)
 		if node.orelse:
-			self.func.else_stmt()
-			with self.scope(self.func.block()):
+			self.context.else_stmt()
+			with self.scope(self.context.block()):
 				self.visit_nodelist(node.orelse)
 	"""

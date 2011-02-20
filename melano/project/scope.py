@@ -28,6 +28,10 @@ class Scope:
 		# will be set with the instance when we declare it
 		self.inst = None
 
+		# Records the scope's local "context" -- e.g. the lowlevel variable scope.
+		# Set in visit_FuncDef during the time we visit our children.
+		self.context = None
+
 		# track which symbols are defined in our scope, rather than just referenced
 		self.ownership = set()
 

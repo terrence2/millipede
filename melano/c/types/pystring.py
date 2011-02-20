@@ -21,12 +21,10 @@ class PyStringType(PyObjectType):
 		return s.replace('\n', '\\n').strip("'").strip('"')
 
 
-	def new(self, func, init):
-		#import pdb; pdb.set_trace()
+	def new(self, ctx, init):
 		# wchar_t is a signed type (!?!), so we need to do some checking here
 		assert all(map(lambda x: ord(x) < 2 ** 31 and ord(x) >= 0, init)), 'Out of range character for wchar in: {}'.format(init)
-		func.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyUnicode_FromUnicode'), c.ExprList(
+		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyUnicode_FromUnicode'), c.ExprList(
 											c.Cast(c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('Py_UNICODE'))), c.Constant('string', init, prefix='L')),
 											c.Constant('integer', len(init))))))
-		self.fail_if_null(self.name, func)
-		func.cleanup.append(self.name)
+		self.fail_if_null(ctx, self.name)

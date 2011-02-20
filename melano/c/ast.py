@@ -64,20 +64,49 @@ class Compound(AST):
 	_fields = ('block_items',)
 	def __init__(self, *items):
 		self.block_items = list(items)
-		self.owner = None
 
-	@property
-	def cleanup(self):
-		return self.owner.cleanup
+		# we insert variables at the front of the function
+		self._vars_pos = 0
+
+		# track which variables need a call to cleanup at compound out
+		self.cleanup = []
+		# map from ll variable names to hl symbols (and existence markers)
+		self.names = {}
+		# counter for tmp items
+		self.tmpcount = itertools.count()
+
+	def tmpname(self):
+		n = self.reserve_name('tmp' + str(next(self.tmpcount)), None, None)
+		return n
 
 	def reserve_name(self, name, sym, tu):
-		return self.owner.reserve_name(name, sym, tu)
+		'''
+		Try to ensure uniqueness in the local scope and against the global scope.  We _should_ only
+		ever care about names in the global scope that we use in the local scope, so if someone
+		introduces a name into the global scope later that aliases with something we've already
+		added to the local scope, then it shouldn't matter because we don't have interest in that 
+		global name, only the local one we are aliasing.
+		'''
+		if not tu: tu = set()
+		cnt = 0
+		nm = name
+		while nm in self.names or (tu and nm in tu.names):
+			nm = name + '_' + str(cnt)
+			cnt += 1
+		self.names[nm] = sym
+		return nm
+
 	def has_name(self, name):
-		return self.owner.has_name(name)
+		return name in self.names
+
 	def has_symbol(self, sym):
-		return self.owner.has_symbol(sym)
-	def add_variable(self, node):
-		return self.owner.add_variable(node)
+		return sym in set(self.names.values())
+
+	def add_variable(self, decl, need_cleanup=True):
+		self.block_items.insert(self._vars_pos, decl)
+		self._vars_pos += 1
+		if need_cleanup:
+			self.cleanup.append(decl.name)
 
 	def add(self, node):
 		self.block_items.append(node)
@@ -192,48 +221,6 @@ class FuncDef(AST):
 		assert isinstance(body, Compound), "Techically the body could be any stmt... but it's going to be a compound anyway."
 		self.decl = decl
 		self.body = body
-		self.body.owner = self
-		self._vars_pos = 0
-		# track variable names that need cleanup in this scope
-		self.cleanup = []
-		# map from ll variable names to hl symbols (and existence markers)
-		self.names = {}
-		# counter for tmp items
-		self.tmpcount = itertools.count()
-
-	def tmpname(self):
-		n = self.reserve_name('tmp' + str(next(self.tmpcount)), None, None)
-		return n
-
-	def reserve_name(self, name, sym, tu):
-		'''
-		Try to ensure uniqueness in the local scope and against the global scope.  We _should_ only
-		ever care about names in the global scope that we use in the local scope, so if someone
-		introduces a name into the global scope later that aliases with something we've already
-		added to the local scope, then it shouldn't matter because we don't have interest in that 
-		global name, only the local one we are aliasing.
-		'''
-		if not tu: tu = set()
-		cnt = 0
-		nm = name
-		while nm in self.names or (tu and nm in tu.names):
-			nm = name + '_' + str(cnt)
-			cnt += 1
-		self.names[nm] = sym
-		return nm
-
-	def has_name(self, name):
-		return name in self.names
-
-	def has_symbol(self, sym):
-		return sym in set(self.names.values())
-
-	def add_variable(self, decl):
-		self.body.block_items.insert(self._vars_pos, decl)
-		self._vars_pos += 1
-
-	def add(self, node):
-		self.body.block_items.append(node)
 
 
 class Goto(AST):
@@ -355,7 +342,7 @@ class TranslationUnit(AST):
 		self._var_pos += 1
 		self._fwddecl_pos += 1
 
-	def add_variable(self, decl):
+	def add_variable(self, decl, need_cleanup=None):
 		self.ext.insert(self._var_pos, decl)
 		self._var_pos += 1
 		self._fwddecl_pos += 1

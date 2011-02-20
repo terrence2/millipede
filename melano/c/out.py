@@ -51,10 +51,16 @@ class COut(ASTVisitor):
 		self.fp.write(' {\n')
 		with self.tab():
 			for item in node.block_items:
+				# labels are dedented by one line, compared to other elements
 				if not isinstance(item, c.Label):
 					self.fp.write(self.level * '\t')
+				else:
+					self.fp.write(max(0, self.level - 1) * '\t')
+
 				self.visit(item)
-				if not isinstance(item, (c.Label, c.Compound)):
+
+				# not all elements require a closing ; 
+				if not isinstance(item, (c.Comment, c.Compound, c.For, c.If, c.Label, c.Switch, c.While)):
 					self.fp.write(';')
 				self.fp.write('\n')
 		self.fp.write(self.level * '\t' + '}')
