@@ -92,3 +92,10 @@ class PyObjectType(LLType):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.BinaryOp('==', c.ID(self.name), c.ID(other.name))))
 		return out
 
+
+	def get_iter(self, ctx):
+		out = PyObjectType(ctx.tmpname())
+		out.declare(ctx)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetIter'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out.name)
+		return out

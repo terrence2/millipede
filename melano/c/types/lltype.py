@@ -12,12 +12,18 @@ class LLType:
 
 
 	def fail_if_null(self, ctx, name):
-		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(c.Goto('end')), None))
+		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(
+																		c.FuncCall(c.ID('__err__capture__'), c.ExprList(c.ID('__LINE__'))),
+																		c.Goto('end')), None))
 
 
 	def fail_if_nonzero(self, ctx, name):
-		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(name)))), c.Compound(c.Goto('end')), None))
+		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(name)))), c.Compound(
+																		c.FuncCall(c.ID('__err__capture__'), c.ExprList(c.ID('__LINE__'))),
+																		c.Goto('end')), None))
 
 
 	def fail_if_negative(self, ctx, name):
-		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('>', c.Constant('integer', 0), c.ID(name)))), c.Compound(c.Goto('end')), None))
+		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('>', c.Constant('integer', 0), c.ID(name)))), c.Compound(
+																		c.FuncCall(c.ID('__err__capture__'), c.ExprList(c.ID('__LINE__'))),
+																		c.Goto('end')), None))

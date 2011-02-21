@@ -256,34 +256,43 @@ class Py2C(ASTVisitor):
 
 	def visit_Assign(self, node):
 		val = self.visit(node.value)
+		assert node.value.hl.inst == val
+
 		for target in node.targets:
 			tgt = self.visit(target)
+			self._assign(target, tgt, val)
 
-			if isinstance(target, py.Attribute):
-				# set the value on the attribute, under the hl name of the attr
-				target.value.hl.inst.set_attr(self.context, str(target.attr), val)
 
-			elif isinstance(target, py.Name):
-				if target.hl.is_global and self.scope != self.globals:
-					self.globals.inst.set_item(self.context, str(target), node.value.hl.inst.name)
+	def _assign(self, target, tgt, val):
+		'''Common "normal" assignment handler.  Things like for loop targets need the same full
+			suite of potential assignment targets as normal assignments.'''
 
-				elif target.hl.is_nonlocal:
-					pos, ctx = self.find_owning_parent_scope(target)
-					if pos >= 0:
-						ctx.inst.set_item(self.context, str(target), node.value.hl.inst.name)
-					elif pos == -1:
-						raise NotImplementedError('overriding builtin with nonlocal keyword')
+		#TODO: destructuring assignment
+		if isinstance(target, py.Attribute):
+			# set the value on the attribute, under the hl name of the attr
+			target.value.hl.inst.set_attr(self.context, str(target.attr), val)
 
-				else:
-					#TODO: completely elide this step if we have no closure that could ref vars in this scope
-					#		note: this opt needs to continue always putting things in the global scope
-					self.scope.inst.set_item(self.context, str(target), val.name)
+		elif isinstance(target, py.Name):
+			if target.hl.is_global and self.scope != self.globals:
+				self.globals.inst.set_item(self.context, str(target), val.name)
 
-					# also create a node in the local namespace to speed up access to the node
-					tgt.assign_name(self.context, val)
+			elif target.hl.is_nonlocal:
+				pos, ctx = self.find_owning_parent_scope(target)
+				if pos >= 0:
+					ctx.inst.set_item(self.context, str(target), val.name)
+				elif pos == -1:
+					raise NotImplementedError('overriding builtin with nonlocal keyword')
 
 			else:
-				raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
+				#TODO: completely elide this step if we have no closure that could ref vars in this scope
+				#		note: this opt needs to continue always putting things in the global scope
+				self.scope.inst.set_item(self.context, str(target), val.name)
+
+				# also create a node in the local namespace to speed up access to the node
+				tgt.assign_name(self.context, val)
+
+		else:
+			raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
 
 
 	def visit_Attribute(self, node):
@@ -407,6 +416,26 @@ class Py2C(ASTVisitor):
 		self.context = base_context
 
 		return out
+
+
+	def visit_For(self, node):
+		#for <target> in <iter>: <body>
+		#else: <orelse>
+
+		#TODO: for:else/break
+
+		tgt = self.visit(node.target)
+		iter_obj = self.visit(node.iter)
+
+		# get the PyIter for the iteration object
+		iter = iter_obj.get_iter(self.context)
+
+		# the gets the object locally inside of the while expr; we do the full assignment inside the body
+		stmt = c.While(c.Assignment('=', c.ID(tgt.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound())
+		self.context.add(stmt)
+		with self.new_context(stmt.stmt):
+			self._assign(node.target, tgt, tgt)
+			self.visit_nodelist(node.body)
 
 
 	def visit_FunctionDef(self, node):
@@ -592,6 +621,13 @@ class Py2C(ASTVisitor):
 		node.hl.inst.declare(self.context)
 		node.hl.inst.new(self.context, node.n)
 		return node.hl.inst
+
+
+	def visit_Raise(self, node):
+		inst = self.visit(node.exc)
+		#self.context.add(c.If(c.FuncCall('PyErr_'
+		self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(inst.name))))
+		self.context.add(c.Goto('end'))
 
 
 	def visit_Return(self, node):

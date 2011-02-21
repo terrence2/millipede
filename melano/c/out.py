@@ -183,3 +183,9 @@ class COut(ASTVisitor):
 	def visit_UnaryOp(self, node):
 		self.fp.write(node.op)
 		self.visit(node.expr)
+
+	def visit_While(self, node):
+		self.fp.write('while(')
+		self.visit(node.cond)
+		self.fp.write(')')
+		self.visit(node.stmt)
