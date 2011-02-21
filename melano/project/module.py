@@ -36,6 +36,7 @@ class MelanoModule(Scope):
 		elif self.filename.endswith('.so'):
 			self.source = None
 			self.checksum = None
+		self.lines = None
 
 		# the ast.Module for this module
 		self.ast = None
@@ -72,6 +73,11 @@ class MelanoModule(Scope):
 		print(self.owner.name)
 		super().show(level)
 
+
+	def get_source_line(self, lineno:int) -> str:
+		if self.lines is None:
+			self.lines = self.source.split('\n')
+		return self.lines[lineno - 1]
 
 
 	"""

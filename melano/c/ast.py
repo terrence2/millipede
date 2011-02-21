@@ -75,6 +75,9 @@ class Compound(AST):
 		# counter for tmp items
 		self.tmpcount = itertools.count()
 
+		# track the underlying converter visitor, so we can get to high-level state
+		self._visitor = None
+
 	def tmpname(self):
 		n = self.reserve_name('tmp' + str(next(self.tmpcount)), None, None)
 		return n

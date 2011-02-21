@@ -19,8 +19,13 @@ def iter_fields(node):
 
 
 class ASTVisitor:
+	def __init__(self):
+		# track current context node to give output methods access to our state for printing errors
+		self._current_node = None
+
 	def visit(self, node):
 		"""Visit a node."""
+		self._current_node = node
 		if node is None: return
 		method = 'visit_' + node.__class__.__name__
 		visitor = getattr(self, method, self.generic_visit)

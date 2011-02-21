@@ -22,13 +22,11 @@ class CIntegerType(LLType):
 
 	def as_pyobject(self, ctx):
 		if self.is_a_bool:
-			from melano.c.types.pybool import PyBoolType
 			out = PyBoolType(ctx.tmpname())
 			out.declare(ctx)
 			out._new_from_long(ctx, c.ID(self.name))
 			return out
 		else:
-			from melano.c.types.pyinteger import PyIntegerType
 			out = PyIntegerType(ctx.tmpname())
 			out.declare(ctx)
 			out._new_from_long(ctx, c.ID(self.name))
@@ -40,3 +38,7 @@ class CIntegerType(LLType):
 		out.declare(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.UnaryOp('!', c.ID(self.name))))
 		return out
+
+
+from melano.c.types.pybool import PyBoolType
+from melano.c.types.pyinteger import PyIntegerType

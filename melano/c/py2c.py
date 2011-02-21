@@ -6,6 +6,7 @@ from . import ast as c
 from contextlib import contextmanager
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.c.types.integer import CIntegerType
+from melano.c.types.lltype import LLType
 from melano.c.types.pycfunction import PyCFunctionType
 from melano.c.types.pyobject import PyObjectType
 from melano.c.types.pystring import PyStringType
@@ -103,6 +104,9 @@ class Py2C(ASTVisitor):
 		# the low-level statment emission context... e.g. the Compound for functions, ifs, etc.
 		self.context = self.main.body
 
+		# the module we are currently processing
+		self.module = None
+
 
 	def close(self):
 		self.main.body.add(c.FuncCall(c.ID('Py_Finalize'), c.ExprList()))
@@ -122,22 +126,18 @@ class Py2C(ASTVisitor):
 
 	@contextmanager
 	def new_scope(self, scope, ctx):
-		# add the new scope and set the scope's context
 		self.scopes.append(scope)
-		scope.context = ctx
-		# set the new global output context
-		prior_ctx = self.context
-		self.context = ctx
-		yield
-		# drop the scope
+		scope.context = ctx # set the scope's low-level context
+		with self.new_context(ctx):
+			yield
 		self.scopes.pop()
-		# reset context
-		self.context = prior_ctx
 
 
 	@contextmanager
 	def new_context(self, ctx):
 		'''Sets a new context (e.g. C-level {}), without adjusting the python scope or the c scope-context'''
+		ctx._visitor = self # give low-level access to high-level data for printing error messages
+
 		prior = self.context
 		self.context = ctx
 		yield
@@ -165,6 +165,8 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Module(self, node):
+		self.module = node.hl
+
 		# get the MelanoModule and Name
 		modscope = node.hl
 		modname = modscope.owner
@@ -189,57 +191,58 @@ class Py2C(ASTVisitor):
 		self.tu.add(self.module_func)
 
 		# set the initial context
-		self.context = self.module_func.body
-		self.comment('Create module "{}" as "{}"'.format(modscope.name, modname.name))
+		with self.new_context(self.module_func.body):
+			self.comment('Create module "{}" as "{}"'.format(modscope.name, modname.name))
 
-		# create the module
-		modname.create_instance(modname.global_name)
-		modname.inst.declare(self.tu, ['static'])
-		modname.inst.new(self.context, modname.name)
+			# create the module
+			modname.create_instance(modname.global_name)
+			modname.inst.declare(self.tu, ['static'])
+			modname.inst.new(self.context, modname.name)
 
-		# load the module dict from the module to the scope
-		modscope.create_instance(modscope.ll_scope)
-		modscope.inst.declare(self.tu, ['static'])
-		modname.inst.get_dict(self.context, modscope.inst)
+			# load the module dict from the module to the scope
+			modscope.create_instance(modscope.ll_scope)
+			modscope.inst.declare(self.tu, ['static'])
+			modname.inst.get_dict(self.context, modscope.inst)
 
-		# load and attach special attributes to the module dict
-		docstring, body = self.split_docstring(node.body)
-		for name, s in [('__name__', modname.name), ('__file__', modscope.filename), ('__doc__', docstring)]:
-			if s is not None:
-				ps = PyStringType(self.context.reserve_name(name, None, self.tu))
-				ps.new(self.context, s)
-			else:
-				ps = PyObjectType(self.context.reserve_name(name, None, self.tu))
-				ps.assign_none(self.context)
-			ps.declare(self.context) # note: this can come after we use the name, it just has to happen
-			modscope.inst.set_item(self.context, name, ps.name)
+			# load and attach special attributes to the module dict
+			docstring, body = self.split_docstring(node.body)
+			for name, s in [('__name__', modname.name), ('__file__', modscope.filename), ('__doc__', docstring)]:
+				if s is not None:
+					ps = PyStringType(self.context.reserve_name(name, None, self.tu))
+					ps.new(self.context, s)
+				else:
+					ps = PyObjectType(self.context.reserve_name(name, None, self.tu))
+					ps.assign_none(self.context)
+				ps.declare(self.context) # note: this can come after we use the name, it just has to happen
+				modscope.inst.set_item(self.context, name, ps.name)
 
-		# the return value
-		self.context.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
-
-		# visit all children
-		with self.global_scope(modscope):
-			# record the top-level context in the scope, so we can declare toplevel variables when in a sub-contexts
-			self.scope.context = self.context
+			# the return value
+			self.context.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
 			# visit all children
-			self.visit_nodelist(body)
+			with self.global_scope(modscope):
+				# record the top-level context in the scope, so we can declare toplevel variables when in a sub-contexts
+				self.scope.context = self.context
 
-		# return the module
-		self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(modname.global_name)))
-		self.context.add(c.Label('end'))
-		for name in reversed(self.context.cleanup):
-			self.context.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
-		self.context.add(c.Return(c.ID('__return_value__')))
+				# visit all children
+				self.visit_nodelist(body)
 
-		# add the function call to the main to set the module's global name
-		tmp = self.main.body.reserve_name(self.main.body.tmpname(), modname, self.tu)
-		self.main.body.add_variable(c.Decl(tmp, c.PtrDecl(c.TypeDecl(tmp, c.IdentifierType('PyObject')))))
-		self.main.body.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(modscope.ll_runner), c.ExprList())))
-		self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
-								c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
-								c.Return(c.Constant('integer', 1),
-							)), None))
+			# return the module
+			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(modname.global_name)))
+			self.context.add(c.Label('end'))
+			for name in reversed(self.context.cleanup):
+				self.context.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+			self.context.add(c.Return(c.ID('__return_value__')))
+
+			# add the function call to the main to set the module's global name
+			tmp = self.main.body.reserve_name(self.main.body.tmpname(), modname, self.tu)
+			self.main.body.add_variable(c.Decl(tmp, c.PtrDecl(c.TypeDecl(tmp, c.IdentifierType('PyObject')))))
+			self.main.body.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(modscope.ll_runner), c.ExprList())))
+			self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
+									c.FuncCall(c.ID('__err_show_traceback__'), c.ExprList()),
+									c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
+									c.Return(c.Constant('integer', 1),
+								)), None))
 
 
 	def find_owning_parent_scope(self, node):
@@ -625,8 +628,23 @@ class Py2C(ASTVisitor):
 
 	def visit_Raise(self, node):
 		inst = self.visit(node.exc)
-		#self.context.add(c.If(c.FuncCall('PyErr_'
-		self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(inst.name))))
+		'''
+		if(PyObject_IsInstance(inst.name, PyType_Type)) {
+			PyErr_SetObject(inst.name, ??);
+		} else {
+			PyErr_SetObject(PyObject_Type(inst.name), inst.name);
+		}
+		goto end;
+		'''
+		is_a_type = inst.is_instance(self.context, c.Cast(c.PtrDecl(c.TypeDecl(None, c.IdentifierType('PyObject'))), c.UnaryOp('&', c.ID('PyType_Type'))))
+		if_stmt = c.If(c.ID(is_a_type.name), c.Compound(), c.Compound())
+		with self.new_context(if_stmt.iftrue):
+			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(inst.name), c.ID('NULL'))))
+		with self.new_context(if_stmt.iffalse):
+			ty_inst = inst.get_type(self.context)
+			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(ty_inst.name), c.ID(inst.name))))
+		self.context.add(LLType.capture_error(self.context))
+		self.context.add(if_stmt)
 		self.context.add(c.Goto('end'))
 
 

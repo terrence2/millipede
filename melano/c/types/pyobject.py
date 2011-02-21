@@ -3,7 +3,6 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
-from melano.c.types.integer import CIntegerType
 from melano.c.types.lltype import LLType
 
 
@@ -99,3 +98,24 @@ class PyObjectType(LLType):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetIter'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
 		return out
+
+
+	def get_type(self, ctx):
+		out = PyTypeType(ctx.tmpname())
+		out.declare(ctx)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Type'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out.name)
+		return out
+
+
+	def is_instance(self, ctx, type_id):
+		out = CIntegerType(ctx.tmpname())
+		out.declare(ctx)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_IsInstance'), c.ExprList(
+																				c.ID(self.name), type_id))))
+		self.fail_if_negative(ctx, out.name)
+		return out
+
+
+from melano.c.types.pytype import PyTypeType
+from melano.c.types.integer import CIntegerType
