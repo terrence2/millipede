@@ -1072,6 +1072,9 @@ class PythonASTBuilder:
 				return int(raw[2:], 8)
 			elif raw.startswith('Ob'):
 				return int(raw[2:], 2)
+			else:
+				return float(raw)
+		raise AssertionError("Invalid literal number type: {}".format(raw))
 
 
 	#FIXME: this can sometimes be a Store op, e.g. as optional_vars on with_stmt
