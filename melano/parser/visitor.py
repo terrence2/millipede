@@ -5,23 +5,11 @@ from collections import Iterable
 from .ast import AST
 
 
-def iter_fields(node):
-	"""
-	Yield a tuple of ``(fieldname, value)`` for each field in ``node._fields``
-	that is present on *node*.
-	"""
-	for field in node._fields:
-		try:
-			yield field, getattr(node, field)
-		except AttributeError:
-			print("No attribute: {} on {}".format(field, node.__class__.__name__))
-
-
-
 class ASTVisitor:
 	def __init__(self):
 		# track current context node to give output methods access to our state for printing errors
 		self._current_node = None
+
 
 	def visit(self, node):
 		"""Visit a node."""
@@ -34,13 +22,15 @@ class ASTVisitor:
 
 	def generic_visit(self, node):
 		"""Called if no explicit visitor function exists for a node."""
-		for field, value in iter_fields(node):
+		rv = None
+		for value in [getattr(node, f) for f in node._fields]:
 			if isinstance(value, Iterable):
 				for item in value:
 					if isinstance(item, AST):
-						self.visit(item)
+						rv = self.visit(item)
 			elif isinstance(value, AST):
-				self.visit(value)
+				rv = self.visit(value)
+		return rv
 
 
 	def visit_nodelist(self, nodes):
