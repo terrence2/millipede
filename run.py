@@ -12,22 +12,21 @@ def main():
 	logging.basicConfig(level=logging.INFO)
 
 	# some tests
-	files = sys.argv[1:]
-	for path in files:
-		base = os.path.dirname(path)
-		fn = os.path.basename(path)
-		project = MelanoProject('test', programs=[fn[:-3]], roots=[base])
-		project.configure(limit=path, verbose=False)
-		project.locate_modules()
-		project.index_names()
-		project.derive_types()
-		project.show()
-		c = project.transform_lowlevel_0()
-		with COut('test.c') as v:
-			v.visit(c)
-	return
-	'''
-	'''
+	if len(sys.argv) > 1:
+		files = sys.argv[1:]
+		for path in files:
+			base = os.path.dirname(path)
+			fn = os.path.basename(path)
+			project = MelanoProject('test', programs=[fn[:-3]], roots=[base])
+			project.configure(limit=path, verbose=False)
+			project.locate_modules()
+			project.index_names()
+			project.derive_types()
+			project.show()
+			c = project.transform_lowlevel_0()
+			with COut('test.c') as v:
+				v.visit(c)
+		return
 
 	project = MelanoProject('zeuss', programs=['format'], roots=[os.path.expanduser('~/Projects/zeuss')])
 	project.configure(limit=os.path.expanduser('~/Projects/zeuss') + '/format.py')

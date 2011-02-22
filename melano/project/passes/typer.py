@@ -36,3 +36,7 @@ class Typer(ASTVisitor):
 		self.visit(node.right)
 		node.hl = Intermediate(Intermediate.GENERALIZE, node.left.hl, node.right.hl)
 
+	def visit_UnaryOp(self, node):
+		self.visit(node.operand)
+		node.hl = node.operand.hl
+

@@ -3,9 +3,11 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
+from melano.c.types.pydict import PyDictType
 from melano.c.types.pyinteger import PyIntegerType
 from melano.c.types.pymodule import PyModuleType
 from melano.c.types.pystring import PyStringType
+from melano.c.types.pytuple import PyTupleType
 from melano.parser import ast
 from melano.parser.visitor import ASTVisitor
 from melano.project.constant import Constant
@@ -13,6 +15,7 @@ from melano.project.intermediate import Intermediate
 from melano.project.name import Name
 from melano.project.scope import Scope
 import logging
+import pdb
 #from melano.project.class_ import MelanoClass
 #from melano.project.foreign import ForeignObject
 #from melano.project.function import MelanoFunction
@@ -144,6 +147,14 @@ class Indexer(ASTVisitor):
 			node.hl = self.context.lookup(name)
 
 
+	def visit_Dict(self, node):
+		node.hl = Constant(PyDictType)
+		if node.keys and node.values:
+			for k, v in zip(node.keys, node.values):
+				self.visit(k)
+				self.visit(v)
+
+
 	def visit_Global(self, node):
 		for name in node.names:
 			if name not in self.context.symbols:
@@ -179,3 +190,8 @@ class Indexer(ASTVisitor):
 		#TODO: discover if we can use a non-unicode or c string type?
 		node.s = node.s.strip('"').strip("'")
 		node.hl = Constant(PyStringType)
+
+
+	def visit_Tuple(self, node):
+		node.hl = Constant(PyTupleType)
+		self.visit_nodelist(node.elts)

@@ -8,6 +8,7 @@ from melano.c.types.lltype import LLType
 
 class PyObjectType(LLType):
 	def declare(self, ctx, quals=[]):
+		assert isinstance(ctx, c.TranslationUnit) or not ctx._visitor.scopes or ctx._visitor.scope.context == ctx
 		ctx.add_variable(c.Decl(self.name, c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('PyObject'))), quals=quals, init=c.ID('NULL')), True)
 
 
@@ -33,18 +34,34 @@ class PyObjectType(LLType):
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(self.name))))
 
 
-	def get_attr(self, ctx, attrname, out_varname):
-		ctx.add(c.Assignment('=', c.ID(out_varname), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
+	def get_attr_string(self, ctx, attrname, out_var):
+		ctx.add(c.Assignment('=', c.ID(out_var.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
 														c.ID(self.name), c.Constant('string', attrname)))))
-		self.fail_if_null(ctx, out_varname)
+		self.fail_if_null(ctx, out_var.name)
 
 
-	def set_attr(self, ctx, attrname, attrval):
-		tmp = ctx.tmpname()
-		ctx.add_variable(c.Decl(tmp, c.TypeDecl(tmp, c.IdentifierType('int'))), False)
-		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
+	def set_attr_string(self, ctx, attrname, attrval):
+		tmp = CIntegerType(ctx.tmpname())
+		tmp.declare(ctx, init= -1)
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
-		self.fail_if_nonzero(ctx, name=tmp)
+		self.fail_if_nonzero(ctx, tmp.name)
+		return tmp
+
+
+	def get_item(self, ctx, key, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetItem'), c.ExprList(
+															c.ID(self.name), c.ID(key.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def set_item(self, ctx, key, val):
+		tmp = CIntegerType(ctx.tmpname())
+		tmp.declare(ctx, init= -1)
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetItem'), c.ExprList(
+															c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
+		self.fail_if_nonzero(ctx, tmp.name)
+		return tmp
 
 
 	def call(self, ctx, posargs, kwargs, out_var):
@@ -113,6 +130,26 @@ class PyObjectType(LLType):
 
 	def power(self, ctx, rhs, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Power'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID('None')))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def invert(self, ctx, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Invert'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def positive(self, ctx, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Positive'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def negative(self, ctx, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Negative'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def not_(self, ctx, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Not'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
