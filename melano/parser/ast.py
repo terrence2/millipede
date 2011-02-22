@@ -604,7 +604,7 @@ class Str(expr):
 
 #| Subscript(expr value, slice slice, expr_context ctx)
 class Subscript(expr):
-	_fields = ('value',)
+	_fields = ('value', 'slice')
 	__slots__ = ('value', 'slice', 'ctx')
 	def __init__(self, value, _slice, ctx, *args, **kwargs):
 		super().__init__(*args, **kwargs)
