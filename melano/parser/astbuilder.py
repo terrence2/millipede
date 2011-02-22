@@ -648,7 +648,7 @@ class PythonASTBuilder:
 		base_value = dotted_name_node.children[0].value
 		name = ast.Name(base_value, ast.Load, dotted_name_node)
 		for i in range(2, len(dotted_name_node.children), 2):
-			attr = dotted_name_node.children[i].value
+			attr = ast.Name(dotted_name_node.children[i].value, ast.Load, dotted_name_node.children[i])
 			name = ast.Attribute(name, attr, ast.Load, dotted_name_node)
 		return name
 

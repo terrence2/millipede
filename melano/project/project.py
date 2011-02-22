@@ -283,21 +283,24 @@ class MelanoProject:
 
 		# look in the project roots
 		modtype = MelanoModule.PROJECT
-		path = self.__find_module_in_roots(self.roots, contextdir, dottedname, fname)
+		rec_modtype, path = self.__find_module_in_roots(self.roots, contextdir, dottedname, fname)
 		if not path:
 			# look in the extensions dir
 			modtype = MelanoModule.EXTENSION
-			path = self.__find_module_in_roots(self.extensions, contextdir, dottedname, fname)
+			rec_modtype, path = self.__find_module_in_roots(self.extensions, contextdir, dottedname, fname)
 			if not path:
 				# look in the stdlib
 				modtype = MelanoModule.STDLIB
-				path = self.__find_module_in_roots(self.stdlib, contextdir, dottedname, fname)
+				rec_modtype, path = self.__find_module_in_roots(self.stdlib, contextdir, dottedname, fname)
 				if not path:
 					# look in the builtins
 					modtype = MelanoModule.BUILTIN
-					path = self.__find_module_in_roots(self.builtins, contextdir, dottedname, fname)
+					rec_modtype, path = self.__find_module_in_roots(self.builtins, contextdir, dottedname, fname)
 					if not path:
 						raise FileNotFoundException(dottedname)
+
+		# if we loaded recursively and got a modtype, set it, not the highlevel discovered type
+		if rec_modtype >= 0: modtype = rec_modtype
 
 		self.name_to_type[dottedname] = modtype
 		self.name_to_path[dottedname] = path
@@ -306,14 +309,14 @@ class MelanoProject:
 
 	def __find_module_in_roots(self, baseroots, contextdir, dottedname, filename):
 		roots = self.override + copy(baseroots)
-		if contextdir:
+		if contextdir and contextdir not in roots:
 			roots += [contextdir]
 
 		# query possible filenames names
 		for root in roots:
 			path = self.__find_module_in_root(root, filename)
 			if path:
-				return path
+				return - 1, path
 
 		# If we are a dotted name, we may be imported as a module inside the
 		# parent.  E.g. when os imports posixpath as path so we can import os.path.
@@ -328,10 +331,10 @@ class MelanoProject:
 			for imp in visitor.imports:
 				for alias in imp.names:
 					if str(alias.asname) == parts[-1]:
-						_, path = self.__find_module_file(str(alias.name))
-						return path
+						modtype, path = self.__find_module_file(str(alias.name))
+						return modtype, path
 
-		return None
+		return None, None
 
 
 	def __find_module_in_root(self, root, filename):

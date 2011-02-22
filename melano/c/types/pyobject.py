@@ -55,8 +55,64 @@ class PyObjectType(LLType):
 		self.fail_if_null(ctx, out_var.name)
 
 
+
+	def bitor(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Or'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def bitxor(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Xor'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def bitand(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_And'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def lshift(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Lshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def rshift(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Rshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
 	def add(self, ctx, rhs, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Add'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def subtract(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Subtract'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def multiply(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Multiply'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def divide(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_TrueDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def floor_divide(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_FloorDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def modulus(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Remainder'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def power(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Power'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID('None')))))
 		self.fail_if_null(ctx, out.name)
 
 

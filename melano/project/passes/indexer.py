@@ -55,65 +55,35 @@ class Indexer(ASTVisitor):
 
 	def visit_Import(self, node):
 		for alias in node.names:
-			if alias.asname:
-				# e.g.: import foo(.bar.baz)? as bar
-				name = str(alias.name)
-				asname = str(alias.asname)
-				if self.project.is_local(self.module):
-					self.context.add_symbol(asname)
-					#self.context.names[asname] = self.module.refs[name]
-				else:
-					self.context.add_symbol(asname)
-					#self.context.names[asname] = ForeignObject(name)
-				#alias.asname.hl = self.context.names[asname]
-			else:
-				if isinstance(alias.name, ast.Attribute):
-					# e.g.: import foo.bar.baz
-					name = str(alias.name)
-					asname = str(alias.name.first())
-					if self.project.is_local(self.module):
-						self.context.add_symbol(asname)
-						#alias.name.hl = self.context.names[asname] = self.project.find_module(asname, self)
-					else:
-						self.context.add_symbol(name)
-						#alias.name.hl = self.context.names[name] = ForeignObject(asname)
-				else:
-					# e.g.: import foo
-					name = str(alias.name)
-					if self.project.is_local(self.module):
-						self.context.add_symbol(name)
-						#self.context.names[name] = self.module.refs[name]
-					else:
-						self.context.add_symbol(name)
-						#self.context.names[name] = ForeignObject(name)
-					#alias.name.hl = self.context.names[name]
+			# If we have an asname then we are importing the full module foo.bar.baz and putting
+			#	that module into the namespace under the asname.  If we don't, then we are only
+			# really importing the first part of the module path -- foo of foo.bar.baz -- and we are
+			# only putting that top name into the namespace.  If we have no asname, we need to
+			# mangle the alias to provide the target asname and the real import name.
+			self.visit(alias.name)
+			self.visit(alias.asname)
+
+			#TODO: this probably needs to be in the linker, where it can always succeed
+			alias.name.hl.scope = self.module.refs.get(str(alias.name), None)
 
 
 	def visit_ImportFrom(self, node):
-		if not self.project.is_local(self.module):
-			return
-		#NOTE: modules are be loaded in _mostly_ dependency order so that we can perform module level
-		#		lookups here.  These will also include non-module lookups, but these we can skip for now.
-		# 		We can't do full dependency ordering because of weird star/graph relationships.  We will need
-		#		to re-run lookup by the total depth of from foo import bar chains.  In practice this is 2, so
-		#		just re-doing missed entries in the linker is adequate. 
-
-		# find the module
 		modname = '.' * node.level + str(node.module)
-		try:
-			mod = self.module.refs[modname]
-		except:
-			import pdb;pdb.set_trace()
-		if mod is None: return
+		mod = self.module.refs.get(modname, None)
+		if not mod:
+			return
 
 		for alias in node.names:
 			assert not isinstance(alias.name, ast.Attribute)
 			name = str(alias.name)
 			if name == '*':
 				for n, ref in mod.lookup_star().items():
-					#self.context.names[n] = ref
 					self.context.add_symbol(n)
 			else:
+				self.visit(alias.name)
+				self.visit(alias.asname)
+
+				'''
 				if alias.asname:
 					asname = str(alias.asname)
 				else:
@@ -124,6 +94,7 @@ class Indexer(ASTVisitor):
 					#self.context.names[asname] = ref
 				except KeyError:
 					logging.critical("MISSING: {} in {} @ {}".format(name, mod.filename, self.module.filename))
+				'''
 
 
 	def visit_ClassDef(self, node):

@@ -26,10 +26,11 @@ class LLType:
 			# if we can't fit the full error context on one line, also print the number of lines longer it goes and the ending column
 			src = ctx._visitor.module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
 			rng = (st[1], len(src))
+		src = src.strip().replace('"', '\\"')
 
 		return c.FuncCall(c.ID('__err_capture__'), c.ExprList(
 						c.Constant('string', filename), c.Constant('integer', st[0]), c.ID('__LINE__'), c.Constant('string', context),
-						c.Constant('string', src.strip()), c.Constant('integer', rng[0]), c.Constant('integer', rng[1])))
+						c.Constant('string', src), c.Constant('integer', rng[0]), c.Constant('integer', rng[1])))
 
 
 	def fail_if_null(self, ctx, name):

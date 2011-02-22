@@ -45,27 +45,34 @@ def test_all(testfile, root):
 	p = subprocess.Popen([os.path.join(TESTDIR, 'test-prog')], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 	out = p.communicate()
 	assert p.returncode == expect['returncode']
-	assert filter_output(out[0]) == expect['stdout']
-	assert filter_output(out[1]) == expect['stderr']
+	if not expect['skip_io']:
+		assert filter_output(out[0]) == expect['stdout']
+		assert filter_output(out[1]) == expect['stderr']
 
 
-def filter_output(out):
-	out = out.strip().decode('UTF-8').split('\n') # turn into text lines
-	return [o for o in out if o] # remove empty elements
+def filter_output(data:bytes) -> [str]:
+	out = data.strip().decode('UTF-8').split('\n') # turn into text lines
+	return [o.strip() for o in out if o] # remove empty elements
+
 
 def load_expectations(testfile):
-	stdout = []
-	stderr = []
-	returncode = 0
-	xfail = False
+	out = {
+		'stdout': [],
+		'stderr': [],
+		'returncode': 0,
+		'xfail': False,
+		'skip_io': False,
+	}
 	with open(testfile, 'r') as fp:
 		for ln in fp:
 			if ln.startswith('#out: '):
-				stdout.append(ln[6:].strip())
+				out['stdout'].append(ln[6:].strip())
 			elif ln.startswith('#err: '):
-				stderr.append(ln[6:].strip())
+				out['stderr'].append(ln[6:].strip())
 			elif ln.startswith('#returncode: '):
-				returncode = int(ln[13:].strip())
+				out['returncode'] = int(ln[13:].strip())
 			elif ln.startswith('#fail'):
-				xfail = True
-	return {'stdout': stdout, 'stderr': stderr, 'returncode': returncode, 'xfail': xfail}
+				out['xfail'] = True
+			elif ln.startswith('#skip_io'):
+				out['skip_io'] = True
+	return out
