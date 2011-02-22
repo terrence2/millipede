@@ -46,7 +46,7 @@ void __err_show_traceback__() {
 	PyObject *dict, *tb, *val;
 	Py_ssize_t i, cnt;
 
-	printf("Traceback (most recent call last):\n");
+	fprintf(stderr, "Traceback (most recent call last):\n");
 
 	dict = PyThreadState_GET()->dict;
 	if(!dict)
@@ -58,6 +58,6 @@ void __err_show_traceback__() {
 	cnt = PyList_Size(tb);
 	for(i = cnt - 1; i > -1; i--) {
 		val = PyList_GET_ITEM(tb, i);
-		PyObject_Print(val, stdout, Py_PRINT_RAW);
+		PyObject_Print(val, stderr, Py_PRINT_RAW);
 	}
 }
