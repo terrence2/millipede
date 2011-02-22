@@ -1117,9 +1117,6 @@ class PythonASTBuilder:
 			if second_child.type == self.tokens.RBRACE:
 				return ast.Dict(None, None, atom_node)
 			return self.handle_dictorsetmaker(second_child, atom_node)
-		elif first_child_type == self.tokens.BACKQUOTE:
-			expr = self.handle_testlist(children[1])
-			return ast.Repr(expr, atom_node)
 		else:
 			raise AssertionError("unknown atom")
 
