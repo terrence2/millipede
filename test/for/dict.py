@@ -4,4 +4,4 @@ a['foo'] = 'bar'
 for k in a:
 	f = a[k]
 	print(f)
-#out: foo
+#out: bar

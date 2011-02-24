@@ -3,12 +3,10 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.parser import ast
+from melano.parser import ast as py
 from melano.parser.visitor import ASTVisitor
-from melano.project.const import MelanoConst
-from melano.project.foreign import ForeignObject
 from melano.project.module import MelanoModule
-from melano.project.variable import MelanoVariable
+import pdb
 
 
 class Linker(ASTVisitor):
@@ -32,6 +30,32 @@ class Linker(ASTVisitor):
 		self.context = prior
 
 
+	def visit_FunctionDef(self, node):
+		self.visit(node.returns) # return annotation
+		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
+		self.visit(node.args.varargannotation) # *args annotation
+		self.visit_nodelist_field(node.args.kwonlyargs, 'annotation') # kwargs annotation
+		self.visit(node.args.kwargannotation) # **args annotation
+		self.visit_nodelist(node.args.defaults) # positional arg default values
+		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
+
+		with self.scope(node.hl):
+			# arg name defs are inside the func
+			self.visit_nodelist_field(node.args.args, 'arg')
+			self.visit(node.args.vararg)
+			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
+			self.visit(node.args.kwarg)
+
+			self.visit_nodelist(node.body)
+
+		self.visit_nodelist(node.decorator_list)
+
+
+	def visit_Name(self, node):
+		if node.ctx == py.Load:
+			node.hl = self.context.lookup(str(node))
+
+	'''
 	def visit_Module(self, node):
 		node.hl = self.module
 		self.visit_nodelist(node.body)
@@ -125,4 +149,4 @@ class Linker(ASTVisitor):
 			else:
 				# NOTE: we only care about cross-module linkage at this point
 				pass
-
+	'''

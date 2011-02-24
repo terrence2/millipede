@@ -31,12 +31,7 @@ def test_all(testfile, root):
 	fn = os.path.basename(testfile)
 	project = MelanoProject('test', programs=[fn[:-3]], roots=[root])
 	project.configure(limit=testfile, verbose=False)
-	project.locate_modules()
-	project.index_names()
-	project.derive_types()
-	c = project.transform_lowlevel_0()
-	with COut('test.c') as v:
-		v.visit(c)
+	project.build('test.c')
 
 	p = subprocess.Popen(['make'])
 	out = p.communicate()

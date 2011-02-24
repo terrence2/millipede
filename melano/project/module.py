@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
+from melano.c.pybuiltins import PY_BUILTINS
 from melano.c.types.lltype import LLType
 from melano.c.types.pymodule import PyModuleType
 from melano.project.name import Name
@@ -21,22 +22,26 @@ class MelanoModule(Scope):
 	PROJECT = 3
 
 
-	def __init__(self, modtype:int, filename:str, dottedname:str):
+	def __init__(self, modtype:int, filename:str, dottedname:str, builtins_scope:Scope):
 		'''
 		The source is the location (project root relative) where
 		this module can be found.
 		'''
 		super().__init__(Name(dottedname.replace('.', '_'), None))
 
+		# the common builtins scope used by all modules for missing lookups
+		self.builtins_scope = builtins_scope
+
 		self.modtype = modtype
 		self.filename = filename
 		if self.filename.endswith('.py'):
 			self.source = self.__read_file()
 			self.checksum = hashlib.sha1(self.source.encode('UTF-8')).hexdigest()
+			self.lines = self.source.split('\n')
 		elif self.filename.endswith('.so'):
 			self.source = None
 			self.checksum = None
-		self.lines = None
+			self.lines = None
 
 		# the ast.Module for this module
 		self.ast = None
@@ -60,13 +65,19 @@ class MelanoModule(Scope):
 		return content
 
 
-	def lookup_name(self, name):
-		'''Query the name list for an existing reference.'''
-		return self.names[name]
+	def lookup(self, name:str) -> Name:
+		try:
+			return super().lookup(name)
+		except KeyError:
+			return self.builtins_scope.lookup(name)
+		raise KeyError(name)
 
 
-	def lookup_star(self):
-		return self.names
+	def lookup_star(self) -> [str]:
+		'''Return all of the names exposed by this scope.'''
+		#TODO: if we have a static __all__, obey it, rather than giving everything
+		#TODO: if __all__ is stored to with a non-const, we need to emit a warning or something
+		return list(self.symbols.keys())
 
 
 	def show(self, level=0):
@@ -75,8 +86,6 @@ class MelanoModule(Scope):
 
 
 	def get_source_line(self, lineno:int) -> str:
-		if self.lines is None:
-			self.lines = self.source.split('\n')
 		return self.lines[lineno - 1]
 
 

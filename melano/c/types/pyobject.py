@@ -185,20 +185,15 @@ class PyObjectType(LLType):
 		return out
 
 
-	def get_iter(self, ctx):
-		out = PyObjectType(ctx.tmpname())
-		out.declare(ctx)
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetIter'), c.ExprList(c.ID(self.name)))))
-		self.fail_if_null(ctx, out.name)
-		return out
+	def get_iter(self, ctx, iter):
+		ctx.add(c.Assignment('=', c.ID(iter.name), c.FuncCall(c.ID('PyObject_GetIter'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, iter.name)
 
 
-	def get_type(self, ctx):
-		out = PyTypeType(ctx.tmpname())
-		out.declare(ctx)
+	def get_type(self, ctx, out):
+		assert isinstance(out, PyTypeType)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Type'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
-		return out
 
 
 	def is_instance(self, ctx, type_id):

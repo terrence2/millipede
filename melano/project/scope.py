@@ -37,7 +37,12 @@ class Scope:
 
 
 	def lookup(self, name:str) -> Name:
-		return self.symbols[name]
+		try:
+			return self.symbols[name]
+		except KeyError:
+			if self.owner.parent:
+				return self.owner.parent.lookup(name)
+			raise
 
 
 	def has_name(self, name:str) -> bool:

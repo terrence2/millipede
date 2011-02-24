@@ -1,3 +1,4 @@
+#fail
 class A: pass
 a = A()
 a.b = A()

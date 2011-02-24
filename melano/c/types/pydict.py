@@ -23,7 +23,7 @@ class PyDictType(PyObjectType):
 	def set_item(self, ctx, key:PyObjectType, val:PyObjectType):
 		tmp = ctx.reserve_name(self.name + '_set_item_rv', None, None)
 		ctx.add_variable(c.Decl(tmp, c.TypeDecl(tmp, c.IdentifierType('int'))), False)
-		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_SetItemString'), c.ExprList(
+		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_SetItem'), c.ExprList(
 											c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
 		self.fail_if_nonzero(ctx, tmp)
 

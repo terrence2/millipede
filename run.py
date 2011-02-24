@@ -19,26 +19,13 @@ def main():
 			fn = os.path.basename(path)
 			project = MelanoProject('test', programs=[fn[:-3]], roots=[base])
 			project.configure(limit=path, verbose=False)
-			project.locate_modules()
-			project.index_names()
-			project.derive_types()
-			project.show()
-			c = project.transform_lowlevel_0()
-			with COut('test.c') as v:
-				v.visit(c)
+			project.build('test.c')
 		return
+
 
 	project = MelanoProject('zeuss', programs=['format'], roots=[os.path.expanduser('~/Projects/zeuss')])
 	project.configure(limit=os.path.expanduser('~/Projects/zeuss') + '/format.py')
-	project.locate_modules()
-	project.index_names()
-	#project.link_references()
-	project.derive_types()
-	#project.emit_code()
-	c = project.transform_lowlevel_0()
-
-	with COut('test.c') as v:
-		v.visit(c)
+	project.build('test.c')
 
 
 	#app = MelanoApplication(project, sys.argv)

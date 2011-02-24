@@ -3,15 +3,19 @@ Toplevel tool for analyzing a source base.
 '''
 from collections import OrderedDict
 from copy import copy
+from melano.c.out import COut
 from melano.c.py2c import Py2C
+from melano.c.pybuiltins import PY_BUILTINS
 from melano.parser.driver import PythonParserDriver
 from melano.project.lowlevel.makefile import Makefile
 from melano.project.module import MelanoModule
-#from melano.project.passes.coder import Coder
+from melano.project.name import Name
+from melano.project.passes.coder import Coder
 from melano.project.passes.find_links import FindLinks
 from melano.project.passes.indexer import Indexer
-#from melano.project.passes.linker import Linker
+from melano.project.passes.linker import Linker
 from melano.project.passes.typer import Typer
+from melano.project.scope import Scope
 import logging
 import melano.parser.ast as ast
 import os
@@ -42,7 +46,7 @@ class MelanoProject:
 		self.name = name
 		self.programs = {p: None for p in programs}
 		self.roots = roots
-		self.build = os.path.realpath('./build')
+		self.build_dir = os.path.realpath('./build')
 
 		self.stdlib = [os.path.realpath('./data/lib-dynload'), '/usr/lib/python3.1', '/usr/lib/python3.1/lib-dynload']
 		self.extensions = ['/usr/lib/python3.1/site-packages']
@@ -71,12 +75,11 @@ class MelanoProject:
 		# list our currently cached entries for fast lookup later
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
 
-		# mark uses of the stdlib and builtins in our code for reference
-		self.use_stdlib = []
-		self.use_builtins = []
-
-		# record used names so we don't dup them
-		self.global_names = []
+		# build a 'scope' for our builtins
+		self.builtins_scope = Scope(Name('builtins', None))
+		for n in PY_BUILTINS:
+			self.builtins_scope.add_symbol(n)
+			self.builtins_scope.mark_ownership(n)
 
 
 	def configure(self, *, stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[], builddir='./build',
@@ -92,7 +95,7 @@ class MelanoProject:
 		self.builtins = builtins + self.builtins
 		self.override = override + self.override
 
-		self.build = os.path.realpath(builddir)
+		self.build_dir = os.path.realpath(builddir)
 		self.limit = re.compile(limit)
 
 		self.verbose = verbose
@@ -105,20 +108,25 @@ class MelanoProject:
 			logging.info("Builtins Search: {}".format(self.builtins))
 
 
+	def build(self, target):
+		self.locate_modules()
+		self.index_names()
+		self.link_references()
+		self.derive_types()
+		#project.show()
+		if target.endswith('.c'):
+			c = self.transform_lowlevel_c()
+			with COut('test.c') as v:
+				v.visit(c)
+		else:
+			raise NotImplementedError('target must be a c file at the moment')
+
+
 	def locate_modules(self):
 		'''Perform static, module-level reachability analysis.'''
 		for program in self.programs:
 			mod = self._locate_module(program, '', is_main=True)
 			self.programs[program] = mod
-
-
-	def transform_lowlevel_0(self):
-		visitor = Py2C()
-		for mod in self.modules.values():
-			if self.is_local(mod):
-				visitor.visit(mod.ast)
-		visitor.close()
-		return visitor.tu
 
 
 	def index_names(self):
@@ -151,9 +159,20 @@ class MelanoProject:
 				typer.visit(mod.ast)
 
 
+	def transform_lowlevel_c(self):
+		visitor = Py2C()
+		for mod in self.modules.values():
+			if self.is_local(mod):
+				visitor.visit(mod.ast)
+		visitor.close()
+		return visitor.tu
+
+
+
+
 	def emit_code(self):
 		'''Look up-reference and thru-call to find the types of all names.'''
-		m = Makefile(self.build, self.roots)
+		m = Makefile(self.build_dir, self.roots)
 		for fn in self.order:
 			mod = self.modules[fn]
 			if self.is_local(mod):
@@ -237,7 +256,7 @@ class MelanoProject:
 			return self.modules[progpath]
 
 		# create the module
-		mod = MelanoModule(modtype, progpath, dottedname if not is_main else '__main__')
+		mod = MelanoModule(modtype, progpath, dottedname if not is_main else '__main__', self.builtins_scope)
 		mod.name = self.__name_for_module_path(progpath)
 		self.modules[progpath] = mod
 
@@ -324,7 +343,7 @@ class MelanoProject:
 			parts = dottedname.split('.')
 			parentname = '.'.join(parts[:-1])
 			modtype, modfile = self.__find_module_file(parentname, contextdir)
-			mod = MelanoModule(modtype, modfile, parentname)
+			mod = MelanoModule(modtype, modfile, parentname, self.builtins_scope)
 			self.__load_ast(mod)
 			visitor = FindLinks()
 			visitor.visit(mod.ast)

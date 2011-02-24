@@ -4,13 +4,16 @@ All rights reserved.
 '''
 from contextlib import contextmanager
 from melano.c.types.pydict import PyDictType
+from melano.c.types.pyfloat import PyFloatType
 from melano.c.types.pyinteger import PyIntegerType
+from melano.c.types.pylist import PyListType
 from melano.c.types.pymodule import PyModuleType
 from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
-from melano.parser import ast
+from melano.parser import ast as py
 from melano.parser.visitor import ASTVisitor
 from melano.project.constant import Constant
+from melano.project.function import MelanoFunction
 from melano.project.intermediate import Intermediate
 from melano.project.name import Name
 from melano.project.scope import Scope
@@ -36,10 +39,10 @@ class Indexer(ASTVisitor):
 
 
 	@contextmanager
-	def scope(self, node):
+	def scope(self, node, scope_ty=Scope):
 		# insert node into parent scope
 		sym = self.context.add_symbol(str(node.name))
-		sym.scope = Scope(sym)
+		sym.scope = scope_ty(sym)
 		node.hl = sym.scope
 		node.name.hl = sym
 
@@ -77,7 +80,7 @@ class Indexer(ASTVisitor):
 			return
 
 		for alias in node.names:
-			assert not isinstance(alias.name, ast.Attribute)
+			assert not isinstance(alias.name, py.Attribute)
 			name = str(alias.name)
 			if name == '*':
 				for n, ref in mod.lookup_star().items():
@@ -120,18 +123,26 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
-		with self.scope(node):
+		with self.scope(node, scope_ty=MelanoFunction):
 			# arg name defs are inside the func
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)
 			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
 			self.visit(node.args.kwarg)
 
+			# add call conventions to the scope
+			if node.args and node.args.args:
+				for arg in node.args.args:
+					self.context.expect_args.append(str(arg.arg))
+			if node.args and node.args.kwonlyargs:
+				for arg in node.args.kwonlyargs:
+					self.context.expect_kwargs.add(str(arg.arg))
+
 			self.visit_nodelist(node.body)
 
 		# insert the assumed return None if we fall off the end without a return
-		if not isinstance(node.body[-1], ast.Return):
-			node.body.append(ast.Return(None, None))
+		if not isinstance(node.body[-1], py.Return):
+			node.body.append(py.Return(None, None))
 
 		self.visit_nodelist(node.decorator_list)
 
@@ -170,26 +181,38 @@ class Indexer(ASTVisitor):
 
 
 	def visit_Name(self, node):
-		name = str(node)
-		if name not in self.context.symbols:
-			sym = self.context.add_symbol(name)
-			node.hl = sym
+		print("NAME:", str(node), node.ctx)
+
+		if node.ctx == py.Load:
+			pass
 		else:
-			node.hl = self.context.lookup(name)
-		if node.ctx == ast.Store and not node.hl.is_nonlocal and not node.hl.is_global:
-			self.context.mark_ownership(name)
+			name = str(node)
+			if name not in self.context.symbols:
+				sym = self.context.add_symbol(name)
+				node.hl = sym
+			else:
+				node.hl = self.context.lookup(name)
+			if node.ctx in [py.Store, py.Param] and not any((node.hl.is_nonlocal, node.hl.is_global)):
+				self.context.mark_ownership(name)
 
 
 	def visit_Num(self, node):
 		#TODO: expand this to discover the minimum sized int that will cover the value.
-		#TODO: does Num also cover PyFloatTypes?
-		node.hl = Constant(PyIntegerType)
+		if isinstance(node.n, int):
+			node.hl = Constant(PyIntegerType)
+		else:
+			node.hl = Constant(PyFloatType)
 
 
 	def visit_Str(self, node):
 		#TODO: discover if we can use a non-unicode or c string type?
 		node.s = node.s.strip('"').strip("'")
 		node.hl = Constant(PyStringType)
+
+
+	def visit_List(self, node):
+		node.hl = Constant(PyListType)
+		self.visit_nodelist(node.elts)
 
 
 	def visit_Tuple(self, node):

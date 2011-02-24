@@ -1068,9 +1068,9 @@ class PythonASTBuilder:
 		except ValueError:
 			if raw.startswith('0x'):
 				return int(raw[2:], 16)
-			elif raw.startswith('Oo'):
+			elif raw.startswith('0o'):
 				return int(raw[2:], 8)
-			elif raw.startswith('Ob'):
+			elif raw.startswith('0b'):
 				return int(raw[2:], 2)
 			else:
 				return float(raw)

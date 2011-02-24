@@ -70,6 +70,8 @@ class COut(ASTVisitor):
 			self.fp.write(node.prefix + '"' + node.value + '"' + node.postfix)
 		elif node.type == 'integer':
 			self.fp.write(node.prefix + str(node.value) + node.postfix)
+		elif node.type == 'double':
+			self.fp.write(node.prefix + repr(node.value).strip("'") + node.postfix)
 		else:
 			raise NotImplementedError
 

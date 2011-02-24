@@ -8,9 +8,11 @@ from melano.c.pybuiltins import PY_BUILTINS
 from melano.c.types.integer import CIntegerType
 from melano.c.types.lltype import LLType
 from melano.c.types.pycfunction import PyCFunctionType
+from melano.c.types.pydict import PyDictType
 from melano.c.types.pyobject import PyObjectType
 from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
+from melano.c.types.pytype import PyTypeType
 from melano.parser import ast as py
 from melano.parser.visitor import ASTVisitor
 from melano.project.module import MelanoModule
@@ -402,8 +404,8 @@ class Py2C(ASTVisitor):
 		elif node.ctx == py.Load:
 			kinst = self.visit(node.slice)
 			tgtinst = self.visit(node.value)
-			tmp = PyObjectType(self.context.tmpname())
-			tmp.declare(self.context)
+			tmp = PyObjectType(self.scope.context.tmpname())
+			tmp.declare(self.scope.context)
 			tgtinst.get_item(self.context, kinst, tmp)
 			return tmp
 		else:
@@ -459,14 +461,73 @@ class Py2C(ASTVisitor):
 		# prepare the func name node
 		funcinst = self.visit(node.func)
 
-		# get ids of positional args
+		# just ensure we always have these nodes for simplicty
+		if not node.args: node.args = []
+		if not node.keywords: node.keywords = []
+
+		# if we are defined locally, we can know the expected calling proc and reorganize our args to it
+		if node.func.hl.scope:
+			expect_args = node.func.hl.scope.expect_args[:]
+			expect_kwargs = node.func.hl.scope.expect_kwargs[:]
+
+		# otherwise, we have to trust that the caller is doing it right
+		else:
+			expect_args = [str(arg) for arg in node.args]
+			expect_kwargs = [str(kw.keyword) for kw in node.keywords]
+
+		# reorganize the passed args into the required format
 		pos_args = []
-		if node.args:
-			for arg in node.args:
-				idinst = self.visit(arg)
-				idinst = idinst.as_pyobject(self.context)
-				idinst.incref(self.context) # pytuple pack will steal the ref, but we want to be able to cleanup the node later
-				pos_args.append(idinst)
+		kw_args = []
+		for arg in node.args:
+			# fill into positional if we expect them there
+			if len(expect_args):
+				pos_args.append(arg)
+				expect_args = expect_args[1:]
+			# otherwise, fill left to right into keyworked args 
+			else:
+				assert len(expect_kwargs), "Not enough args passed to function: {}".format(str(node.func))
+				kw_args.append(arg)
+				expect_kwargs = expect_kwargs[1:]
+		pos_args = pos_args + [None] * (len(expect_args) - len(pos_args)) #extend with None's so we can have random insertion
+		for kw in node.keywords:
+			# we need to match any passed keyword args up to remaining positional args, in the correct position
+			if expect_args and str(kw.keyword) in expect_args:
+				offset = expect_args.index(str(kw.keyword))
+				pos_args[offset] = kw.value
+				del expect_args[offset]
+			elif str(kw.keyword) in expect_kwargs:
+				kw_args.append(kw)
+				expect_kwargs.remove(str(kw.keyword))
+			else:
+				raise NotImplementedError("this arg needs to go in **kwargs")
+			#pdb.set_trace()
+
+		# build the actual arg tuple/dicts
+		args_insts = []
+		for arg in pos_args:
+			idinst = self.visit(arg)
+			idinst = idinst.as_pyobject(self.context)
+			args_insts.append(idinst)
+		for idinst in args_insts:
+			# pytuple pack will steal the ref, but we want to be able to cleanup the node later
+			# note: do this after visiting all other nodes to minimize our probability of leaking the extra ref
+			#FIXME: make it possible for a failure in the tuple packing to free these refs?  Or is this a bad idea
+			#		because a failure halfway through would end up with us double-freeing half of our refs?
+			idinst.incref(self.context)
+		args1 = PyTupleType(self.scope.context.reserve_name(funcinst.name + '_args', None, self.tu))
+		args1.declare(self.scope.context)
+		args1.pack(self.context, *args_insts)
+
+		'''
+		if kw_args:
+			args2 = PyDictType(self.scope.context.tmpname())
+			args2.declare(self.scope.context)
+			args2.new(self.context)
+			for kw in kw_args:
+				print("AT KW: {}:{}".format(str(kw.keyword), str(kw.value)))
+				val_inst = self.visit(kw.value)
+				args2.set_item_string(self.context, str(kw.keyword), val_inst)
+		'''
 
 		# begin call output
 		self.comment('Call function "{}"'.format(str(node.func)))
@@ -475,16 +536,12 @@ class Py2C(ASTVisitor):
 		rv = PyObjectType(self.scope.context.reserve_name(funcinst.name + '_rv', None, self.tu))
 		rv.declare(self.scope.context)
 
-		# build a tuple with our positional args	
-		args = PyTupleType(self.scope.context.reserve_name(funcinst.name + '_args', None, self.tu))
-		args.declare(self.scope.context)
-		args.pack(self.context, *pos_args)
-
 		# make the call
-		funcinst.call(self.context, args, None, rv)
+		funcinst.call(self.context, args1, None, rv)
 
 		# cleanup the args
-		args.delete(self.context)
+		args1.delete(self.context)
+		#if kw_args: kw_args.delete(self.context)
 
 		return rv
 
@@ -563,7 +620,9 @@ class Py2C(ASTVisitor):
 		iter_obj = self.visit(node.iter)
 
 		# get the PyIter for the iteration object
-		iter = iter_obj.get_iter(self.context)
+		iter = PyObjectType(self.scope.context.tmpname())
+		iter.declare(self.scope.context)
+		iter_obj.get_iter(self.context, iter)
 
 		# the gets the object locally inside of the while expr; we do the full assignment inside the body
 		stmt = c.While(c.Assignment('=', c.ID(tgt.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound())
@@ -575,26 +634,7 @@ class Py2C(ASTVisitor):
 
 	def visit_FunctionDef(self, node):
 		#TODO: keyword functions and other call types
-		'''
-		self.visit(node.returns) # return annotation
-		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
-		self.visit(node.args.varargannotation) # *args annotation
-		self.visit_nodelist_field(node.args.kwonlyargs, 'annotation') # kwargs annotation
-		self.visit(node.args.kwargannotation) # **args annotation
-		self.visit_nodelist(node.args.defaults) # positional arg default values
-		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
-		with self.scope(node):
-			# arg name defs are inside the func
-			self.visit_nodelist_field(node.args.args, 'arg')
-			self.visit(node.args.vararg)
-			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
-			self.visit(node.args.kwarg)
-
-			self.visit_nodelist(node.body)
-
-		self.visit_nodelist(node.decorator_list)
-		'''
 		# get the Scope and Name
 		funcscope = node.hl
 		funcname = funcscope.owner
@@ -650,6 +690,18 @@ class Py2C(ASTVisitor):
 			#	so that we can handle the control flow needed for exception handler much more easily.
 			self.context.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
+			# attach all parameters into the local namespace
+			if node.args and node.args.args:
+				arginst = PyTupleType('args')
+				self.visit_nodelist_field(node.args.args, 'arg')
+				for i, arg in enumerate(node.args.args):
+					arginst.get_unchecked(self.context, i, arg.arg.hl.inst)
+			#TODO:
+			#self.visit(node.args.vararg)
+			#self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
+			#self.visit(node.args.kwarg)
+
+			# write the body
 			self.visit_nodelist(body)
 
 			# exit handler
@@ -684,7 +736,7 @@ class Py2C(ASTVisitor):
 
 	def visit_Name(self, node):
 		# if we are storing to the name, we just need to return the instance, so we can assign to it
-		if node.ctx == py.Store:
+		if node.ctx == py.Store or node.ctx == py.Param:
 			#NOTE: names will not get out of sync here because they share the same underlying Name, so the rename
 			#		happens for all shared names in a Scope.
 			if not node.hl.inst:
@@ -693,7 +745,7 @@ class Py2C(ASTVisitor):
 				node.hl.inst.declare(self.scope.context)
 			return node.hl.inst
 
-		# if we are loading a name, we have to search for the name's location 
+		# if we are loading a name, we have to search for the name's location
 		elif node.ctx == py.Load:
 			# Since we already indexed, we know what can be found in our local scopes.  Look up the scope
 			# chain until we find a local with the given name.  If we hit scope[0] (globals), then emit code to 
@@ -760,6 +812,8 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Raise(self, node):
+		#FIXME: re-raise existing context if node.exc is not present
+
 		inst = self.visit(node.exc)
 		'''
 		if(PyObject_IsInstance(inst.name, PyType_Type)) {
@@ -774,7 +828,9 @@ class Py2C(ASTVisitor):
 		with self.new_context(if_stmt.iftrue):
 			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(inst.name), c.ID('NULL'))))
 		with self.new_context(if_stmt.iffalse):
-			ty_inst = inst.get_type(self.context)
+			ty_inst = PyTypeType(self.scope.context.tmpname())
+			ty_inst.declare(self.scope.context)
+			inst.get_type(self.context, ty_inst)
 			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(ty_inst.name), c.ID(inst.name))))
 		self.context.add(LLType.capture_error(self.context))
 		self.context.add(if_stmt)
@@ -806,9 +862,11 @@ class Py2C(ASTVisitor):
 		if node.elts:
 			for n in node.elts:
 				inst = self.visit(n)
+				inst.incref(self.context)
 				to_pack.append(inst)
 		node.hl.inst.pack(self.context, *to_pack)
 		return node.hl.inst
+	visit_List = visit_Tuple
 
 
 	def visit_With(self, node):

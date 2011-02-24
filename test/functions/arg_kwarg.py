@@ -1,4 +1,3 @@
-#fail
 def foo(**kwargs):
 	print(kwargs['a'])
 	print(kwargs['b'])
