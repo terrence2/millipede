@@ -31,12 +31,12 @@ class Linker(ASTVisitor):
 		self.context = prior
 
 
-	def visit_Attribute(self, node):
-		# look up the attribute type and propagate it to a reference on the top-level attribute node
-		if node.ctx == py.Load:
-			self.visit(node.value)
-			ref = node.value.hl.reference_attribute(str(node.attr))
-			node.hl = ref
+	#def visit_Attribute(self, node):
+	#	# look up the attribute type and propagate it to a reference on the top-level attribute node
+	#	if node.ctx == py.Load:
+	#		self.visit(node.value)
+	#		ref = node.value.hl.reference_attribute(str(node.attr))
+	#		node.hl = ref
 
 
 	def visit_FunctionDef(self, node):

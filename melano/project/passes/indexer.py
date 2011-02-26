@@ -154,13 +154,14 @@ class Indexer(ASTVisitor):
 					self.visit(alias.name)
 
 
-	def visit_Lambda(self, node):
-		with self.scope(node):
-			self.visit_nodelist_field(node.args.args, 'arg')
-			self.visit(node.args.vararg)
-			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
-			self.visit(node.args.kwarg)
-			self.visit(node.body)
+	#FIXME: scoping doesn't work because listcomp has no name attr.... need to rewrite to take name separatly
+	#def visit_Lambda(self, node):
+	#	with self.scope(node):
+	#		self.visit_nodelist_field(node.args.args, 'arg')
+	#		self.visit(node.args.vararg)
+	#		self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
+	#		self.visit(node.args.kwarg)
+	#		self.visit(node.body)
 
 
 	def visit_List(self, node):
@@ -168,10 +169,11 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.elts)
 
 
-	def visit_ListComp(self, node):
-		with self.scope(node):
-			self.visit(node.elt)
-			self.visit_nodelist(node.generators)
+	#FIXME: scoping doesn't work because listcomp has no name attr.... need to rewrite to take name separatly
+	#def visit_ListComp(self, node):
+	#	with self.scope(node):
+	#		self.visit(node.elt)
+	#		self.visit_nodelist(node.generators)
 
 
 	def visit_Module(self, node):
