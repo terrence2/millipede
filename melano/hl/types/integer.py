@@ -3,7 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
-from melano.c.types.lltype import LLType
+from melano.hl.types.lltype import LLType
 
 
 class CIntegerType(LLType):
@@ -40,5 +40,5 @@ class CIntegerType(LLType):
 		return out
 
 
-from melano.c.types.pybool import PyBoolType
-from melano.c.types.pyinteger import PyIntegerType
+from melano.hl.types.pybool import PyBoolType
+from melano.hl.types.pyinteger import PyIntegerType

@@ -3,7 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
-from melano.c.types.lltype import LLType
+from melano.hl.types.lltype import LLType
 
 
 class PyObjectType(LLType):
@@ -205,5 +205,5 @@ class PyObjectType(LLType):
 		return out
 
 
-from melano.c.types.pytype import PyTypeType
-from melano.c.types.integer import CIntegerType
+from melano.hl.types.pytype import PyTypeType
+from melano.hl.types.integer import CIntegerType

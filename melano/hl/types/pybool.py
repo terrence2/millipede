@@ -3,7 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
-from melano.c.types.pyinteger import PyIntegerType
+from melano.hl.types.pyinteger import PyIntegerType
 
 
 class PyBoolType(PyIntegerType):

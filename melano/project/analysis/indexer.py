@@ -3,15 +3,15 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.c.types.pybytes import PyBytesType
-from melano.c.types.pydict import PyDictType
-from melano.c.types.pyfloat import PyFloatType
-from melano.c.types.pyinteger import PyIntegerType
-from melano.c.types.pylist import PyListType
-from melano.c.types.pymodule import PyModuleType
-from melano.c.types.pyset import PySetType
-from melano.c.types.pystring import PyStringType
-from melano.c.types.pytuple import PyTupleType
+from melano.hl.types.pybytes import PyBytesType
+from melano.hl.types.pydict import PyDictType
+from melano.hl.types.pyfloat import PyFloatType
+from melano.hl.types.pyinteger import PyIntegerType
+from melano.hl.types.pylist import PyListType
+from melano.hl.types.pymodule import PyModuleType
+from melano.hl.types.pyset import PySetType
+from melano.hl.types.pystring import PyStringType
+from melano.hl.types.pytuple import PyTupleType
 from melano.py import ast as py
 from melano.lang.visitor import ASTVisitor
 from melano.hl.constant import Constant

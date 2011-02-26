@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.c.types.pyobject import PyObjectType
+from melano.hl.types.pyobject import PyObjectType
 
 class Coerce:
 	GENERALIZE = 0
