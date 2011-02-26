@@ -3,7 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.lang.visitor import ASTVisitor
-from melano.project.intermediate import Intermediate
+from melano.hl.coerce import Coerce
 
 
 class Typer(ASTVisitor):
@@ -34,7 +34,7 @@ class Typer(ASTVisitor):
 	def visit_BinOp(self, node):
 		self.visit(node.left)
 		self.visit(node.right)
-		node.hl = Intermediate(Intermediate.GENERALIZE, node.left.hl, node.right.hl)
+		node.hl = Coerce(Coerce.GENERALIZE, node.left.hl, node.right.hl)
 
 	def visit_UnaryOp(self, node):
 		self.visit(node.operand)

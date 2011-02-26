@@ -5,8 +5,8 @@ All rights reserved.
 from collections import OrderedDict
 from melano.c.types.lltype import LLType
 from melano.c.types.pydict import PyDictType
-from melano.project.name import Name
-from melano.project.nameref import NameRef
+from melano.hl.name import Name
+from melano.hl.nameref import NameRef
 
 
 class Scope:

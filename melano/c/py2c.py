@@ -15,7 +15,7 @@ from melano.c.types.pytuple import PyTupleType
 from melano.c.types.pytype import PyTypeType
 from melano.py import ast as py
 from melano.lang.visitor import ASTVisitor
-from melano.project.module import MelanoModule
+from melano.hl.module import MelanoModule
 import itertools
 import pdb
 import tc

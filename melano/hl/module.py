@@ -5,8 +5,8 @@ All rights reserved.
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.c.types.lltype import LLType
 from melano.c.types.pymodule import PyModuleType
-from melano.project.name import Name
-from melano.project.scope import Scope
+from melano.hl.name import Name
+from melano.hl.scope import Scope
 import hashlib
 import logging
 import tokenize

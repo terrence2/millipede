@@ -5,8 +5,8 @@ All rights reserved.
 from contextlib import contextmanager
 from melano.py import ast as py
 from melano.lang.visitor import ASTVisitor
-from melano.project.module import MelanoModule
-from melano.project.nameref import NameRef
+from melano.hl.module import MelanoModule
+from melano.hl.nameref import NameRef
 import pdb
 
 

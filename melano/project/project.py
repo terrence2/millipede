@@ -7,14 +7,14 @@ from melano.c.out import COut
 from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.py.driver import PythonParserDriver
-from melano.project.module import MelanoModule
-from melano.project.name import Name
+from melano.hl.module import MelanoModule
+from melano.hl.name import Name
 from melano.project.passes.coder import Coder
 from melano.project.passes.find_links import FindLinks
 from melano.project.passes.indexer import Indexer
 from melano.project.passes.linker import Linker
 from melano.project.passes.typer import Typer
-from melano.project.scope import Scope
+from melano.hl.scope import Scope
 import logging
 import melano.py.ast as ast
 import os

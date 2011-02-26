@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.project.scope import Scope
+from melano.hl.scope import Scope
 import logging
 
 

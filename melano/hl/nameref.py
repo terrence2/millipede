@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.project.name import Name
+from melano.hl.name import Name
 import logging
 
 

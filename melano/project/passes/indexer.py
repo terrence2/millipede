@@ -14,11 +14,10 @@ from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
 from melano.py import ast as py
 from melano.lang.visitor import ASTVisitor
-from melano.project.constant import Constant
-from melano.project.function import MelanoFunction
-from melano.project.intermediate import Intermediate
-from melano.project.name import Name
-from melano.project.scope import Scope
+from melano.hl.constant import Constant
+from melano.hl.function import MelanoFunction
+from melano.hl.name import Name
+from melano.hl.scope import Scope
 import logging
 import pdb
 

@@ -1,7 +1,7 @@
 from .editor.document import MelanoCodeDocument
 from .main import MelanoMainWindow
 from PyQt4.QtGui import QApplication
-from melano.project.module import MelanoModule
+from melano.hl.module import MelanoModule
 from melano.project.variable import MelanoVariable
 import base64
 import os.path

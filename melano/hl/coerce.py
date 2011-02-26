@@ -4,7 +4,7 @@ All rights reserved.
 '''
 from melano.c.types.pyobject import PyObjectType
 
-class Intermediate:
+class Coerce:
 	GENERALIZE = 0
 
 	def __init__(self, coerce_type:int, *children):
