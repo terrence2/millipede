@@ -447,13 +447,9 @@ class Py2C(ASTVisitor):
 		# prepare the func name node
 		funcinst = self.visit(node.func)
 
-		pdb.set_trace()
-
-
-		# just ensure we always have these nodes for simplicty
+		# just ensure we always have these nodes for simplicity
 		if not node.args: node.args = []
 		if not node.keywords: node.keywords = []
-
 
 		# if we are defined locally, we can know the expected calling proc and reorganize our args to it
 		if node.func.hl.scope:
@@ -762,9 +758,9 @@ class Py2C(ASTVisitor):
 
 		for alias in node.names:
 			if alias.asname:
-				self._import_as_name(self, node, alias.name, alias.asname)
+				_import_as_name(self, node, alias.name, alias.asname)
 			else:
-				self._import(self, node, alias.name)
+				_import(self, node, alias.name)
 
 
 

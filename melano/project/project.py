@@ -7,7 +7,6 @@ from melano.c.out import COut
 from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.parser.driver import PythonParserDriver
-from melano.project.lowlevel.makefile import Makefile
 from melano.project.module import MelanoModule
 from melano.project.name import Name
 from melano.project.passes.coder import Coder
