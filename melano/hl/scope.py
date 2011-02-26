@@ -3,7 +3,6 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from collections import OrderedDict
-from melano.hl.types.lltype import LLType
 from melano.hl.types.pydict import PyDictType
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
