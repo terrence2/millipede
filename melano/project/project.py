@@ -9,11 +9,11 @@ from melano.c.pybuiltins import PY_BUILTINS
 from melano.py.driver import PythonParserDriver
 from melano.hl.module import MelanoModule
 from melano.hl.name import Name
-from melano.project.passes.coder import Coder
-from melano.project.passes.find_links import FindLinks
-from melano.project.passes.indexer import Indexer
-from melano.project.passes.linker import Linker
-from melano.project.passes.typer import Typer
+from melano.project.analysis.coder import Coder
+from melano.project.analysis.find_links import FindLinks
+from melano.project.analysis.indexer import Indexer
+from melano.project.analysis.linker import Linker
+from melano.project.analysis.typer import Typer
 from melano.hl.scope import Scope
 import logging
 import melano.py.ast as ast
