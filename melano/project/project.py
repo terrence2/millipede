@@ -79,7 +79,6 @@ class MelanoProject:
 		self.builtins_scope = Scope(Name('builtins', None))
 		for n in PY_BUILTINS:
 			self.builtins_scope.add_symbol(n)
-			self.builtins_scope.mark_ownership(n)
 
 
 	def configure(self, *, stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[], builddir='./build',
@@ -111,9 +110,10 @@ class MelanoProject:
 	def build(self, target):
 		self.locate_modules()
 		self.index_names()
+		self.show()
 		self.link_references()
 		self.derive_types()
-		#project.show()
+		self.show()
 		if target.endswith('.c'):
 			c = self.transform_lowlevel_c()
 			with COut('test.c') as v:
@@ -199,6 +199,7 @@ class MelanoProject:
 
 	def show(self):
 		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
+		logging.info("Showing Project:")
 		for fn in self.order:
 			mod = self.modules[fn]
 			if self.is_local(mod):

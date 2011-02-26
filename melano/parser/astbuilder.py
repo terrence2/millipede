@@ -218,12 +218,13 @@ class PythonASTBuilder:
 	def handle_import_as_name(self, import_as_name):
 		children = self.children(import_as_name)
 		assert children[0].type == self.tokens.NAME
-		name = ast.Name(children[0].value, ast.Aug, children[0])
+		name = ast.Name(children[0].value, ast.Store, children[0])
 		asname = None
 		if len(children) > 1:
 			assert children[1].value == 'as'
 			assert children[2].type == self.tokens.NAME
 			asname = ast.Name(children[2].value, ast.Store, children[2])
+			name.set_context(ast.Load)
 		return ast.alias(name, asname)
 
 

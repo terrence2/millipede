@@ -8,6 +8,7 @@ from melano.c.types.pymodule import PyModuleType
 from melano.project.name import Name
 from melano.project.scope import Scope
 import hashlib
+import logging
 import tokenize
 
 
@@ -81,7 +82,7 @@ class MelanoModule(Scope):
 
 
 	def show(self, level=0):
-		print(self.owner.name)
+		logging.info('Module: {} as {}'.format(self.name, self.owner.global_name))
 		super().show(level)
 
 

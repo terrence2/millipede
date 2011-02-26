@@ -407,7 +407,7 @@ class FunctionDef(stmt):
 
 #| Attribute(expr value, identifier attr, expr_context ctx)
 class Attribute(expr):
-	_fields = ('value', 'attr')
+	_fields = ('value',)
 	__slots__ = ('value', 'attr', 'ctx')
 	def __init__(self, value, attr, ctx, *args, **kwargs):
 		super().__init__(*args, **kwargs)

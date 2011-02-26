@@ -3,11 +3,13 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
+from melano.c.types.pybytes import PyBytesType
 from melano.c.types.pydict import PyDictType
 from melano.c.types.pyfloat import PyFloatType
 from melano.c.types.pyinteger import PyIntegerType
 from melano.c.types.pylist import PyListType
 from melano.c.types.pymodule import PyModuleType
+from melano.c.types.pyset import PySetType
 from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
 from melano.parser import ast as py
@@ -19,16 +21,11 @@ from melano.project.name import Name
 from melano.project.scope import Scope
 import logging
 import pdb
-#from melano.project.class_ import MelanoClass
-#from melano.project.foreign import ForeignObject
-#from melano.project.function import MelanoFunction
-#from melano.project.module import MelanoModule
-#from melano.project.variable import MelanoVariable
 
 
 class Indexer(ASTVisitor):
 	'''
-	Get the names of things in this module.
+	This builds the high-level scope tree.
 	'''
 
 	def __init__(self, project, module):
@@ -53,57 +50,13 @@ class Indexer(ASTVisitor):
 		self.context = prior
 
 
-	def visit_Module(self, node):
-		assert node.hl is self.module
-		node.hl.owner.types = [PyModuleType]
-		self.visit_nodelist(node.body)
-
-
-	def visit_Import(self, node):
-		for alias in node.names:
-			# If we have an asname then we are importing the full module foo.bar.baz and putting
-			#	that module into the namespace under the asname.  If we don't, then we are only
-			# really importing the first part of the module path -- foo of foo.bar.baz -- and we are
-			# only putting that top name into the namespace.  If we have no asname, we need to
-			# mangle the alias to provide the target asname and the real import name.
-			self.visit(alias.name)
-			self.visit(alias.asname)
-
-			#TODO: this probably needs to be in the linker, where it can always succeed
-			alias.name.hl.scope = self.module.refs.get(str(alias.name), None)
-
-
-	def visit_ImportFrom(self, node):
-		modname = '.' * node.level + str(node.module)
-		mod = self.module.refs.get(modname, None)
-		if not mod:
-			return
-
-		for alias in node.names:
-			assert not isinstance(alias.name, py.Attribute)
-			name = str(alias.name)
-			if name == '*':
-				for n, ref in mod.lookup_star().items():
-					self.context.add_symbol(n)
-			else:
-				self.visit(alias.name)
-				self.visit(alias.asname)
-
-				'''
-				if alias.asname:
-					asname = str(alias.asname)
-				else:
-					asname = name
-				try:
-					self.context.add_symbol(asname)
-					#ref = mod.lookup_name(name)
-					#self.context.names[asname] = ref
-				except KeyError:
-					logging.critical("MISSING: {} in {} @ {}".format(name, mod.filename, self.module.filename))
-				'''
+	def visit_Bytes(self, node):
+		node.s = node.s.strip('"').strip("'")
+		node.hl = Constant(PyBytesType)
 
 
 	def visit_ClassDef(self, node):
+		self.visit(node.name)
 		self.visit_nodelist(node.bases)
 		self.visit_nodelist(node.keywords)
 		self.visit(node.starargs)
@@ -111,6 +64,21 @@ class Indexer(ASTVisitor):
 		with self.scope(node):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
+
+
+	def visit_Dict(self, node):
+		node.hl = Constant(PyDictType)
+		if node.keys and node.values:
+			for k, v in zip(node.keys, node.values):
+				self.visit(k)
+				self.visit(v)
+
+
+	def visit_DictComp(self, node):
+		with self.scope(node):
+			self.visit(node.key)
+			self.visit(node.value)
+			self.visit_nodelist(node.generators)
 
 
 	def visit_FunctionDef(self, node):
@@ -147,53 +115,91 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
-	def visit_Attribute(self, node):
-		self.visit(node.value)
-		self.visit(node.attr)
-		name = str(node)
-		if name not in self.context.symbols:
-			sym = self.context.add_symbol(name)
-			node.hl = sym
-		else:
-			node.hl = self.context.lookup(name)
-
-
-	def visit_Dict(self, node):
-		node.hl = Constant(PyDictType)
-		if node.keys and node.values:
-			for k, v in zip(node.keys, node.values):
-				self.visit(k)
-				self.visit(v)
+	def visit_GeneratorExp(self, node):
+		with self.scope(node):
+			self.visit(node.elt)
+			self.visit_nodelist(node.generators)
 
 
 	def visit_Global(self, node):
 		for name in node.names:
-			if name not in self.context.symbols:
-				self.context.add_symbol(name)
-			self.context.lookup(name).is_global = True
+			#NOTE: this scope may be the only creator of this symbol (e.g. no Name Store), so we 
+			#		need to make sure that the symbol gets created on the module scope too
+			if name not in self.module.symbols:
+				self.module.add_symbol(name)
+			sym = self.module.lookup(name)
+			ref = self.context.add_reference(sym)
+			ref.is_global = True
 
 
-	def visit_Nonlocal(self, node):
-		for name in node.names:
-			if name not in self.context.symbols:
-				self.context.add_symbol(name)
-			self.context.lookup(name).is_nonlocal = True
+	def visit_Import(self, node):
+		for alias in node.names:
+			if alias.asname:
+				# Note: don't visit name if we have asname, since name is Load in this case, but it's not a Load on this module
+				self.visit(alias.asname)
+				alias.asname.hl.scope = self.module.refs.get(str(alias.name), None)
+			else:
+				self.visit(alias.name)
+				alias.name.hl.scope = self.module.refs.get(str(alias.name), None)
+
+
+	def visit_ImportFrom(self, node):
+		#Note: we need to already be indexed to provide name refs that are _inside_ a module,
+		#	so we do most of the work for ImportFrom in link.
+		for alias in node.names:
+			if alias.asname:
+				self.visit(alias.asname)
+			else:
+				if str(alias.name) != '*':
+					self.visit(alias.name)
+
+
+	def visit_Lambda(self, node):
+		with self.scope(node):
+			self.visit_nodelist_field(node.args.args, 'arg')
+			self.visit(node.args.vararg)
+			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
+			self.visit(node.args.kwarg)
+			self.visit(node.body)
+
+
+	def visit_List(self, node):
+		node.hl = Constant(PyListType)
+		self.visit_nodelist(node.elts)
+
+
+	def visit_ListComp(self, node):
+		with self.scope(node):
+			self.visit(node.elt)
+			self.visit_nodelist(node.generators)
+
+
+	def visit_Module(self, node):
+		assert node.hl is self.module
+		node.hl.owner.types = [PyModuleType]
+		self.visit_nodelist(node.body)
 
 
 	def visit_Name(self, node):
-		print("NAME:", str(node), node.ctx)
-
-		if node.ctx == py.Load:
-			pass
-		else:
+		if node.ctx in [py.Store, py.Param]:
+			#NOTE: store to global/nonlocal will have already visited the global/nonlocal node and created
+			#		this name as a ref, thus preventing us from doing the (incorrect) lookup here
 			name = str(node)
 			if name not in self.context.symbols:
 				sym = self.context.add_symbol(name)
 				node.hl = sym
-			else:
+			# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
+			if not node.hl:
 				node.hl = self.context.lookup(name)
-			if node.ctx in [py.Store, py.Param] and not any((node.hl.is_nonlocal, node.hl.is_global)):
-				self.context.mark_ownership(name)
+
+
+	def visit_Nonlocal(self, node):
+		for name in node.names:
+			# look up-scope for the name
+			#FIXME: we need to fully visit outer scopes first -- this may have to wait until link time? (function_nonlocal_late)
+			sym = self.context.owner.parent.lookup(name)
+			ref = self.context.add_reference(sym)
+			ref.is_nonlocal = True
 
 
 	def visit_Num(self, node):
@@ -204,17 +210,28 @@ class Indexer(ASTVisitor):
 			node.hl = Constant(PyFloatType)
 
 
+	def visit_Set(self, node):
+		node.hl = Constant(PySetType)
+		self.visit_nodelist(node.elts)
+
+
+	def visit_SetComp(self, node):
+		with self.scope(node):
+			self.visit(node.elt)
+			self.visit_nodelist(node.generator)
+
+
 	def visit_Str(self, node):
 		#TODO: discover if we can use a non-unicode or c string type?
 		node.s = node.s.strip('"').strip("'")
 		node.hl = Constant(PyStringType)
 
 
-	def visit_List(self, node):
-		node.hl = Constant(PyListType)
-		self.visit_nodelist(node.elts)
-
-
 	def visit_Tuple(self, node):
 		node.hl = Constant(PyTupleType)
 		self.visit_nodelist(node.elts)
+
+
+	def visit_Yield(self, node):
+		assert isinstance(self.context, MelanoFunction), 'Yield in non-function scope'
+		self.scope.is_generator = True

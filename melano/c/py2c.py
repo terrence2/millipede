@@ -168,70 +168,7 @@ class Py2C(ASTVisitor):
 		return None, nodes
 
 
-	def visit_Import(self, node):
-		for alias in node.names:
-			ref = alias.name.hl.scope
-			assert ref is not None
-			assert ref.modtype != MelanoModule.PROJECT
 
-			if alias.asname:
-				tgt = self.visit(alias.asname)
-				self.comment("Import module {} as {}".format(str(alias.name), str(alias.asname)))
-				tmp = PyObjectType(self.scope.context.tmpname())
-				tmp.declare(self.scope.context)
-				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																													c.Constant('string', str(alias.name))))))
-				tmp.fail_if_null(self.context, tmp.name)
-				self._assign(alias.asname, tgt, tmp)
-
-			else:
-				tgt = self.visit(alias.name)
-
-				self.comment("Import module {}".format(str(alias.name)))
-				tmp = PyObjectType(self.scope.context.tmpname())
-				tmp.declare(self.scope.context)
-				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																													c.Constant('string', str(alias.name))))))
-				tmp.fail_if_null(self.context, tmp.name)
-
-				#NOTE: if we are importing from an attribute, we also need to import the goal name, so it exists, _and_ we 
-				#		need to import the base name so that we can assign it to the target name
-				if isinstance(alias.name, py.Attribute):
-					basename = str(alias.name).split('.')[0]
-					self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																														c.Constant('string', str(basename))))))
-					tmp.fail_if_null(self.context, tmp.name)
-					self._assign(alias.name.first(), tgt, tmp)
-				else:
-					self._assign(alias.name, tgt, tmp)
-
-
-	def visit_ImportFrom(self, node):
-		# import the module
-		modname = '.' * node.level + str(node.module)
-		tmp = PyObjectType(self.scope.context.tmpname())
-		tmp.declare(self.scope.context)
-		self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																											c.Constant('string', str(modname))))))
-		tmp.fail_if_null(self.context, tmp.name)
-
-		for alias in node.names:
-			name = str(alias.name)
-			if name == '*':
-				raise NotImplementedError
-
-			# load the name off of the module
-			val = PyObjectType(self.scope.context.tmpname())
-			val.declare(self.scope.context)
-			self.context.add(c.Assignment('=', c.ID(val.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
-																		c.ID(tmp.name), c.Constant('string', name)))))
-			val.fail_if_null(self.context, val.name)
-			if alias.asname:
-				tgt = self.visit(alias.asname)
-				self._assign(alias.asname, tgt, val)
-			else:
-				tgt = self.visit(alias.name)
-				self._assign(alias.name, tgt, val)
 
 
 	def visit_Module(self, node):
@@ -332,17 +269,24 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Assign(self, node):
+		self.comment("Assign: {} = {}".format([str(t) for t in node.targets], str(node.value)))
 		val = self.visit(node.value)
 		for target in node.targets:
 			tgt = self.visit(target)
-			self._assign(target, tgt, val)
+			self._store(target, tgt, val)
 
 
-	def _assign(self, target, tgt, val):
-		'''Common "normal" assignment handler.  Things like for loop targets need the same full
-			suite of potential assignment targets as normal assignments.'''
-
+	def _store(self, target, tgt, val):
+		'''
+		Common "normal" assignment handler.  Things like for-loop targets and with-stmt vars 
+			need the same full suite of potential assignment targets as normal assignments.  With
+			the caveat that only assignment will have non-Name children.
+		
+		target -- the node that is the lhs of the storage.
+		tgt -- the inst 
+		'''
 		#TODO: destructuring assignment
+
 		if isinstance(target, py.Attribute):
 			# set the value on the attribute, under the hl name of the attr
 			target.value.hl.inst.set_attr_string(self.context, str(target.attr), val)
@@ -352,6 +296,15 @@ class Py2C(ASTVisitor):
 			target.value.hl.inst.set_item(self.context, tgt, val)
 
 		elif isinstance(target, py.Name):
+			# note, the hl Name or Ref will always be parented under  the right scope
+			target.hl.parent.inst.set_item_string(self.context, str(target), val)
+
+			#TODO: this is an optimization; we only want to do it when we can get away with it, and when we can
+			#		get away with it, we don't want to assign to the namespace.
+			#if tgt:
+			#	tgt.assign_name(self.context, val)
+
+			"""
 			if target.hl.is_global and self.scope != self.globals:
 				self.globals.inst.set_item_string(self.context, str(target), val)
 
@@ -370,9 +323,42 @@ class Py2C(ASTVisitor):
 				# also create a node in the local namespace to speed up access to the node
 				if tgt:
 					tgt.assign_name(self.context, val)
-
+			"""
 		else:
 			raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
+
+
+	def _load(self, source):
+		'''
+		source - the underlying name reference that we to provide access to
+		'''
+		#pdb.set_trace()
+		tmp = PyObjectType(self.scope.context.tmpname())
+		tmp.declare(self.scope.context)
+
+		if source.hl.parent.inst:
+			source.hl.parent.inst.get_item_string(self.context, str(source), tmp)
+		else:
+			if str(source) in PY_BUILTINS:
+				self.comment('Load (probable) builtin "{}"'.format(str(source)))
+				mode = 'likely'
+			else:
+				self.comment('Load (probable) global "{}"'.format(str(source)))
+				mode = 'unlikely'
+
+			# access globals first, fall back to builtins -- remember to ref the global if we get it, since dict get item borrows
+			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(self.globals.ll_scope), c.Constant('string', str(source))))))
+			self.context.add(c.If(c.FuncCall(c.ID(mode), c.ExprList(c.UnaryOp('!', c.ID(tmp.name)))),
+					c.Compound(
+						c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_GetAttrString'),
+															c.ExprList(c.ID('builtins'), c.Constant('string', str(source))))),
+						c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(tmp.name)))), c.Compound(c.Goto('end')), None)
+					),
+					c.Compound(
+						c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(tmp.name)))
+					)))
+			tmp.fail_if_null(self.context, tmp.name)
+		return tmp
 
 
 	def visit_Attribute(self, node):
@@ -461,9 +447,13 @@ class Py2C(ASTVisitor):
 		# prepare the func name node
 		funcinst = self.visit(node.func)
 
+		pdb.set_trace()
+
+
 		# just ensure we always have these nodes for simplicty
 		if not node.args: node.args = []
 		if not node.keywords: node.keywords = []
+
 
 		# if we are defined locally, we can know the expected calling proc and reorganize our args to it
 		if node.func.hl.scope:
@@ -628,7 +618,7 @@ class Py2C(ASTVisitor):
 		stmt = c.While(c.Assignment('=', c.ID(tgt.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound())
 		self.context.add(stmt)
 		with self.new_context(stmt.stmt):
-			self._assign(node.target, tgt, tgt)
+			self._store(node.target, tgt, tgt)
 			self.visit_nodelist(node.body)
 
 
@@ -733,6 +723,79 @@ class Py2C(ASTVisitor):
 		self.context.add(stmt)
 
 
+	def visit_Import(self, node):
+		def _import_as_name(self, node, name, asname):
+			ref = asname.hl.scope
+			assert ref is not None
+			assert ref.modtype != MelanoModule.PROJECT
+			tgt = self.visit(asname)
+			self.comment("Import module {} as {}".format(str(name), str(asname)))
+			tmp = PyObjectType(self.scope.context.tmpname())
+			tmp.declare(self.scope.context)
+			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+																												c.Constant('string', str(name))))))
+			tmp.fail_if_null(self.context, tmp.name)
+			self._store(asname, tgt, tmp)
+
+		def _import(self, node, name):
+			ref = name.hl.scope
+			assert ref is not None
+			assert ref.modtype != MelanoModule.PROJECT
+			tgt = self.visit(name)
+			self.comment("Import module {}".format(str(name)))
+			tmp = PyObjectType(self.scope.context.tmpname())
+			tmp.declare(self.scope.context)
+			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+																												c.Constant('string', str(name))))))
+			tmp.fail_if_null(self.context, tmp.name)
+
+			#NOTE: if we are importing from an attribute, we also need to import the goal name, so it exists, _and_ we 
+			#		need to import the base name so that we can assign it to the target name
+			if isinstance(name, py.Attribute):
+				basename = str(name.first())
+				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+																													c.Constant('string', str(basename))))))
+				tmp.fail_if_null(self.context, tmp.name)
+				self._store(name.first(), tgt, tmp)
+			else:
+				self._store(name, tgt, tmp)
+
+		for alias in node.names:
+			if alias.asname:
+				self._import_as_name(self, node, alias.name, alias.asname)
+			else:
+				self._import(self, node, alias.name)
+
+
+
+
+	def visit_ImportFrom(self, node):
+		# import the module
+		modname = '.' * node.level + str(node.module)
+		tmp = PyObjectType(self.scope.context.tmpname())
+		tmp.declare(self.scope.context)
+		self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+																											c.Constant('string', str(modname))))))
+		tmp.fail_if_null(self.context, tmp.name)
+
+		for alias in node.names:
+			name = str(alias.name)
+			if name == '*':
+				raise NotImplementedError
+
+			# load the name off of the module
+			val = PyObjectType(self.scope.context.tmpname())
+			val.declare(self.scope.context)
+			self.context.add(c.Assignment('=', c.ID(val.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
+																		c.ID(tmp.name), c.Constant('string', name)))))
+			val.fail_if_null(self.context, val.name)
+			if alias.asname:
+				tgt = self.visit(alias.asname)
+				self._store(alias.asname, tgt, val)
+			else:
+				tgt = self.visit(alias.name)
+				self._store(alias.name, tgt, val)
+
 
 	def visit_Name(self, node):
 		# if we are storing to the name, we just need to return the instance, so we can assign to it
@@ -747,6 +810,8 @@ class Py2C(ASTVisitor):
 
 		# if we are loading a name, we have to search for the name's location
 		elif node.ctx == py.Load:
+			return self._load(node)
+			'''
 			# Since we already indexed, we know what can be found in our local scopes.  Look up the scope
 			# chain until we find a local with the given name.  If we hit scope[0] (globals), then emit code to 
 			# try globals, then fall back to builtins, unless static_globals is set, in which case, we can continue
@@ -769,8 +834,8 @@ class Py2C(ASTVisitor):
 			if lvl <= 0:
 				#NOTE: we have to create fully generic code to access globals and builtins, since they can change under us
 				tmp = self.scope.context.tmpname()
-				node.hl.inst = PyObjectType(tmp)
-				node.hl.inst.declare(self.scope.context)
+				inst = PyObjectType(tmp)
+				inst.declare(self.scope.context)
 
 				# note; unless we declare that module globals are static (and thus fully discovered and unoverridable, we need
 				#		to check them first... the best op in this case is checking if the override is likely or not.
@@ -792,16 +857,21 @@ class Py2C(ASTVisitor):
 						c.Compound(
 							c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(tmp)))
 						)))
-				node.hl.inst.fail_if_null(self.context, tmp)
+				inst.fail_if_null(self.context, tmp)
+
+				return inst
 			else:
-				#For higher non-local scopes, we can access directly
+				#For higher non-local scopes, we can access the scope dict directly
 				assert scope.has_name(name)
 				tmp = self.scope.context.tmpname()
-				node.hl.create_instance(tmp)
-				node.hl.inst.declare(self.scope.context)
-				scope.inst.get_item_string(self.context, name, node.hl.inst)
+				inst = node.hl.get_type()(tmp)
+				inst.declare(self.scope.context)
+				scope.inst.get_item_string(self.context, name, inst)
+				if node.hl.inst is None:
+					node.hl.inst = inst
 
 			return node.hl.inst
+			'''
 
 
 	def visit_Num(self, node):
@@ -889,7 +959,7 @@ class Py2C(ASTVisitor):
 
 		if node.optional_vars:
 			var = self.visit(node.optional_vars)
-			self._assign(node.optional_vars, var, tmp)
+			self._store(node.optional_vars, var, tmp)
 
 		if isinstance(node.body, list):
 			self.visit_nodelist(node.body)
@@ -914,8 +984,9 @@ class Py2C(ASTVisitor):
 	def visit_UnaryOp(self, node):
 		o = self.visit(node.operand)
 
-		node.hl.create_instance(self.scope.context.tmpname())
-		node.hl.inst.declare(self.scope.context)
+		if not node.hl.inst:
+			node.hl.create_instance(self.scope.context.tmpname())
+			node.hl.inst.declare(self.scope.context)
 
 		if node.op == py.Invert:
 			o.invert(self.context, node.hl.inst)

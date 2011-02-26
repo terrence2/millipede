@@ -6,6 +6,7 @@ from collections import OrderedDict
 from melano.c.types.lltype import LLType
 from melano.c.types.pydict import PyDictType
 from melano.project.name import Name
+from melano.project.nameref import NameRef
 
 
 class Scope:
@@ -31,9 +32,6 @@ class Scope:
 		# Records the scope's local "context" -- e.g. the lowlevel variable scope.
 		# Set in visit_FuncDef during the time we visit our children.
 		self.context = None
-
-		# track which symbols are defined in our scope, rather than just referenced
-		self.ownership = set()
 
 
 	def lookup(self, name:str) -> Name:
@@ -65,8 +63,12 @@ class Scope:
 		return self.symbols[name]
 
 
-	def mark_ownership(self, name:str):
-		self.ownership.add(name)
+	def add_reference(self, sym:Name):
+		if sym.name in self.symbols:
+			# already reffed, or we own the name
+			return self.symbols[sym.name]
+		self.symbols[sym.name] = NameRef(sym)
+		return self.symbols[sym.name]
 
 
 	def show(self, level=0):

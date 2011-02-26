@@ -3,6 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c.types.pyobject import PyObjectType
+import logging
 
 
 class Name:
@@ -37,10 +38,6 @@ class Name:
 		# the ll instance
 		self.inst = None
 
-		# property flags
-		self.is_global = False
-		self.is_nonlocal = False
-
 
 	def get_type(self) -> type:
 		'''
@@ -56,6 +53,7 @@ class Name:
 		'''
 		Instance the type with a name.  Sets the new instance on the 'inst' variable.
 		'''
+		assert not self.inst
 		self.inst = self.get_type()(name)
 
 
@@ -64,6 +62,10 @@ class Name:
 
 
 	def show(self, level):
-		print('{}{:20}{:20}'.format('\t' * level, self.name, self.global_name))
 		if self.scope:
 			self.scope.show(level + 1)
+		else:
+			logging.info('{}Name: {}'.format('\t' * level, self.name))
+		#print('{}{:20}{:20}'.format('\t' * level, self.name, self.global_name))
+		#if self.scope:
+		#	self.scope.show(level + 1)

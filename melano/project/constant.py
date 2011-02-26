@@ -13,8 +13,13 @@ class Constant:
 	def types(self) -> [type]:
 		return [self.type]
 
+
 	def create_instance(self, name:str):
 		'''
 		Instance the type with a name.  Sets the new instance on the 'inst' variable.
 		'''
 		self.inst = self.type(name)
+
+
+	def reference_attribute(self, attr:str):
+		self.type.reference_attribute(attr)

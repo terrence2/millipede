@@ -7,6 +7,14 @@ from melano.c.types.pyobject import PyObjectType
 
 
 class PyStringType(PyObjectType):
+	ATTRS = {
+				'strip': None
+			}
+
+	@classmethod
+	def reference_attribute(cls, attr:str):
+		return cls.ATTRS[attr]
+
 
 	@classmethod
 	def bytes2c(cls, b):

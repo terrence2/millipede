@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from melano.parser import ast as py
 from melano.parser.visitor import ASTVisitor
 from melano.project.module import MelanoModule
+from melano.project.nameref import NameRef
 import pdb
 
 
@@ -30,6 +31,14 @@ class Linker(ASTVisitor):
 		self.context = prior
 
 
+	def visit_Attribute(self, node):
+		# look up the attribute type and propagate it to a reference on the top-level attribute node
+		if node.ctx == py.Load:
+			self.visit(node.value)
+			ref = node.value.hl.reference_attribute(str(node.attr))
+			node.hl = ref
+
+
 	def visit_FunctionDef(self, node):
 		self.visit(node.returns) # return annotation
 		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
@@ -51,9 +60,42 @@ class Linker(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
+	def visit_Import(self, node):
+		for alias in node.names:
+			if alias.asname:
+				self.visit(alias.asname)
+			else:
+				if isinstance(alias.name, py.Attribute):
+					self.visit(alias.name.first())
+				else:
+					self.visit(alias.name)
+
+	def visit_ImportFrom(self, node):
+		'''Note: we need to already be indexed to provide names for * imports, so we _also_
+			do import_from in link.'''
+		modname = '.' * node.level + str(node.module)
+		mod = self.module.refs.get(modname, None)
+		if not mod:
+			raise NotImplementedError('No ref to module {} when linking'.format(modname))
+
+		for alias in node.names:
+			assert not isinstance(alias.name, py.Attribute)
+			if alias.asname:
+				self.visit(alias.asname)
+			else:
+				if str(alias.name) == '*':
+					for n, ref in mod.lookup_star().items():
+						self.context.add_symbol(n)
+				else:
+					self.visit(alias.name)
+
+
 	def visit_Name(self, node):
 		if node.ctx == py.Load:
-			node.hl = self.context.lookup(str(node))
+			sym = self.context.lookup(str(node))
+			ref = self.context.add_reference(sym)
+			node.hl = ref
+
 
 	'''
 	def visit_Module(self, node):
