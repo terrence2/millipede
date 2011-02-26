@@ -10,7 +10,7 @@ if __name__ == '__main__':
 	import os
 	import sys
 	from melano.config.config import MelanoConfig
-	from melano.parser.pgen.parser import ParseError
+	from melano.py.pgen.parser import ParseError
 	from melano.lint import lint, report
 
 	# load the configuration

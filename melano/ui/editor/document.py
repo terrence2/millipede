@@ -2,7 +2,7 @@ import tokenize
 from PyQt4 import QtCore
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTextDocument, QTextCursor, QColor
-from melano.parser.tokens import python_tokens
+from melano.py.tokens import python_tokens
 
 
 RESERVED = set([

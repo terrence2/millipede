@@ -6,7 +6,7 @@ from copy import copy
 from melano.c.out import COut
 from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
-from melano.parser.driver import PythonParserDriver
+from melano.py.driver import PythonParserDriver
 from melano.project.module import MelanoModule
 from melano.project.name import Name
 from melano.project.passes.coder import Coder
@@ -16,7 +16,7 @@ from melano.project.passes.linker import Linker
 from melano.project.passes.typer import Typer
 from melano.project.scope import Scope
 import logging
-import melano.parser.ast as ast
+import melano.py.ast as ast
 import os
 import pickle
 import re

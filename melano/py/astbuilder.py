@@ -8,7 +8,7 @@ NOTES for Melano:
 		off and passing start line and column individually.
 	- Handles our skiptokens by filtering the children lists as needed.
 '''
-import melano.parser.ast as ast
+import melano.py.ast as ast
 
 
 class PythonASTBuilder:

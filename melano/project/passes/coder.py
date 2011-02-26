@@ -3,7 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.parser import ast
+from melano.py import ast
 from melano.lang.visitor import ASTVisitor
 
 

@@ -7,12 +7,12 @@ NOTE: This linter attempts to aggregate all of the linters that require a
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 
-from melano.parser.common.visitor import ASTVisitor
+from melano.py.common.visitor import ASTVisitor
 from melano.lint.common import BUILTINS, KEYWORDS
 from melano.lint.messages import \
 	W0611, W0612, W0613, W0614, W0615, W0621, W0622, W0631, W0702, \
 	E0601, E0602, E0603
-import melano.parser.py3.ast as ast
+import melano.py.py3.ast as ast
 from contextlib import contextmanager
 
 
