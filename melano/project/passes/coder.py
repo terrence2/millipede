@@ -4,7 +4,7 @@ All rights reserved.
 '''
 from contextlib import contextmanager
 from melano.parser import ast
-from melano.parser.visitor import ASTVisitor
+from melano.lang.visitor import ASTVisitor
 
 
 class Coder(ASTVisitor):

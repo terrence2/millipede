@@ -4,7 +4,7 @@ All rights reserved.
 '''
 from contextlib import contextmanager
 from melano.parser import ast as py
-from melano.parser.visitor import ASTVisitor
+from melano.lang.visitor import ASTVisitor
 from melano.project.module import MelanoModule
 from melano.project.nameref import NameRef
 import pdb

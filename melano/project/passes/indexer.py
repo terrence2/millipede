@@ -13,7 +13,7 @@ from melano.c.types.pyset import PySetType
 from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
 from melano.parser import ast as py
-from melano.parser.visitor import ASTVisitor
+from melano.lang.visitor import ASTVisitor
 from melano.project.constant import Constant
 from melano.project.function import MelanoFunction
 from melano.project.intermediate import Intermediate

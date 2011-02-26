@@ -14,7 +14,7 @@ from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
 from melano.c.types.pytype import PyTypeType
 from melano.parser import ast as py
-from melano.parser.visitor import ASTVisitor
+from melano.lang.visitor import ASTVisitor
 from melano.project.module import MelanoModule
 import itertools
 import pdb

@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.parser.visitor import ASTVisitor
+from melano.lang.visitor import ASTVisitor
 
 
 class FindLinks(ASTVisitor):

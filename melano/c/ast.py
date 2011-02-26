@@ -1,7 +1,7 @@
 '''
 Copied from Eli Benderski's LGPL pycparser.
 '''
-from melano.parser.ast import AST
+from melano.lang.ast import AST
 import itertools
 
 class CPP(AST):

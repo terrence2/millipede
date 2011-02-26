@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.parser.visitor import ASTVisitor
+from melano.lang.visitor import ASTVisitor
 from melano.project.intermediate import Intermediate
 
 
