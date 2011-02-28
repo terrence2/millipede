@@ -3,10 +3,10 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
-from melano.c.types.pyobject import PyObjectType
+from melano.c.types.pyobject import PyObjectLL
 
 
-class PyIntegerType(PyObjectType):
+class PyIntegerType(PyObjectLL):
 	def new(self, ctx, n):
 		#FIXME: need a way to get the target architecture word size for this!
 		if n < 2 ** 63 - 1:

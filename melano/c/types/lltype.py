@@ -6,9 +6,9 @@ from melano.c import ast as c
 
 
 class LLType:
-	def __init__(self, name):
+	def __init__(self, hltype):
 		super().__init__()
-		self.name = name
+		self.hltype = hltype
 
 
 	@staticmethod

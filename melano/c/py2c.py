@@ -9,17 +9,22 @@ from melano.c.types.integer import CIntegerType
 from melano.c.types.lltype import LLType
 from melano.c.types.pycfunction import PyCFunctionType
 from melano.c.types.pydict import PyDictType
-from melano.c.types.pyobject import PyObjectType
+from melano.c.types.pymodule import PyModuleLL
+from melano.c.types.pyobject import PyObjectLL
 from melano.c.types.pystring import PyStringType
 from melano.c.types.pytuple import PyTupleType
 from melano.c.types.pytype import PyTypeType
-from melano.py import ast as py
-from melano.lang.visitor import ASTVisitor
 from melano.hl.module import MelanoModule
+from melano.hl.types.hltype import HLType
+from melano.hl.types.pymodule import PyModuleType
+from melano.hl.types.pyobject import PyObjectType
+from melano.lang.visitor import ASTVisitor
+from melano.py import ast as py
 import itertools
 import pdb
 import tc
 
+HLType
 
 
 class Py2C(ASTVisitor):
@@ -54,6 +59,9 @@ class Py2C(ASTVisitor):
 		py.IsNot: 'is not',
 		py.In: 'in',
 		py.NotIn: 'not in',
+	}
+	TYPEMAP = {
+		PyModuleType: PyModuleLL,
 	}
 
 
@@ -168,11 +176,16 @@ class Py2C(ASTVisitor):
 		return None, nodes
 
 
-
+	def create_instance(self, ty:HLType):
+		return self.TYPEMAP[ty.__class__](ty)
 
 
 	def visit_Module(self, node):
+		# we need the toplevel available to all children so that we can do lookups for globals
 		self.module = node.hl
+
+		# delegate creation of the module's lowlevel nodes
+		modinst = self.create_instance(self.module.get_type())
 
 		# get the MelanoModule and Name
 		modscope = node.hl

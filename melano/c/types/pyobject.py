@@ -6,7 +6,7 @@ from melano.c import ast as c
 from melano.c.types.lltype import LLType
 
 
-class PyObjectType(LLType):
+class PyObjectLL(LLType):
 	def declare(self, ctx, quals=[]):
 		assert isinstance(ctx, c.TranslationUnit) or not ctx._visitor.scopes or ctx._visitor.scope.context == ctx
 		ctx.add_variable(c.Decl(self.name, c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('PyObject'))), quals=quals, init=c.ID('NULL')), True)

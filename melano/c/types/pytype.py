@@ -2,8 +2,8 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.c.types.pyobject import PyObjectType
+from melano.c.types.pyobject import PyObjectLL
 
 
-class PyTypeType(PyObjectType):
+class PyTypeType(PyObjectLL):
 	pass

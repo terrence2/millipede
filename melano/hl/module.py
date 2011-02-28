@@ -2,12 +2,13 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
+from melano.hl.builtins import Builtins
 from melano.hl.name import Name
 from melano.hl.scope import Scope
+from melano.hl.types.pymodule import PyModuleType
 import hashlib
 import logging
 import tokenize
-
 
 
 class MelanoModule(Scope):
@@ -20,7 +21,7 @@ class MelanoModule(Scope):
 	PROJECT = 3
 
 
-	def __init__(self, modtype:int, filename:str, dottedname:str, builtins_scope:Scope):
+	def __init__(self, modtype:int, filename:str, dottedname:str, builtins_scope:Builtins):
 		'''
 		The source is the location (project root relative) where
 		this module can be found.
@@ -52,6 +53,9 @@ class MelanoModule(Scope):
 		#	mapping from the accessing module name to the module itself).
 		self.refs = {}
 
+		# the hl type definition
+		self.type = PyModuleType()
+
 
 	def __read_file(self):
 		# read the file contents, obeying the python encoding marker
@@ -65,7 +69,7 @@ class MelanoModule(Scope):
 
 	def lookup(self, name:str) -> Name:
 		try:
-			return super().lookup(name)
+			return self.symbols[name]
 		except KeyError:
 			return self.builtins_scope.lookup(name)
 		raise KeyError(name)
@@ -75,30 +79,18 @@ class MelanoModule(Scope):
 		'''Return all of the names exposed by this scope.'''
 		#TODO: if we have a static __all__, obey it, rather than giving everything
 		#TODO: if __all__ is stored to with a non-const, we need to emit a warning or something
-		return list(self.symbols.keys())
+		return list(self.symbols.values())
 
 
 	def show(self, level=0):
 		logging.info('Module: {} as {}'.format(self.name, self.owner.global_name))
-		super().show(level)
+		for sym in self.symbols.values():
+			if isinstance(sym.scope, MelanoModule):
+				logging.info('{}Name: {}'.format('\t' * (level + 1), sym.name))
+			else:
+				sym.show(level + 1)
 
 
 	def get_source_line(self, lineno:int) -> str:
 		return self.lines[lineno - 1]
 
-
-	"""
-	def lookup(self, name):
-		'''Query for a name.  Overflow into module builtins.'''
-		if name in self.names:
-			return self.names[name]
-		ref = lookup_builtin(name)
-		if ref is not None:
-			return ref
-		raise KeyError(name)
-
-
-
-	def __str__(self):
-		return '<Module[{}]>'.format(self.names.get('__name__', self.filename))
-	"""

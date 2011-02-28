@@ -3,9 +3,10 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from collections import OrderedDict
-from melano.hl.types.pydict import PyDictType
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
+from melano.hl.types.pydict import PyDictType
+import logging
 
 
 class Scope:
@@ -22,9 +23,6 @@ class Scope:
 		# the name of the low-level function used to build/run the scope 
 		self.ll_runner = None
 
-		# scopes can have a single type, and it is almost only a simple PyDictType
-		self.type = PyDictType
-
 		# will be set with the instance when we declare it
 		self.inst = None
 
@@ -34,12 +32,7 @@ class Scope:
 
 
 	def lookup(self, name:str) -> Name:
-		try:
-			return self.symbols[name]
-		except KeyError:
-			if self.owner.parent:
-				return self.owner.parent.lookup(name)
-			raise
+		raise NotImplementedError("Every Scope type needs its own lookup routines.")
 
 
 	def has_name(self, name:str) -> bool:
@@ -71,8 +64,8 @@ class Scope:
 
 
 	def show(self, level=0):
-		for name in self.symbols:
-			self.symbols[name].show(level + 1)
+		for sym in self.symbols.values():
+			sym.show(level + 1)
 
 
 	def get_type(self) -> type:

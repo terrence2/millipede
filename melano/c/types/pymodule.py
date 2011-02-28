@@ -3,10 +3,11 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
-from melano.c.types.pyobject import PyObjectType
+from melano.c.types.pyobject import PyObjectLL
 
 
-class PyModuleType(PyObjectType):
+class PyModuleLL(PyObjectLL):
+
 	def new(self, ctx, modname):
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyModule_New'), c.ExprList(c.Constant('string', modname)))))
 		self.fail_if_null(ctx, self.name)

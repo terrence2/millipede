@@ -6,15 +6,16 @@ from copy import copy
 from melano.c.out import COut
 from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
-from melano.py.driver import PythonParserDriver
+from melano.hl.builtins import Builtins
 from melano.hl.module import MelanoModule
 from melano.hl.name import Name
+from melano.hl.scope import Scope
 from melano.project.analysis.coder import Coder
 from melano.project.analysis.find_links import FindLinks
 from melano.project.analysis.indexer import Indexer
 from melano.project.analysis.linker import Linker
 from melano.project.analysis.typer import Typer
-from melano.hl.scope import Scope
+from melano.py.driver import PythonParserDriver
 import logging
 import melano.py.ast as ast
 import os
@@ -24,6 +25,9 @@ import re
 
 class FileNotFoundException(Exception):
 	'''Raised when we can't find a referenced module.'''
+
+class MissingSymbolsError(Exception):
+	'''Raised if we cannot resolve all symbols when indexing.'''
 
 
 class MelanoProject:
@@ -75,7 +79,7 @@ class MelanoProject:
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
 
 		# build a 'scope' for our builtins
-		self.builtins_scope = Scope(Name('builtins', None))
+		self.builtins_scope = Builtins(Name('builtins', None))
 		for n in PY_BUILTINS:
 			self.builtins_scope.add_symbol(n)
 
@@ -130,11 +134,31 @@ class MelanoProject:
 
 	def index_names(self):
 		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
-		for fn in self.order:
-			mod = self.modules[fn]
-			logging.info("Indexing: {}".format(mod.filename))
-			indexer = Indexer(self, mod)
-			indexer.visit(mod.ast)
+		missing = {}
+		def _index(self):
+			for fn in self.order:
+				if fn not in missing or missing[fn] > 0:
+					mod = self.modules[fn]
+					if fn not in missing:
+						logging.info("Indexing: {}".format(mod.filename))
+					else:
+						logging.info("[{} remaining] Indexing: {}".format(sum(list(missing.values())), fn))
+					indexer = Indexer(self, mod)
+					indexer.visit(mod.ast)
+					if self.is_local(mod):
+						missing[fn] = len(indexer.missing)
+
+		logging.info("Indexing: Phase 1, {} files".format(len(self.order)))
+		_index(self)
+
+		logging.info("Indexing: Phase 2, {} remaining".format(sum(list(missing.values()))))
+		while sum(list(missing.values())) > 0:
+			prior = sum(list(missing.values()))
+			_index(self)
+			cur = sum(list(missing.values()))
+			if cur == prior:
+				raise MissingSymbolsError
+
 
 
 	def link_references(self):

@@ -2,8 +2,10 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.name import Name
 from melano.hl.scope import Scope
 import logging
+
 
 
 class MelanoFunction(Scope):
@@ -21,3 +23,9 @@ class MelanoFunction(Scope):
 	def show(self, level):
 		logging.info("{}Function: {}".format('\t' * level, self.owner.name))
 		super().show(level)
+
+	def lookup(self, name:str) -> Name:
+		try:
+			return self.symbols[name]
+		except KeyError:
+			return self.owner.parent.lookup(name)

@@ -3,6 +3,11 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
+from melano.hl.class_ import MelanoClass
+from melano.hl.constant import Constant
+from melano.hl.function import MelanoFunction
+from melano.hl.name import Name
+from melano.hl.scope import Scope
 from melano.hl.types.pybytes import PyBytesType
 from melano.hl.types.pydict import PyDictType
 from melano.hl.types.pyfloat import PyFloatType
@@ -12,12 +17,9 @@ from melano.hl.types.pymodule import PyModuleType
 from melano.hl.types.pyset import PySetType
 from melano.hl.types.pystring import PyStringType
 from melano.hl.types.pytuple import PyTupleType
-from melano.py import ast as py
 from melano.lang.visitor import ASTVisitor
-from melano.hl.constant import Constant
-from melano.hl.function import MelanoFunction
-from melano.hl.name import Name
-from melano.hl.scope import Scope
+from melano.py import ast as py
+import itertools
 import logging
 import pdb
 
@@ -33,14 +35,25 @@ class Indexer(ASTVisitor):
 		self.module = module
 		self.context = self.module
 
+		# anon scopes need to be unique
+		self.anon_count = itertools.count()
+
+		# count of symbols we weren't able to index because of missing dependencies
+		self.missing = set()
 
 	@contextmanager
 	def scope(self, node, scope_ty=Scope):
+		try:
+			name = str(node.name)
+		except AttributeError: # unnamed nodes
+			name = 'anon_scope_' + str(next(self.anon_count))
+
 		# insert node into parent scope
-		sym = self.context.add_symbol(str(node.name))
+		sym = self.context.add_symbol(name)
 		sym.scope = scope_ty(sym)
 		node.hl = sym.scope
-		node.name.hl = sym
+		try: node.name.hl = sym
+		except: pass
 
 		# push a new scope
 		prior = self.context
@@ -60,7 +73,7 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.keywords)
 		self.visit(node.starargs)
 		self.visit(node.kwargs)
-		with self.scope(node):
+		with self.scope(node, scope_ty=MelanoClass):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
 
@@ -103,7 +116,7 @@ class Indexer(ASTVisitor):
 					self.context.expect_args.append(str(arg.arg))
 			if node.args and node.args.kwonlyargs:
 				for arg in node.args.kwonlyargs:
-					self.context.expect_kwargs.add(str(arg.arg))
+					self.context.expect_kwargs.append(str(arg.arg))
 
 			self.visit_nodelist(node.body)
 
@@ -136,31 +149,57 @@ class Indexer(ASTVisitor):
 			if alias.asname:
 				# Note: don't visit name if we have asname, since name is Load in this case, but it's not a Load on this module
 				self.visit(alias.asname)
-				alias.asname.hl.scope = self.module.refs.get(str(alias.name), None)
+				try:
+					alias.asname.hl.scope = self.module.refs[str(alias.name)]
+				except KeyError:
+					logging.info("Skipping missing: {}".format(str(alias.name)))
+					self.missing.add(str(alias.name))
 			else:
 				self.visit(alias.name)
-				alias.name.hl.scope = self.module.refs.get(str(alias.name), None)
+				if isinstance(alias.name, py.Attribute):
+					sym = alias.name.first().hl
+				else:
+					sym = alias.name.hl
+				try:
+					sym.scope = self.module.refs[str(alias.name)]
+				except KeyError:
+					logging.info("Skipping missing: {}".format(str(alias.name)))
+					self.missing.add(str(alias.name))
 
 
 	def visit_ImportFrom(self, node):
-		#Note: we need to already be indexed to provide name refs that are _inside_ a module,
-		#	so we do most of the work for ImportFrom in link.
+		modname = '.' * node.level + str(node.module)
+		#FIXME: we need to ask self.project to find the real module name if we are a relative module
+		try:
+			mod = self.module.refs[modname]
+		except KeyError:
+			logging.info("Skipping missing: {}".format(modname))
+			self.missing.add(modname)
+			return
+		if mod is None:
+			logging.info("Skipping missing: {}".format(modname))
+			self.missing.add(modname)
+			return
+
 		for alias in node.names:
 			if alias.asname:
 				self.visit(alias.asname)
+				alias.asname.hl.scope = mod
 			else:
-				if str(alias.name) != '*':
+				if str(alias.name) == '*':
+					pass # Note: add these cross-module refs in the linker
+				else:
 					self.visit(alias.name)
+					alias.name.hl.scope = mod
 
 
-	#FIXME: scoping doesn't work because listcomp has no name attr.... need to rewrite to take name separatly
-	#def visit_Lambda(self, node):
-	#	with self.scope(node):
-	#		self.visit_nodelist_field(node.args.args, 'arg')
-	#		self.visit(node.args.vararg)
-	#		self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
-	#		self.visit(node.args.kwarg)
-	#		self.visit(node.body)
+	def visit_Lambda(self, node):
+		with self.scope(node):
+			self.visit_nodelist_field(node.args.args, 'arg')
+			self.visit(node.args.vararg)
+			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
+			self.visit(node.args.kwarg)
+			self.visit(node.body)
 
 
 	def visit_List(self, node):
@@ -168,11 +207,10 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.elts)
 
 
-	#FIXME: scoping doesn't work because listcomp has no name attr.... need to rewrite to take name separatly
-	#def visit_ListComp(self, node):
-	#	with self.scope(node):
-	#		self.visit(node.elt)
-	#		self.visit_nodelist(node.generators)
+	def visit_ListComp(self, node):
+		with self.scope(node):
+			self.visit(node.elt)
+			self.visit_nodelist(node.generators)
 
 
 	def visit_Module(self, node):
@@ -219,7 +257,7 @@ class Indexer(ASTVisitor):
 	def visit_SetComp(self, node):
 		with self.scope(node):
 			self.visit(node.elt)
-			self.visit_nodelist(node.generator)
+			self.visit_nodelist(node.generators)
 
 
 	def visit_Str(self, node):
