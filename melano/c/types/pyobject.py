@@ -8,15 +8,7 @@ from melano.c.types.lltype import LLType
 
 class PyObjectLL(LLType):
 	def declare(self, ctx, quals=[], name=None):
-		assert isinstance(ctx, c.TranslationUnit) or not ctx._visitor.scopes or ctx._visitor.scope.context == ctx
-		assert self.name is None # we can only declare once
-		if name:
-			self.name = ctx.reserve_name(name)
-		else:
-			if self.hlnode and hasattr(self.hlnode, 'name'):
-				self.name = ctx.reserve_name(self.hlnode.name)
-			else:
-				self.name = ctx.tmpname()
+		super().declare(ctx, quals, name)
 		ctx.add_variable(c.Decl(self.name, c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('PyObject'))), quals=quals, init=c.ID('NULL')), True)
 
 
@@ -50,7 +42,7 @@ class PyObjectLL(LLType):
 
 	def set_attr_string(self, ctx, attrname, attrval):
 		tmp = CIntegerLL(None)
-		tmp.declare(ctx, init= -1)
+		tmp.declare(ctx._visitor.scope.context, init= -1)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
@@ -65,7 +57,7 @@ class PyObjectLL(LLType):
 
 	def set_item(self, ctx, key, val):
 		tmp = CIntegerLL(None)
-		tmp.declare(ctx, init= -1)
+		tmp.declare(ctx._visitor.scope.context, init= -1)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
@@ -169,8 +161,8 @@ class PyObjectLL(LLType):
 
 
 	def rich_compare_bool(self, ctx, rhs, opid):
-		out = CIntegerType(ctx.tmpname())
-		out.declare(ctx)
+		out = CIntegerLL(None)
+		out.declare(ctx._visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_RichCompareBool'), c.ExprList(
 																				c.ID(self.name), c.ID(rhs.name), c.ID(opid)))))
 		self.fail_if_negative(ctx, out.name)
@@ -178,8 +170,8 @@ class PyObjectLL(LLType):
 
 
 	def sequence_contains(self, ctx, item):
-		out = CIntegerType(ctx.tmpname())
-		out.declare(ctx)
+		out = CIntegerLL(None)
+		out.declare(ctx._visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_Contains'), c.ExprList(
 																				c.ID(self.name), c.ID(item.name)))))
 		self.fail_if_negative(ctx, out.name)
@@ -187,8 +179,8 @@ class PyObjectLL(LLType):
 
 
 	def is_(self, ctx, other):
-		out = CIntegerType(ctx.tmpname())
-		out.declare(ctx)
+		out = CIntegerLL(None)
+		out.declare(ctx._visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.BinaryOp('==', c.ID(self.name), c.ID(other.name))))
 		return out
 
@@ -199,14 +191,14 @@ class PyObjectLL(LLType):
 
 
 	def get_type(self, ctx, out):
-		assert isinstance(out, PyTypeType)
+		assert isinstance(out, PyTypeLL)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Type'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def is_instance(self, ctx, type_id):
-		out = CIntegerType(ctx.tmpname())
-		out.declare(ctx)
+		out = CIntegerLL(None)
+		out.declare(ctx._visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_IsInstance'), c.ExprList(
 																				c.ID(self.name), type_id))))
 		self.fail_if_negative(ctx, out.name)

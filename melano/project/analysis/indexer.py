@@ -43,6 +43,15 @@ class Indexer(ASTVisitor):
 
 	@contextmanager
 	def scope(self, node, scope_ty=Scope):
+		# NOTE: since we can repeatedly visit index to find names defined later, we need
+		#		to not overwrite existing symbols dicts
+		if node.hl:
+			prior = self.context
+			self.context = node.hl
+			yield
+			self.context = prior
+			return
+
 		try:
 			name = str(node.name)
 		except AttributeError: # unnamed nodes
@@ -121,8 +130,8 @@ class Indexer(ASTVisitor):
 			self.visit_nodelist(node.body)
 
 		# insert the assumed return None if we fall off the end without a return
-		if not isinstance(node.body[-1], py.Return):
-			node.body.append(py.Return(None, None))
+		#if not isinstance(node.body[-1], py.Return):
+		#	node.body.append(py.Return(None, None))
 
 		self.visit_nodelist(node.decorator_list)
 
@@ -190,7 +199,6 @@ class Indexer(ASTVisitor):
 					pass # Note: add these cross-module refs in the linker
 				else:
 					self.visit(alias.name)
-					alias.name.hl.scope = mod
 
 
 	def visit_Lambda(self, node):
@@ -234,9 +242,12 @@ class Indexer(ASTVisitor):
 
 	def visit_Nonlocal(self, node):
 		for name in node.names:
-			# look up-scope for the name
-			#FIXME: we need to fully visit outer scopes first -- this may have to wait until link time? (function_nonlocal_late)
-			sym = self.context.owner.parent.lookup(name)
+			try:
+				# look up-scope for the name
+				sym = self.context.owner.parent.lookup(name)
+			except KeyError:
+				self.missing.add(name)
+				return
 			ref = self.context.add_reference(sym)
 			ref.is_nonlocal = True
 

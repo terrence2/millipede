@@ -1,8 +1,10 @@
-print(7 | 12)
+a = 7
+b = 12
+print(a | b)
 #out: 15
-print(7 ^ 12)
+print(a ^ b)
 #out: 11
-print(7 & 12)
+print(a & b)
 #out: 4
 print(15 << 2)
 #out: 60

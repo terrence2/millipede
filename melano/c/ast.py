@@ -1,6 +1,7 @@
 '''
 Copied from Eli Benderski's LGPL pycparser.
 '''
+from melano.c.keywords import C_KEYWORDS
 from melano.lang.ast import AST
 import itertools
 
@@ -97,12 +98,13 @@ class Compound(AST):
 		ever care about names in the global scope that we use in the local scope, so if someone
 		introduces a name into the global scope later that aliases with something we've already
 		added to the local scope, then it shouldn't matter because we don't have interest in that 
-		global name, only the local one we are aliasing.
+		global name, only the local one we are aliasing.  This, of course, breaks down if we happen
+		to alias with one of our internal names, which is why we have this particular indirection.
 		'''
 		tu = self._tu
 		cnt = 0
 		nm = name
-		while nm in self.names or (tu and nm in tu.names):
+		while nm in self.names or (tu and nm in tu.names) or nm in C_KEYWORDS:
 			nm = name + '_' + str(cnt)
 			cnt += 1
 		self.names.add(nm)
@@ -346,7 +348,7 @@ class TranslationUnit(AST):
 	def reserve_name(self, name):
 		cnt = 0
 		nm = name
-		while nm in self.names:
+		while nm in self.names or nm in C_KEYWORDS:
 			nm = name + '_' + str(cnt)
 			cnt += 1
 		self.names.add(nm)

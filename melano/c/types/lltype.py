@@ -13,6 +13,18 @@ class LLType:
 		self.name = None #set when we declare
 
 
+	def declare(self, ctx, quals=[], name=None):
+		assert isinstance(ctx, c.TranslationUnit) or not ctx._visitor.scopes or ctx._visitor.scope.context == ctx
+		assert self.name is None # we can only declare once
+		if name:
+			self.name = ctx.reserve_name(name)
+		else:
+			if self.hlnode and hasattr(self.hlnode, 'name'):
+				self.name = ctx.reserve_name(self.hlnode.name)
+			else:
+				self.name = ctx.tmpname()
+
+
 	@staticmethod
 	def capture_error(ctx):
 		filename = ctx._visitor.hl_module.filename

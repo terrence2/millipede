@@ -4,6 +4,8 @@ All rights reserved.
 '''
 from melano.hl.coerce import Coerce
 from melano.lang.visitor import ASTVisitor
+from melano.py import ast as py
+import logging
 import pdb
 
 
@@ -15,10 +17,20 @@ class Typer(ASTVisitor):
 
 	def visit_Assign(self, node):
 		self.visit(node.value)
+		if not node.value.hl:
+			logging.debug("Skipping typing through assignment because we did not propogate a hl node!")
+			return
 		for target in node.targets:
 			self.visit(target)
-			if node.value.hl:
+			if isinstance(target, py.Attribute):
+				logging.debug("Skipping typing of attribute assignment")
+			elif isinstance(target, py.Subscript):
+				logging.debug("Skipping typing of subscript assignment")
+			elif isinstance(target, py.Name):
 				target.hl.add_type(node.value.hl.get_type())
+			else:
+				raise NotImplementedError("Assignment to unknown node class in typer")
+
 
 
 	'''
@@ -41,8 +53,4 @@ class Typer(ASTVisitor):
 		self.visit(node.left)
 		self.visit(node.right)
 		node.hl = Coerce(Coerce.GENERALIZE, node.left.hl, node.right.hl)
-
-	def visit_UnaryOp(self, node):
-		self.visit(node.operand)
-		node.hl = node.operand.hl
 

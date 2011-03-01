@@ -5,4 +5,4 @@ def foo():
 	a = 1
 	bar()
 foo()
-#out(1)
+#out: 1

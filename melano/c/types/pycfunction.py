@@ -19,6 +19,13 @@ class PyCFunctionLL(PyObjectLL):
 		self.c_runner_name = None
 		self.c_runner_func = None
 
+		# the name of the struct that defines the function
+		self.funcdef_name = None
+
+		# the ll name and instance representing the py callable function object
+		self.c_obj_name = None
+		self.c_obj = None
+
 
 	def declare(self, ll_mod, tu, docstring):
 		# create the locals array
@@ -26,7 +33,7 @@ class PyCFunctionLL(PyObjectLL):
 		cnt = self.hlnode.get_locals_count()
 		self.c_locals_array = c.Decl(self.c_locals_name,
 									c.ArrayDecl(c.PtrDecl(c.TypeDecl(self.c_locals_name, c.IdentifierType('PyObject'))), cnt),
-									init=c.ExprList(*(cnt * [c.ID('NULL')])))
+									init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
 		tu.add_fwddecl(self.c_locals_array)
 
 		# create the c function that will correspond to the py function 
@@ -36,7 +43,7 @@ class PyCFunctionLL(PyObjectLL):
 				c.FuncDecl(c.ParamList(
 									c.Decl('self', c.PtrDecl(c.TypeDecl('self', c.IdentifierType('PyObject')))),
 									c.Decl('args', c.PtrDecl(c.TypeDecl('args', c.IdentifierType('PyObject'))))), \
-						c.PtrDecl(c.TypeDecl(self.c_runner_name, c.IdentifierType('PyObject'))))),
+						c.PtrDecl(c.TypeDecl(self.c_runner_name, c.IdentifierType('PyObject')))), quals=['static']),
 			c.Compound()
 		)
 		tu.add_fwddecl(self.c_runner_func.decl)
@@ -48,19 +55,20 @@ class PyCFunctionLL(PyObjectLL):
 		ctx.add(c.Comment('Declare Function "{}"'.format(self.hlnode.owner.name)))
 
 		# create the function definition structure
-		funcdef_name = ctx.reserve_name(self.hlnode.owner.name + '_def')
+		self.funcdef_name = ctx.reserve_name(self.hlnode.owner.name + '_def')
 		c_docstring = c.Constant('string', PyStringLL.str2c(docstring)) if docstring else c.ID('NULL')
-		ctx.add_variable(c.Decl(funcdef_name, c.TypeDecl(funcdef_name, c.Struct('PyMethodDef')),
+		ctx.add_variable(c.Decl(self.funcdef_name, c.TypeDecl(self.funcdef_name, c.Struct('PyMethodDef')),
 				init=c.ExprList(c.Constant('string', str(self.hlnode.owner.name)), c.ID(self.c_runner_name), c.ID('METH_VARARGS'), c_docstring)), False)
 
 		# create the function pyobject itself
-		tmp = PyObjectLL(None)
-		tmp.declare(ctx, name=self.hlnode.owner.name + '_cfunc')
-		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyCFunction_NewEx'), c.ExprList(
-													c.UnaryOp('&', c.ID(funcdef_name)), c.ID('NULL'), c.ID('NULL')))))
-		self.fail_if_null(ctx, tmp.name)
+		self.c_obj_name = self.hlnode.owner.name + "_pycfunc"
+		self.c_obj = PyObjectLL(self.hlnode)
+		self.c_obj.declare(tu, ['static'], name=self.c_obj_name)
+		ctx.add(c.Assignment('=', c.ID(self.c_obj_name), c.FuncCall(c.ID('PyCFunction_NewEx'), c.ExprList(
+													c.UnaryOp('&', c.ID(self.funcdef_name)), c.ID('NULL'), c.ID('NULL')))))
+		self.fail_if_null(ctx, self.c_obj_name)
 
-		return tmp
+		return self.c_obj
 
 		#FIXME: do we want to pass our own dict as self here?  What is the role for the last param?  Just the module name?
 		#cfunc_inst = PyCFunctionType(funcname.global_name)
@@ -69,7 +77,28 @@ class PyCFunctionLL(PyObjectLL):
 
 
 	def set_attr_string(self, ctx, attrname, val):
-		raise NotImplementedError
+		attroffset = self.hlnode.locals_map[attrname]
+		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
+		ctx.add(c.Assignment('=', c.ArrayRef(self.c_locals_name, attroffset), c.ID(val.name)))
 
-	def new(self, ctx, funcdef_name, locals, modname):
-		pass
+		# TODO: also assign to a local?
+
+
+	def get_attr_string(self, ctx, attrname, outvar):
+		attroffset = self.hlnode.locals_map[attrname]
+		ctx.add(c.Assignment('=', c.ID(outvar.name), c.ArrayRef(self.c_locals_name, attroffset)))
+
+		#TODO: use a local?
+
+
+	def new(self, ctx):
+		# fwddecl and init the return value
+		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+
+
+	def emit_outro(self, ctx):
+		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
+		ctx.add(c.Label('end'))
+		for name in reversed(ctx.cleanup):
+			ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+		ctx.add(c.Return(c.ID('__return_value__')))

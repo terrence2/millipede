@@ -34,7 +34,7 @@ class PyModuleLL(PyObjectLL):
 			c.Decl(self.c_builder_name,
 				c.FuncDecl(
 						c.ParamList(),
-						c.PtrDecl(c.TypeDecl(self.c_builder_name, c.IdentifierType('PyObject'))))),
+						c.PtrDecl(c.TypeDecl(self.c_builder_name, c.IdentifierType('PyObject')))), quals=['static']),
 			c.Compound()
 		)
 		tu.add_fwddecl(self.c_builder_func.decl)

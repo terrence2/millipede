@@ -26,7 +26,7 @@ class MelanoFunction(Scope):
 
 		# map locals names to an offset into the locals array
 		self.locals_map = {}
-		self.locals_count = itertools.count()
+		self.locals_count = itertools.count(0)
 
 
 	def get_locals_count(self):

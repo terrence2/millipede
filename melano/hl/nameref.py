@@ -43,6 +43,9 @@ class NameRef:
 	@property
 	def scope(self):
 		return self.ref.scope
+	@scope.setter
+	def scope(self, value):
+		self.ref.scope = value
 
 
 	@property
@@ -52,6 +55,9 @@ class NameRef:
 
 	def get_type(self):
 		return self.ref.get_type()
+
+	def add_type(self, ty):
+		self.ref.add_type(ty)
 
 
 	def show(self, level):
