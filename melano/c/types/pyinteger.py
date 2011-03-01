@@ -6,7 +6,7 @@ from melano.c import ast as c
 from melano.c.types.pyobject import PyObjectLL
 
 
-class PyIntegerType(PyObjectLL):
+class PyIntegerLL(PyObjectLL):
 	def new(self, ctx, n):
 		#FIXME: need a way to get the target architecture word size for this!
 		if n < 2 ** 63 - 1:

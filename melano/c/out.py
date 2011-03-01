@@ -28,6 +28,9 @@ class COut(ASTVisitor):
 		yield
 		self.level -= 1
 
+	def visit_ArrayDecl(self, node):
+		self.visit(node.type)
+
 	def visit_Assignment(self, node):
 		self.visit(node.lvalue)
 		self.fp.write(' ' + node.op + ' ')
@@ -87,6 +90,8 @@ class COut(ASTVisitor):
 			self.fp.write('(')
 			self.visit(node.type.args)
 			self.fp.write(')')
+		elif isinstance(node.type, c.ArrayDecl):
+			self.fp.write('[' + str(node.type.dim) + ']')
 		if node.bitsize:
 			self.fp.write(': ' + str(node.bitsize))
 		if node.init:

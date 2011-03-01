@@ -6,7 +6,7 @@ from melano.c import ast as c
 from melano.c.types.pyobject import PyObjectLL
 
 
-class PyFloatType(PyObjectLL):
+class PyFloatLL(PyObjectLL):
 	def new(self, ctx, n):
 		return self._new_from_double(ctx, c.Constant('double', n))
 

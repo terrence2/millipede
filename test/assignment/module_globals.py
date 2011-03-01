@@ -1,7 +1,7 @@
 foo = 0
 bar = 'hello'
 baz = ()
-baz = (1, 'world')
+bif = (1, 'world')
 a = []
 b = [1, 'foo', [2, 'bar']]
 c = {}

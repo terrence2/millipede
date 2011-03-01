@@ -71,18 +71,27 @@ class Compound(AST):
 		# track which variables need a call to cleanup at compound out
 		self.cleanup = []
 		# map from ll variable names to hl symbols (and existence markers)
-		self.names = {}
+		self.names = set()
 		# counter for tmp items
 		self.tmpcount = itertools.count()
 
 		# track the underlying converter visitor, so we can get to high-level state
 		self._visitor = None
+		self._tu = None
 
-	def tmpname(self):
-		n = self.reserve_name('tmp' + str(next(self.tmpcount)), None, None)
+
+	def tmp_pyobject(self):
+		'''Reserve a tmp name and declare it as a pyobject.  Return name name.'''
+		n = self.tmpname()
+		self.add_variable(Decl(n, PtrDecl(TypeDecl(n, IdentifierType('PyObject'))), init=ID('NULL')), True)
 		return n
 
-	def reserve_name(self, name, sym, tu):
+
+	def tmpname(self):
+		return self.reserve_name('tmp' + str(next(self.tmpcount)))
+
+
+	def reserve_name(self, name):
 		'''
 		Try to ensure uniqueness in the local scope and against the global scope.  We _should_ only
 		ever care about names in the global scope that we use in the local scope, so if someone
@@ -90,13 +99,13 @@ class Compound(AST):
 		added to the local scope, then it shouldn't matter because we don't have interest in that 
 		global name, only the local one we are aliasing.
 		'''
-		if not tu: tu = set()
+		tu = self._tu
 		cnt = 0
 		nm = name
 		while nm in self.names or (tu and nm in tu.names):
 			nm = name + '_' + str(cnt)
 			cnt += 1
-		self.names[nm] = sym
+		self.names.add(nm)
 		return nm
 
 	def has_name(self, name):
@@ -329,15 +338,18 @@ class TranslationUnit(AST):
 		self._var_pos = 0
 		self._fwddecl_pos = 0
 		# map from ll variable names to hl symbols (and existence markers)
-		self.names = {}
+		self.names = set()
 
-	def reserve_name(self, name, sym):
+		# note: need to allow declare to check ourself as well
+		self.tu = self
+
+	def reserve_name(self, name):
 		cnt = 0
 		nm = name
 		while nm in self.names:
 			nm = name + '_' + str(cnt)
 			cnt += 1
-		self.names[nm] = sym
+		self.names.add(nm)
 		return nm
 
 	def add_include(self, inc):

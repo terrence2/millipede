@@ -6,5 +6,5 @@ from melano.c import ast as c
 from melano.c.types.pyobject import PyObjectLL
 
 
-class PyBytesType(PyObjectLL):
+class PyBytesLL(PyObjectLL):
 	pass

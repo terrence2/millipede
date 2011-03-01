@@ -6,7 +6,7 @@ from melano.c import ast as c
 from melano.c.types.lltype import LLType
 
 
-class CIntegerType(LLType):
+class CIntegerLL(LLType):
 	def __init__(self, name, size=None, signed=None, is_a_bool=False):
 		super().__init__(name)
 		self.size = size
@@ -22,23 +22,23 @@ class CIntegerType(LLType):
 
 	def as_pyobject(self, ctx):
 		if self.is_a_bool:
-			out = PyBoolType(ctx.tmpname())
+			out = PyBoolLL(ctx.tmpname())
 			out.declare(ctx)
 			out._new_from_long(ctx, c.ID(self.name))
 			return out
 		else:
-			out = PyIntegerType(ctx.tmpname())
+			out = PyIntegerLL(ctx.tmpname())
 			out.declare(ctx)
 			out._new_from_long(ctx, c.ID(self.name))
 			return out
 
 
 	def not_(self, ctx):
-		out = CIntegerType(ctx.tmpname())
+		out = CIntegerLL(ctx.tmpname())
 		out.declare(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.UnaryOp('!', c.ID(self.name))))
 		return out
 
 
-from melano.c.types.pybool import PyBoolType
-from melano.c.types.pyinteger import PyIntegerType
+from melano.c.types.pybool import PyBoolLL
+from melano.c.types.pyinteger import PyIntegerLL

@@ -46,14 +46,14 @@ class MelanoModule(Scope):
 		self.ast = None
 
 		# add names common
-		self.add_symbol('__name__', dottedname)
-		self.add_symbol('__file__', filename)
+		self.add_symbol('__name__', Name(dottedname, self))
+		self.add_symbol('__file__', Name(filename, self))
 
 		# the refs table contains referenced modules (not the symbols they pull in, just a 
 		#	mapping from the accessing module name to the module itself).
 		self.refs = {}
 
-		# the hl type definition
+		# the hl type definition -- used mostly as an identity badge in the module
 		self.type = PyModuleType()
 
 
@@ -84,11 +84,11 @@ class MelanoModule(Scope):
 
 	def show(self, level=0):
 		logging.info('Module: {} as {}'.format(self.name, self.owner.global_name))
-		for sym in self.symbols.values():
-			if isinstance(sym.scope, MelanoModule):
-				logging.info('{}Name: {}'.format('\t' * (level + 1), sym.name))
+		for name, val in self.symbols.items():
+			if isinstance(val.scope, MelanoModule):
+				logging.info('{}Name: {}'.format('\t' * (level + 1), name))
 			else:
-				sym.show(level + 1)
+				val.show(level + 1)
 
 
 	def get_source_line(self, lineno:int) -> str:

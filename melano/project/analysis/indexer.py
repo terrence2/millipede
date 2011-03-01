@@ -64,7 +64,7 @@ class Indexer(ASTVisitor):
 
 	def visit_Bytes(self, node):
 		node.s = node.s.strip('"').strip("'")
-		node.hl = Constant(PyBytesType)
+		node.hl = Constant(PyBytesType())
 
 
 	def visit_ClassDef(self, node):
@@ -79,7 +79,7 @@ class Indexer(ASTVisitor):
 
 
 	def visit_Dict(self, node):
-		node.hl = Constant(PyDictType)
+		node.hl = Constant(PyDictType())
 		if node.keys and node.values:
 			for k, v in zip(node.keys, node.values):
 				self.visit(k)
@@ -203,7 +203,7 @@ class Indexer(ASTVisitor):
 
 
 	def visit_List(self, node):
-		node.hl = Constant(PyListType)
+		node.hl = Constant(PyListType())
 		self.visit_nodelist(node.elts)
 
 
@@ -244,13 +244,13 @@ class Indexer(ASTVisitor):
 	def visit_Num(self, node):
 		#TODO: expand this to discover the minimum sized int that will cover the value.
 		if isinstance(node.n, int):
-			node.hl = Constant(PyIntegerType)
+			node.hl = Constant(PyIntegerType())
 		else:
-			node.hl = Constant(PyFloatType)
+			node.hl = Constant(PyFloatType())
 
 
 	def visit_Set(self, node):
-		node.hl = Constant(PySetType)
+		node.hl = Constant(PySetType())
 		self.visit_nodelist(node.elts)
 
 
@@ -263,11 +263,11 @@ class Indexer(ASTVisitor):
 	def visit_Str(self, node):
 		#TODO: discover if we can use a non-unicode or c string type?
 		node.s = node.s.strip('"').strip("'")
-		node.hl = Constant(PyStringType)
+		node.hl = Constant(PyStringType())
 
 
 	def visit_Tuple(self, node):
-		node.hl = Constant(PyTupleType)
+		node.hl = Constant(PyTupleType())
 		self.visit_nodelist(node.elts)
 
 

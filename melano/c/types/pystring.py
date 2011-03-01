@@ -6,16 +6,7 @@ from melano.c import ast as c
 from melano.c.types.pyobject import PyObjectLL
 
 
-class PyStringType(PyObjectLL):
-	ATTRS = {
-				'strip': None
-			}
-
-	@classmethod
-	def reference_attribute(cls, attr:str):
-		return cls.ATTRS[attr]
-
-
+class PyStringLL(PyObjectLL):
 	@classmethod
 	def bytes2c(cls, b):
 		'''Reformats a python bytes to make it suitable for use as a C string constant.'''

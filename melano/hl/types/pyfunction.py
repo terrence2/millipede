@@ -5,5 +5,5 @@ All rights reserved.
 from melano.hl.types.pyobject import PyObjectType
 
 
-class PyCFunctionType(PyObjectType):
+class PyFunctionType(PyObjectType):
 	pass

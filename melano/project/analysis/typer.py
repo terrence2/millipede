@@ -2,8 +2,9 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.lang.visitor import ASTVisitor
 from melano.hl.coerce import Coerce
+from melano.lang.visitor import ASTVisitor
+import pdb
 
 
 class Typer(ASTVisitor):
@@ -11,12 +12,16 @@ class Typer(ASTVisitor):
 		self.project = project
 		self.module = module
 
-	"""
+
 	def visit_Assign(self, node):
-		self.visit_nodelist(node.targets)
 		self.visit(node.value)
+		for target in node.targets:
+			self.visit(target)
+			if node.value.hl:
+				target.hl.add_type(node.value.hl.get_type())
 
 
+	'''
 	def visit_Call(self, node):
 		#print(dir(node))
 		#import pdb; pdb.set_trace()
@@ -29,7 +34,8 @@ class Typer(ASTVisitor):
 		# Annotate parameters (in callee) with type of args/annotations.
 		# Note type of annotated return as the type of the call.
 		node.hl = node.func.hl
-	"""
+	'''
+
 
 	def visit_BinOp(self, node):
 		self.visit(node.left)

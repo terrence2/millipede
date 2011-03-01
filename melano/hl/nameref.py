@@ -33,12 +33,11 @@ class NameRef:
 
 
 	@property
-	def ll_name(self):
-		return self.ref.ll_name
-	@ll_name.setter
-	def ll_name(self, value):
-		self.ref.ll_name = value
-
+	def ll(self):
+		return self.ref.ll
+	@ll.setter
+	def ll(self, value):
+		self.ref.ll = value
 
 
 	@property

@@ -22,7 +22,7 @@ class Coerce:
 	def types(self) -> [type]:
 		if self.coerce_type == self.GENERALIZE:
 			#TODO: find most general type of children and return that
-			return [PyObjectType]
+			return [PyObjectType()]
 		else:
 			raise NotImplementedError
 

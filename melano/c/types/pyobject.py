@@ -7,8 +7,16 @@ from melano.c.types.lltype import LLType
 
 
 class PyObjectLL(LLType):
-	def declare(self, ctx, quals=[]):
+	def declare(self, ctx, quals=[], name=None):
 		assert isinstance(ctx, c.TranslationUnit) or not ctx._visitor.scopes or ctx._visitor.scope.context == ctx
+		assert self.name is None # we can only declare once
+		if name:
+			self.name = ctx.reserve_name(name)
+		else:
+			if self.hlnode and hasattr(self.hlnode, 'name'):
+				self.name = ctx.reserve_name(self.hlnode.name)
+			else:
+				self.name = ctx.tmpname()
 		ctx.add_variable(c.Decl(self.name, c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('PyObject'))), quals=quals, init=c.ID('NULL')), True)
 
 
@@ -41,7 +49,7 @@ class PyObjectLL(LLType):
 
 
 	def set_attr_string(self, ctx, attrname, attrval):
-		tmp = CIntegerType(ctx.tmpname())
+		tmp = CIntegerLL(None)
 		tmp.declare(ctx, init= -1)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
@@ -56,7 +64,7 @@ class PyObjectLL(LLType):
 
 
 	def set_item(self, ctx, key, val):
-		tmp = CIntegerType(ctx.tmpname())
+		tmp = CIntegerLL(None)
 		tmp.declare(ctx, init= -1)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
@@ -205,5 +213,5 @@ class PyObjectLL(LLType):
 		return out
 
 
-from melano.c.types.pytype import PyTypeType
-from melano.c.types.integer import CIntegerType
+from melano.c.types.pytype import PyTypeLL
+from melano.c.types.integer import CIntegerLL

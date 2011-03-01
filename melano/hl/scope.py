@@ -17,14 +17,8 @@ class Scope:
 		self.symbols = OrderedDict()
 		self.owner = owner
 
-		# the name of the global variable used to reference this scope
-		self.ll_scope = None
-
-		# the name of the low-level function used to build/run the scope 
-		self.ll_runner = None
-
 		# will be set with the instance when we declare it
-		self.inst = None
+		self.ll = None
 
 		# Records the scope's local "context" -- e.g. the lowlevel variable scope.
 		# Set in visit_FuncDef during the time we visit our children.
@@ -51,7 +45,9 @@ class Scope:
 
 
 	def add_symbol(self, name:str, init:object=None):
-		self.symbols[name] = Name(name, self)
+		if not init:
+			init = Name(name, self)
+		self.symbols[name] = init
 		return self.symbols[name]
 
 

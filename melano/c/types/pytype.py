@@ -5,5 +5,5 @@ All rights reserved.
 from melano.c.types.pyobject import PyObjectLL
 
 
-class PyTypeType(PyObjectLL):
+class PyTypeLL(PyObjectLL):
 	pass

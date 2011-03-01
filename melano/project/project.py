@@ -188,6 +188,7 @@ class MelanoProject:
 			if self.is_local(mod):
 				visitor.visit(mod.ast)
 		visitor.close()
+
 		return visitor.tu
 
 

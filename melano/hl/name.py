@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.types.hltype import HLType
 from melano.hl.types.pyobject import PyObjectType
 import logging
 
@@ -18,17 +19,6 @@ class Name:
 		self.name = name
 		self.parent = parent
 
-		# a name suitable for use in a c program
-		# 		this gets used for the local identifier for a Name, when such is useful  
-		self.ll_name = self._as_lowlevel(name)
-
-		# this name should be globally unique among the project's modules/scopes
-		#		this name is used for objects that need to be used globally (e.g. functions, modules)
-		if parent and parent.owner:
-			self.global_name = parent.owner.global_name + '_' + self.ll_name
-		else:
-			self.global_name = self.ll_name
-
 		# a name can have a child scope (class/functions, etc)
 		self.scope = None
 
@@ -36,25 +26,40 @@ class Name:
 		self.types = []
 
 		# the ll instance
-		self.inst = None
+		self.ll = None
+
+
+	@property
+	def global_name(self):
+		if self.parent and self.parent.owner:
+			return self.parent.owner.global_name + '.' + self.name
+		return self.name
 
 
 	def get_type(self) -> type:
 		'''
 		Query the type list to find the most appropriate type for this name.
 		'''
-		assert len(self.types) <= 1
-		if len(self.types):
+		# if we have only one type assigned, just use it
+		if len(self.types) == 1:
 			return self.types[0]
-		return PyObjectType
+		# if we have no types, then we just use the most generic possible type
+		if not len(self.types):
+			return PyObjectType()
+
+		# otherwise, we have to find a common base
+		base = self.types[0]
+		for ty in self.types[1:]:
+			if base == ty:
+				continue
+			base = base.common_base_type(ty.__class__)
+
+		#print("RET: {} for {} types".format(base, self.types))
+		return base
 
 
-	def create_instance(self, name:str):
-		'''
-		Instance the type with a name.  Sets the new instance on the 'inst' variable.
-		'''
-		assert not self.inst
-		self.inst = self.get_type()(name)
+	def add_type(self, ty:HLType):
+		self.types.append(ty)
 
 
 	def _as_lowlevel(self, name):

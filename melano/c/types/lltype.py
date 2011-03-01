@@ -6,25 +6,27 @@ from melano.c import ast as c
 
 
 class LLType:
-	def __init__(self, hltype):
+	def __init__(self, hlnode):
 		super().__init__()
-		self.hltype = hltype
+		self.hlnode = hlnode
+		self.hltype = hlnode.get_type() if hlnode else None
+		self.name = None #set when we declare
 
 
 	@staticmethod
 	def capture_error(ctx):
-		filename = ctx._visitor.module.filename
+		filename = ctx._visitor.hl_module.filename
 		try: context = ctx._visitor.scope.owner.name
 		except IndexError: context = '<module>'
 		st = ctx._visitor._current_node.start
 		end = ctx._visitor._current_node.end
 
 		if st[0] == end[0]: # one line only
-			src = ctx._visitor.module.get_source_line(st[0])
+			src = ctx._visitor.hl_module.get_source_line(st[0])
 			rng = (st[1], end[1])
 		else:
 			# if we can't fit the full error context on one line, also print the number of lines longer it goes and the ending column
-			src = ctx._visitor.module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
+			src = ctx._visitor.hl_module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
 			rng = (st[1], len(src))
 		src = src.strip().replace('"', '\\"')
 
