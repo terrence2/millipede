@@ -46,7 +46,14 @@ class PyObjectLL(LLType):
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
-		return tmp
+
+
+	def set_attr(self, ctx, attr, val):
+		tmp = CIntegerLL(None)
+		tmp.declare(ctx._visitor.scope.context, init= -1)
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObjectSetAttr'), c.ExprList(
+															c.ID(self.name), c.ID(attr.name), c.ID(val.name)))))
+		self.fail_if_nonzero(ctx, tmp.name)
 
 
 	def get_item(self, ctx, key, out):

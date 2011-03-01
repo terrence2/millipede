@@ -233,7 +233,7 @@ class Py2C(ASTVisitor):
 		for target in node.targets:
 			if isinstance(target, py.Attribute):
 				o = self.visit(target.value)
-				o.set_attr(self.context, str(target.attr), val)
+				o.set_attr_string(self.context, str(target.attr), val)
 			elif isinstance(target, py.Subscript):
 				o = self.visit(target.value)
 				i = self.visit(target.slice)
@@ -314,7 +314,7 @@ class Py2C(ASTVisitor):
 
 	def visit_Attribute(self, node):
 		if node.ctx == py.Store:
-			raise NotImplementedError("Subscript store needs special casing at assignment site")
+			return self.visit(node.value)
 
 		elif node.ctx == py.Load:
 			# load the attr lhs as normal
@@ -433,7 +433,6 @@ class Py2C(ASTVisitor):
 				expect_kwargs.remove(str(kw.keyword))
 			else:
 				raise NotImplementedError("this arg needs to go in **kwargs")
-			#pdb.set_trace()
 
 		# build the actual arg tuple/dicts
 		args_insts = []
