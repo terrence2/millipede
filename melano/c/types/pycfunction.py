@@ -36,13 +36,23 @@ class PyCFunctionLL(PyObjectLL):
 									init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
 		tu.add_fwddecl(self.c_locals_array)
 
-		# create the c function that will correspond to the py function 
+		# set the calling convention based on our discovered parameters
+		call_type = c.ID('METH_NOARGS')
+		param_list = c.ParamList(
+								c.Decl('self', c.PtrDecl(c.TypeDecl('self', c.IdentifierType('PyObject')))),
+								c.Decl('args', c.PtrDecl(c.TypeDecl('args', c.IdentifierType('PyObject'))))
+								)
+		if not self.hltype.has_noargs:
+			call_type = c.ID('METH_VARARGS')
+		if self.hltype.has_kwargs:
+			call_type = c.BinaryOp('|', c.ID('METH_VARARGS'), c.ID('METH_KEYWORDS'))
+			param_list.params.append(c.Decl('kwargs', c.PtrDecl(c.TypeDecl('kwargs', c.IdentifierType('PyObject')))))
+
+		# create the c function that will correspond to the py function
 		self.c_runner_name = tu.reserve_name(self.hlnode.owner.name + '_runner')
 		self.c_runner_func = c.FuncDef(
 			c.Decl(self.c_runner_name,
-				c.FuncDecl(c.ParamList(
-									c.Decl('self', c.PtrDecl(c.TypeDecl('self', c.IdentifierType('PyObject')))),
-									c.Decl('args', c.PtrDecl(c.TypeDecl('args', c.IdentifierType('PyObject'))))), \
+				c.FuncDecl(param_list, \
 						c.PtrDecl(c.TypeDecl(self.c_runner_name, c.IdentifierType('PyObject')))), quals=['static']),
 			c.Compound()
 		)
@@ -58,7 +68,10 @@ class PyCFunctionLL(PyObjectLL):
 		self.funcdef_name = ctx.reserve_name(self.hlnode.owner.name + '_def')
 		c_docstring = c.Constant('string', PyStringLL.str2c(docstring)) if docstring else c.ID('NULL')
 		ctx.add_variable(c.Decl(self.funcdef_name, c.TypeDecl(self.funcdef_name, c.Struct('PyMethodDef')),
-				init=c.ExprList(c.Constant('string', str(self.hlnode.owner.name)), c.ID(self.c_runner_name), c.ID('METH_VARARGS'), c_docstring)), False)
+				init=c.ExprList(
+							c.Constant('string', str(self.hlnode.owner.name)),
+							c.Cast(c.IdentifierType('PyCFunction'), c.ID(self.c_runner_name)),
+							call_type, c_docstring)), False)
 
 		# create the function pyobject itself
 		self.c_obj_name = self.hlnode.owner.name + "_pycfunc"
@@ -69,11 +82,6 @@ class PyCFunctionLL(PyObjectLL):
 		self.fail_if_null(ctx, self.c_obj_name)
 
 		return self.c_obj
-
-		#FIXME: do we want to pass our own dict as self here?  What is the role for the last param?  Just the module name?
-		#cfunc_inst = PyCFunctionType(funcname.global_name)
-		#cfunc_inst.declare(self.tu, ['static'])
-		#cfunc_inst.new(self.module_func.body, funcdef_name, funcscope.inst, 'NULL')
 
 
 	def set_attr_string(self, ctx, attrname, val):

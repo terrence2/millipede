@@ -6,4 +6,6 @@ from melano.hl.types.pyobject import PyObjectType
 
 
 class PyFunctionType(PyObjectType):
-	pass
+	def __init__(self):
+		self.has_noargs = False
+		self.has_kwargs = False

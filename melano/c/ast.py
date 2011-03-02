@@ -285,7 +285,7 @@ class NamedInitializer(AST):
 class ParamList(AST):
 	_fields = ('params',)
 	def __init__(self, *params):
-		self.params = params
+		self.params = list(params)
 
 
 class PtrDecl(AST):

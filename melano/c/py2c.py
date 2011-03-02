@@ -586,10 +586,20 @@ class Py2C(ASTVisitor):
 				#FIXME: this is only strictly needed if we have a closure, otherwise, we should be able to read out of the args tuple 
 				args_tuple = PyTupleLL(None)
 				args_tuple.name = 'args'
+
 				for i, arg in enumerate(node.args.args):
 					arg_inst = self.visit(arg.arg)
 					args_tuple.get_unchecked(self.context, i, arg_inst)
 					self._store(arg.arg, arg_inst)
+
+				#for i, arg in enumerate(node.args.args[len(node.args.defaults):]):
+				#	arg_inst = self.visit(arg.arg)
+				#	args_tuple.get_unchecked(self.context, i, arg_inst)
+				#	self._store(arg.arg, arg_inst)
+
+				#pdb.set_trace()
+				#for arg in node.args.
+
 			#TODO:
 			#self.visit(node.args.vararg)
 			#self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
@@ -650,7 +660,8 @@ class Py2C(ASTVisitor):
 				tgt = self.visit(name.first())
 
 			assert ref is not None
-			assert ref.modtype != MelanoModule.PROJECT
+			#FIXME: need to implement in-project imports
+			#assert ref.modtype != MelanoModule.PROJECT
 
 			self.comment("Import module {}".format(str(name)))
 			tmp = PyObjectLL(None)

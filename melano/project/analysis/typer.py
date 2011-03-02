@@ -54,3 +54,16 @@ class Typer(ASTVisitor):
 		self.visit(node.right)
 		node.hl = Coerce(Coerce.GENERALIZE, node.left.hl, node.right.hl)
 
+
+
+	def visit_FunctionDef(self, node):
+		ty = node.hl.type
+
+		# check if we need a kwarg field
+		if node.args.defaults or node.args.kwonlyargs or node.args.kwarg:
+			ty.has_kwargs = True
+
+		# check for no-args funcs
+		if not node.args.args and not node.args.vararg and not node.args.kwarg and not node.args.kwonlyargs:
+			ty.has_noargs = True
+
