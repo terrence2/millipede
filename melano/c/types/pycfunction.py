@@ -36,17 +36,11 @@ class PyCFunctionLL(PyObjectLL):
 									init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
 		tu.add_fwddecl(self.c_locals_array)
 
-		# set the calling convention based on our discovered parameters
-		call_type = c.ID('METH_NOARGS')
+		# NOTE: always use kwargs calling convention, because we don't know how external code will call us
 		param_list = c.ParamList(
 								c.Decl('self', c.PtrDecl(c.TypeDecl('self', c.IdentifierType('PyObject')))),
-								c.Decl('args', c.PtrDecl(c.TypeDecl('args', c.IdentifierType('PyObject'))))
-								)
-		if not self.hltype.has_noargs:
-			call_type = c.ID('METH_VARARGS')
-		if self.hltype.has_kwargs:
-			call_type = c.BinaryOp('|', c.ID('METH_VARARGS'), c.ID('METH_KEYWORDS'))
-			param_list.params.append(c.Decl('kwargs', c.PtrDecl(c.TypeDecl('kwargs', c.IdentifierType('PyObject')))))
+								c.Decl('args', c.PtrDecl(c.TypeDecl('args', c.IdentifierType('PyObject')))),
+								c.Decl('kwargs', c.PtrDecl(c.TypeDecl('kwargs', c.IdentifierType('PyObject')))))
 
 		# create the c function that will correspond to the py function
 		self.c_runner_name = tu.reserve_name(self.hlnode.owner.name + '_runner')
@@ -71,7 +65,7 @@ class PyCFunctionLL(PyObjectLL):
 				init=c.ExprList(
 							c.Constant('string', str(self.hlnode.owner.name)),
 							c.Cast(c.IdentifierType('PyCFunction'), c.ID(self.c_runner_name)),
-							call_type, c_docstring)), False)
+							c.BinaryOp('|', c.ID('METH_VARARGS'), c.ID('METH_KEYWORDS')), c_docstring)), False)
 
 		# create the function pyobject itself
 		self.c_obj_name = self.hlnode.owner.name + "_pycfunc"

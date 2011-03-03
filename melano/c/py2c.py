@@ -351,6 +351,7 @@ class Py2C(ASTVisitor):
 		l = self.visit(node.left)
 		r = self.visit(node.right)
 
+		pdb.set_trace()
 		inst = self.create_ll_instance(node.hl)
 		inst.declare(self.context)
 
@@ -387,6 +388,57 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Call(self, node):
+		def _call_remote(self, node, funcinst):
+			# build the arg tuple
+			args_insts = []
+			if node.args:
+				for arg in node.args:
+					idinst = self.visit(arg)
+					idinst = idinst.as_pyobject(self.context)
+					args_insts.append(idinst)
+				for idinst in args_insts:
+					# pytuple pack will steal the ref, but we want to be able to cleanup the node later
+					# note: do this after visiting all other nodes to minimize our probability of leaking the extra ref
+					#FIXME: make it possible for a failure in the tuple packing to free these refs?  Or is this a bad idea
+					#		because a failure halfway through would end up with us double-freeing half of our refs?
+					idinst.incref(self.context)
+			# Note: we always need to pass a tuple as args, even if there is nothing in it
+			args1 = PyTupleLL(None)
+			args1.declare(self.scope.context)
+			args1.pack(self.context, *args_insts)
+
+			# build the keyword dict
+			args2 = None
+			if node.keywords:
+				kw_insts = []
+				for kw in node.keywords:
+					valinst = self.visit(kw.value)
+					valinst = valinst.as_pyobject(self.context)
+					kw_insts.append((str(kw.keyword), valinst))
+				if kw_insts:
+					args2 = PyDictLL(None)
+					args2.declare(self.scope.context)
+					args2.new(self.context)
+					for keyname, valinst in kw_insts:
+						args2.set_item_string(self.context, keyname, valinst)
+
+			# begin call output
+			self.comment('Call function "{}"'.format(str(node.func)))
+
+			# build the output variable
+			rv = PyObjectLL(None)
+			rv.declare(self.scope.context)
+
+			# make the call
+			funcinst.call(self.context, args1, args2, rv)
+
+			# cleanup the args
+			args1.delete(self.context)
+			if args2: args2.delete(self.context)
+
+			return rv
+
+
 		#TODO: direct calling, keywords calling, etc
 		#TODO: track "type" so we can dispatch to PyCFunction_Call or PyFunction_Call instead of PyObject_Call 
 		#TODO: track all call methods (callsite usage types) and see if we can't unpack into a direct c call
@@ -394,12 +446,14 @@ class Py2C(ASTVisitor):
 		# prepare the func name node
 		funcinst = self.visit(node.func)
 
-		# just ensure we always have these nodes for simplicity
-		if not node.args: node.args = []
-		if not node.keywords: node.keywords = []
-
 		# if we are defined locally, we can know the expected calling proc and reorganize our args to it
-		if node.func.hl and node.func.hl.scope:
+		#if node.func.hl and node.func.hl.scope:
+		#	return _call_local(self, node, funcinst)
+		#else:
+		#	return _call_remote(self, node, funcinst)
+		return _call_remote(self, node, funcinst)
+
+		'''			
 			expect_args = node.func.hl.scope.expect_args[:]
 			expect_kwargs = node.func.hl.scope.expect_kwargs[:]
 
@@ -449,6 +503,7 @@ class Py2C(ASTVisitor):
 		args1 = PyTupleLL(None)
 		args1.declare(self.scope.context)
 		args1.pack(self.context, *args_insts)
+		'''
 
 		'''
 		if kw_args:
@@ -461,6 +516,7 @@ class Py2C(ASTVisitor):
 				args2.set_item_string(self.context, str(kw.keyword), val_inst)
 		'''
 
+		'''
 		# begin call output
 		self.comment('Call function "{}"'.format(str(node.func)))
 
@@ -476,6 +532,7 @@ class Py2C(ASTVisitor):
 		#if kw_args: kw_args.delete(self.context)
 
 		return rv
+		'''
 
 
 	def visit_Compare(self, node):
@@ -575,13 +632,15 @@ class Py2C(ASTVisitor):
 		funcobj_inst = inst.declare(self.ll_module, self.tu, docstring)
 
 		with self.new_scope(node.hl, inst.c_runner_func.body):
-			# do any setup needed for function entry
+			# mask these so that we can't use a c-level arg name
 			self.context.reserve_name('self')
 			self.context.reserve_name('args')
+			self.context.reserve_name('kwargs')
 			self.comment('Run function "{}"'.format(str(node.name)))
 			inst.new(self.context)
 
 			# attach all parameters into the local namespace
+			# we can't know the convention the caller used, so this can be quite complex
 			if node.args and node.args.args:
 				#FIXME: this is only strictly needed if we have a closure, otherwise, we should be able to read out of the args tuple 
 				args_tuple = PyTupleLL(None)

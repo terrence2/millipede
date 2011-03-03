@@ -52,6 +52,7 @@ class Typer(ASTVisitor):
 	def visit_BinOp(self, node):
 		self.visit(node.left)
 		self.visit(node.right)
+		print("AT BINOP: {}".format(node))
 		node.hl = Coerce(Coerce.GENERALIZE, node.left.hl, node.right.hl)
 
 

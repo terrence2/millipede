@@ -186,6 +186,7 @@ class MelanoProject:
 		visitor = Py2C()
 		for mod in self.modules.values():
 			if self.is_local(mod):
+				logging.info("Emitting: {}".format(mod.filename))
 				visitor.visit(mod.ast)
 		visitor.close()
 
