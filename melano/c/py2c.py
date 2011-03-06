@@ -629,35 +629,84 @@ class Py2C(ASTVisitor):
 
 		docstring, body = self.split_docstring(node.body)
 		inst = self.create_ll_instance(node.hl)
-		funcobj_inst = inst.declare(self.ll_module, self.tu, docstring)
+		inst.declare_locals(self.tu)
+		inst.declare_pystubfunc(self.tu)
+		# NOTE: we create _all_ functions, even nested/class functions, in the module, instead of their surrounding scope
+		#		so that we don't have to re-create the full infrastructure every time we visit the outer scope 
+		inst.declare_funcdef(self.ll_module.c_builder_func.body, self.tu, docstring)
 
-		with self.new_scope(node.hl, inst.c_runner_func.body):
-			# mask these so that we can't use a c-level arg name
+		# declare the defaults in the module scope
+		with self.module_scope():
+			for default in node.args.defaults + node.args.kw_defaults:
+				inst = self.visit(default)
+				# tie the default into the pycfunc where it needs to be
+
+		# Build the python stub function
+		with self.new_scope(node.hl, inst.c_pystub_func.body):
+			# Attach all parameters and names into the local namespace
+			# We can't know the convention the caller used, so we need to handle all 
+			#  possiblities -- local callers do their own setup and just call the runner.
 			self.context.reserve_name('self')
+
 			self.context.reserve_name('args')
+			args_tuple = PyTupleLL(None)
+			args_tuple.name = 'args'
+			
 			self.context.reserve_name('kwargs')
-			self.comment('Run function "{}"'.format(str(node.name)))
-			inst.new(self.context)
+			kwargs_dict = PyDictLL(None)
+			kwargs_dict.name = 'kwargs'
+			
+			self.comment('Python interface stub function "{}"'.format(str(node.name)))
+			inst.intro(self.context)
 
-			# attach all parameters into the local namespace
-			# we can't know the convention the caller used, so this can be quite complex
-			if node.args and node.args.args:
-				#FIXME: this is only strictly needed if we have a closure, otherwise, we should be able to read out of the args tuple 
-				args_tuple = PyTupleLL(None)
-				args_tuple.name = 'args'
+			# get the number of args
+			c_args_size = CIntegerLL(None)
+			c_args_size.declare(self.scope.context, name='args_size')
+			args_tuple.get_size_unchecked(self.context, c_args_size)
 
-				for i, arg in enumerate(node.args.args):
-					arg_inst = self.visit(arg.arg)
-					args_tuple.get_unchecked(self.context, i, arg_inst)
-					self._store(arg.arg, arg_inst)
+			arg_insts = [None] * len(node.args.args)
+			for i, arg in enumerate(node.args.args):
+				# declare local variable for arg ref
+				arg_insts[i] = self.create_ll_instance(arg.arg.hl)
+				arg_insts[i].declare(self.scope.context)
+				
+				# query if in positional args
+				self.comment("Grab arg {}".format(str(arg.arg)))
+				query_inst = c.If(c.BinaryOp('>', c.ID(c_args_size.name), c.Constant('integer', i)),
+									c.Compound(), c.Compound())
+				self.context.add(query_inst)
+				
+				# get the positional arg
+				with self.new_context(query_inst.iftrue):
+					args_tuple.get_unchecked(self.context, i, arg_insts[i])
+				
+				# get the keyword arg
+				with self.new_context(query_inst.iffalse):
+					kwargs_dict.get_item_string(self.context, str(arg.arg), arg_insts[i])
+					query_default_inst = c.If(c.UnaryOp('!', c.ID(arg_insts[i].name)),
+											c.Compound(), None)
+					self.context.add(query_default_inst)
+					
+					# try loading from defaults
+					default = node.args.defaults[i]
+					if default:
+						with self.new_context(query_default_inst.iftrue):
+							default_inst = None #load this from the pycfunc instace
+							arg_insts[i].assign(self.context, default_inst)
+					else:
+						# emit an error for an unpassed arg
 
-				#for i, arg in enumerate(node.args.args[len(node.args.defaults):]):
-				#	arg_inst = self.visit(arg.arg)
-				#	args_tuple.get_unchecked(self.context, i, arg_inst)
-				#	self._store(arg.arg, arg_inst)
+			return
 
-				#pdb.set_trace()
-				#for arg in node.args.
+			c_i = CIntegerLL(None)
+			c_i.declare(self.context, name='i')
+
+			posargs_iter = c.For(
+					c.Assignment('=', c.ID(c_i.name), c.Constant('integer', 0)),
+					c.BinaryOp('<', c.ID(c_i.name), c.ID(c_args_size.name)),
+					c.UnaryOp('++', c.ID(c_i.name)),
+					c.Compound())
+			self.context.add(posargs_iter)
 
 			#TODO:
 			#self.visit(node.args.vararg)

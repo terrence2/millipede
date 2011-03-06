@@ -112,6 +112,16 @@ class COut(ASTVisitor):
 			self.visit(exp)
 			self.fp.write(', ')
 		self.visit(node.exprs[-1])
+	
+	def visit_For(self, node):
+		self.fp.write('for(')
+		self.visit(node.init)
+		self.fp.write('; ')
+		self.visit(node.cond)
+		self.fp.write('; ')
+		self.visit(node.next)
+		self.fp.write(')')
+		self.visit(node.stmt)
 
 	def visit_FuncCall(self, node):
 		self.visit(node.name)

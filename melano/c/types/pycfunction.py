@@ -16,19 +16,18 @@ class PyCFunctionLL(PyObjectLL):
 		self.c_locals_array = None
 
 		# the ll name and instance representing the c function that runs the python function
-		self.c_runner_name = None
-		self.c_runner_func = None
+		self.c_pystub_name = None
+		self.c_pystub_func = None
 
-		# the name of the struct that defines the function
+		# ethe name of the struct that defines the function
 		self.funcdef_name = None
 
 		# the ll name and instance representing the py callable function object
 		self.c_obj_name = None
 		self.c_obj = None
 
-
-	def declare(self, ll_mod, tu, docstring):
-		# create the locals array
+	
+	def declare_locals(self, tu):
 		self.c_locals_name = tu.reserve_name(self.hlnode.owner.name + '_locals')
 		cnt = self.hlnode.get_locals_count()
 		self.c_locals_array = c.Decl(self.c_locals_name,
@@ -36,6 +35,8 @@ class PyCFunctionLL(PyObjectLL):
 									init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
 		tu.add_fwddecl(self.c_locals_array)
 
+
+	def declare_pystubfunc(self, tu):
 		# NOTE: always use kwargs calling convention, because we don't know how external code will call us
 		param_list = c.ParamList(
 								c.Decl('self', c.PtrDecl(c.TypeDecl('self', c.IdentifierType('PyObject')))),
@@ -43,20 +44,19 @@ class PyCFunctionLL(PyObjectLL):
 								c.Decl('kwargs', c.PtrDecl(c.TypeDecl('kwargs', c.IdentifierType('PyObject')))))
 
 		# create the c function that will correspond to the py function
-		self.c_runner_name = tu.reserve_name(self.hlnode.owner.name + '_runner')
-		self.c_runner_func = c.FuncDef(
-			c.Decl(self.c_runner_name,
+		self.c_pystub_name = tu.reserve_name(self.hlnode.owner.name + '_runner')
+		self.c_pystub_func = c.FuncDef(
+			c.Decl(self.c_pystub_name,
 				c.FuncDecl(param_list, \
-						c.PtrDecl(c.TypeDecl(self.c_runner_name, c.IdentifierType('PyObject')))), quals=['static']),
+						c.PtrDecl(c.TypeDecl(self.c_pystub_name, c.IdentifierType('PyObject')))), quals=['static']),
 			c.Compound()
 		)
-		tu.add_fwddecl(self.c_runner_func.decl)
-		tu.add(self.c_runner_func)
+		tu.add_fwddecl(self.c_pystub_func.decl)
+		tu.add(self.c_pystub_func)
 
-		# NOTE: we create _all_ functions, even nested/class functions, in the module, instead of their surrounding scope
-		#		so that we don't have to re-create the full infrastructure every time we visit the outer scope 
-		ctx = ll_mod.c_builder_func.body
-		ctx.add(c.Comment('Declare Function "{}"'.format(self.hlnode.owner.name)))
+
+	def declare_funcdef(self, ctx, tu, docstring):
+		ctx.add(c.Comment('Declare Python stub function "{}"'.format(self.hlnode.owner.name)))
 
 		# create the function definition structure
 		self.funcdef_name = ctx.reserve_name(self.hlnode.owner.name + '_def')
@@ -64,7 +64,7 @@ class PyCFunctionLL(PyObjectLL):
 		ctx.add_variable(c.Decl(self.funcdef_name, c.TypeDecl(self.funcdef_name, c.Struct('PyMethodDef')),
 				init=c.ExprList(
 							c.Constant('string', str(self.hlnode.owner.name)),
-							c.Cast(c.IdentifierType('PyCFunction'), c.ID(self.c_runner_name)),
+							c.Cast(c.IdentifierType('PyCFunction'), c.ID(self.c_pystub_name)),
 							c.BinaryOp('|', c.ID('METH_VARARGS'), c.ID('METH_KEYWORDS')), c_docstring)), False)
 
 		# create the function pyobject itself
@@ -93,12 +93,12 @@ class PyCFunctionLL(PyObjectLL):
 		#TODO: use a local?
 
 
-	def new(self, ctx):
+	def intro(self, ctx):
 		# fwddecl and init the return value
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
 
-	def emit_outro(self, ctx):
+	def outro(self, ctx):
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):

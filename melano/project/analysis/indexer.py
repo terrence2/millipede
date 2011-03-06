@@ -119,13 +119,9 @@ class Indexer(ASTVisitor):
 			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
 			self.visit(node.args.kwarg)
 
-			# add call conventions to the scope
-			if node.args and node.args.args:
-				for arg in node.args.args:
-					self.context.expect_args.append(str(arg.arg))
-			if node.args and node.args.kwonlyargs:
-				for arg in node.args.kwonlyargs:
-					self.context.expect_kwargs.append(str(arg.arg))
+			# prepend None's to the defaults list so that we can access easily by offset
+			node.args.defaults = [None] * (len(node.args.args) - len(node.args.defaults)) + \
+						node.args.defaults
 
 			self.visit_nodelist(node.body)
 

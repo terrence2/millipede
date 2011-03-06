@@ -16,8 +16,8 @@ class CIntegerLL(LLType):
 		self.is_a_bool = self.hltype.is_a_bool if self.hltype else is_a_bool
 
 
-	def declare(self, ctx, quals=[], init=0):
-		super().declare(ctx, quals, None)
+	def declare(self, ctx, quals=[], init=0, name=None):
+		super().declare(ctx, quals, name)
 		#TODO: specialize for signed and sized ints
 		ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=quals, init=c.Constant('integer', init)), False)
 
