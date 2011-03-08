@@ -47,6 +47,12 @@ class LLType:
 						c.Constant('string', src), c.Constant('integer', rng[0]), c.Constant('integer', rng[1])))
 
 
+	@classmethod
+	def fail(cls, ctx, error):
+		ctx.add(cls.capture_error(ctx))
+		ctx.add(c.Goto('end'))
+
+
 	def fail_if_null(self, ctx, name):
 		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(
 																		self.capture_error(ctx),

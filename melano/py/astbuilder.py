@@ -653,7 +653,6 @@ class PythonASTBuilder:
 
 
 	def handle_parameters(self, arguments_node):
-		'''This should be handle_parameters; Call does not use it.'''
 		assert arguments_node.type == self.syms.parameters
 		children = self.children(arguments_node)
 
@@ -706,7 +705,7 @@ class PythonASTBuilder:
 						defaults.append(default)
 				else:
 					kwonlyargs.append(arg)
-					defaults.append(default)
+					kw_defaults.append(default)
 			#elif arg_type == self.syms.vfpdef:
 			#	assert argument.children[0].type == self.tokens.NAME
 			#	args.append(ast.arg(argument.children[0].value, None, argument))

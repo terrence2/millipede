@@ -34,3 +34,9 @@ class PyDictLL(PyObjectLL):
 		self.fail_if_null(ctx, out.name)
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(out.name)))) # borrowed ref
 
+
+	def get_item_string_nofail(self, ctx, name:str, out:PyObjectLL):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(
+												c.ID(self.name), c.Constant('string', name)))))
+		ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(out.name)))) # borrowed ref
+

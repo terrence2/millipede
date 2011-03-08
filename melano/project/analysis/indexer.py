@@ -119,10 +119,6 @@ class Indexer(ASTVisitor):
 			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
 			self.visit(node.args.kwarg)
 
-			# prepend None's to the defaults list so that we can access easily by offset
-			node.args.defaults = [None] * (len(node.args.args) - len(node.args.defaults)) + \
-						node.args.defaults
-
 			self.visit_nodelist(node.body)
 
 		# insert the assumed return None if we fall off the end without a return

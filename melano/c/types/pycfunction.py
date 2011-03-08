@@ -15,9 +15,26 @@ class PyCFunctionLL(PyObjectLL):
 		self.c_locals_name = None
 		self.c_locals_array = None
 
-		# the ll name and instance representing the c function that runs the python function
+		# the c instantce representing the defaults, for fast access (and since we can't store them on __defaults__ in a PyCFunction)
+		self.c_defaults_name = None
+		self.c_defaults_array = None
+
+		# the c instantce representing the kwdefaults, for fast access (and since we can't store them on __defaults__ in a PyCFunction)
+		self.c_kwdefaults_name = None
+		self.c_kwdefaults_array = None
+		self.c_kwdefaults_map = {}
+
+		# the c instantce representing the annotations, for fast access (and since we can't store them on __defaults__ in a PyCFunction)
+		self.c_annotations_name = None
+		self.c_annotations_dict = None
+
+		# the ll name and instance representing the c function that does arg decoding for python style calls
 		self.c_pystub_name = None
 		self.c_pystub_func = None
+
+		# the ll name and instance representing the c function that runs the python function
+		self.c_runner_name = None
+		self.c_runner_func = None
 
 		# ethe name of the struct that defines the function
 		self.funcdef_name = None
@@ -26,8 +43,8 @@ class PyCFunctionLL(PyObjectLL):
 		self.c_obj_name = None
 		self.c_obj = None
 
-	
-	def declare_locals(self, tu):
+
+	def create_locals(self, tu):
 		self.c_locals_name = tu.reserve_name(self.hlnode.owner.name + '_locals')
 		cnt = self.hlnode.get_locals_count()
 		self.c_locals_array = c.Decl(self.c_locals_name,
@@ -36,7 +53,23 @@ class PyCFunctionLL(PyObjectLL):
 		tu.add_fwddecl(self.c_locals_array)
 
 
-	def declare_pystubfunc(self, tu):
+	def create_defaults(self, tu, cnt):
+		self.c_defaults_name = tu.reserve_name(self.hlnode.owner.name + '_defaults')
+		self.c_defaults_array = c.Decl(self.c_defaults_name,
+									c.ArrayDecl(c.PtrDecl(c.TypeDecl(self.c_defaults_name, c.IdentifierType('PyObject'))), cnt),
+									init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
+		tu.add_fwddecl(self.c_defaults_array)
+
+
+	def create_kwdefaults(self, tu, cnt):
+		self.c_kwdefaults_name = tu.reserve_name(self.hlnode.owner.name + '_kwdefaults')
+		self.c_kwdefaults_array = c.Decl(self.c_kwdefaults_name,
+									c.ArrayDecl(c.PtrDecl(c.TypeDecl(self.c_kwdefaults_name, c.IdentifierType('PyObject'))), cnt),
+									init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
+		tu.add_fwddecl(self.c_kwdefaults_array)
+
+
+	def create_pystubfunc(self, tu):
 		# NOTE: always use kwargs calling convention, because we don't know how external code will call us
 		param_list = c.ParamList(
 								c.Decl('self', c.PtrDecl(c.TypeDecl('self', c.IdentifierType('PyObject')))),
@@ -44,10 +77,10 @@ class PyCFunctionLL(PyObjectLL):
 								c.Decl('kwargs', c.PtrDecl(c.TypeDecl('kwargs', c.IdentifierType('PyObject')))))
 
 		# create the c function that will correspond to the py function
-		self.c_pystub_name = tu.reserve_name(self.hlnode.owner.name + '_runner')
+		self.c_pystub_name = tu.reserve_name(self.hlnode.owner.name + '_pystub')
 		self.c_pystub_func = c.FuncDef(
 			c.Decl(self.c_pystub_name,
-				c.FuncDecl(param_list, \
+				c.FuncDecl(param_list,
 						c.PtrDecl(c.TypeDecl(self.c_pystub_name, c.IdentifierType('PyObject')))), quals=['static']),
 			c.Compound()
 		)
@@ -55,7 +88,33 @@ class PyCFunctionLL(PyObjectLL):
 		tu.add(self.c_pystub_func)
 
 
-	def declare_funcdef(self, ctx, tu, docstring):
+	def create_runnerfunc(self, tu, args, vararg, kwonlyargs, kwarg):
+		args_decls = [c.Decl(str(arg.arg), c.PtrDecl(c.TypeDecl(str(arg.arg), c.IdentifierType('PyObject')))) for arg in args]
+		if vararg:
+			args_decls.append(c.Decl(str(vararg), c.PtrDecl(c.TypeDecl(str(vararg), c.IdentifierType('PyObject')))))
+		kw_decls = [c.Decl(str(arg.arg), c.PtrDecl(c.TypeDecl(str(arg.arg), c.IdentifierType('PyObject')))) for arg in kwonlyargs]
+		if kwarg:
+			args_decls.append(c.Decl(str(kwarg), c.PtrDecl(c.TypeDecl(str(kwarg), c.IdentifierType('PyObject')))))
+
+		param_list = c.ParamList(*(args_decls + kw_decls))
+		self.c_runner_name = tu.reserve_name(self.hlnode.owner.name + '_runner')
+		self.c_runner_func = c.FuncDef(
+			c.Decl(self.c_runner_name,
+				c.FuncDecl(param_list, \
+						c.PtrDecl(c.TypeDecl(self.c_runner_name, c.IdentifierType('PyObject')))), quals=['static']),
+			c.Compound()
+		)
+		tu.add_fwddecl(self.c_runner_func.decl)
+		tu.add(self.c_runner_func)
+
+
+	def call_runnerfunc(self, ctx, args, vararg, kwonlyargs, kwarg):
+		args = [c.ID(str(arg.arg)) for arg in args]
+		kwargs = [c.ID(str(arg.arg)) for arg in kwonlyargs]
+		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.FuncCall(c.ID(self.c_runner_name), c.ExprList(*(args + kwargs)))))
+
+
+	def create_funcdef(self, ctx, tu, docstring):
 		ctx.add(c.Comment('Declare Python stub function "{}"'.format(self.hlnode.owner.name)))
 
 		# create the function definition structure
@@ -93,12 +152,22 @@ class PyCFunctionLL(PyObjectLL):
 		#TODO: use a local?
 
 
-	def intro(self, ctx):
-		# fwddecl and init the return value
+	def stub_intro(self, ctx):
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
 
-	def outro(self, ctx):
+	def stub_outro(self, ctx):
+		ctx.add(c.Label('end'))
+		for name in reversed(ctx.cleanup):
+			ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+		ctx.add(c.Return(c.ID('__return_value__')))
+
+
+	def runner_intro(self, ctx):
+		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+
+
+	def runner_outro(self, ctx):
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):

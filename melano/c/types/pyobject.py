@@ -30,7 +30,7 @@ class PyObjectLL(LLType):
 
 
 	def assign_name(self, ctx, from_var):
-		ctx.add(c.Assignment(' = ', c.ID(self.name), c.ID(from_var.name)))
+		ctx.add(c.Assignment('=', c.ID(self.name), c.ID(from_var.name)))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(self.name))))
 
 

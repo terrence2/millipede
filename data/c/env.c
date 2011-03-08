@@ -33,6 +33,7 @@ void __err_capture__(char *file, int lineno, int clineno, char *context,
 		tb = PyList_New(0);
 		if(!tb)
 			Py_FatalError("Could not create traceback list");
+		Py_INCREF(tb);
 		rv = PyDict_SetItemString(dict, "__melano_traceback__", tb);
 		if(rv == -1)
 			Py_FatalError("Failed to insert traceback into thread state");
@@ -63,7 +64,13 @@ void __err_show_traceback__() {
 
 	cnt = PyList_Size(tb);
 	for(i = cnt - 1; i > -1; i--) {
-		val = PyList_GET_ITEM(tb, i);
+		val = PyList_GetItem(tb, i);
+		if(!val) {
+			Py_FatalError("Failed to get_item in tb list when printing traceback");
+		}
+		if(!PyUnicode_Check(val)) {
+			Py_FatalError("Non-Unicode object in traceback");
+		}
 		PyObject_Print(val, stderr, Py_PRINT_RAW);
 	}
 }
@@ -75,7 +82,7 @@ This is borrowed directly from python's sources.
 
 /* Decode a byte string from the locale encoding with the
    surrogateescape error handler (undecodable bytes are decoded as characters
-   in range U+DC80..U+DCFF). If a byte sequence can be decoded as a surrogate
+   in range U+DC80..U+DC {FF). If a byte sequence can be decoded as a surrogate
    character, escape the bytes using the surrogateescape error handler instead
    of decoding them.
 

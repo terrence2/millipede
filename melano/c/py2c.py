@@ -189,6 +189,21 @@ class Py2C(ASTVisitor):
 		self.context = prior
 
 
+	@contextmanager
+	def module_scope(self):
+		'''Set the scope and context as the module scope/context, no matter what function we are processing.
+			We use this to declare functions, classes etc all at module build time, even nested function/classes.'''
+		prior_scopes = self.scopes
+		prior_context = self.context
+		self.scopes = [self.hl_module]
+		self.context = self.ll_module.c_builder_func.body
+		self.context._visitor = self
+		self.context._tu = self.tu
+		yield
+		self.scopes = prior_scopes
+		self.context = prior_context
+
+
 	@property
 	def scope(self):
 		return self.scopes[-1]
@@ -274,31 +289,11 @@ class Py2C(ASTVisitor):
 		#if tgt:
 		#	tgt.assign_name(self.context, val)
 
-		"""
-		if target.hl.is_global and self.scope != self.globals:
-			self.globals.inst.set_item_string(self.context, str(target), val)
-
-		elif target.hl.is_nonlocal:
-			pos, ctx = self.find_owning_parent_scope(target)
-			if pos >= 0:
-				ctx.inst.set_item_string(self.context, str(target), val)
-			elif pos == -1:
-				raise NotImplementedError('overriding builtin with nonlocal keyword')
-
-		else:
-			#TODO: completely elide this step if we have no closure that could ref vars in this scope
-			#		note: this opt needs to continue always putting things in the global scope
-			self.scope.inst.set_item_string(self.context, str(target), val)
-
-			# also create a node in the local namespace to speed up access to the node
-			if tgt:
-				tgt.assign_name(self.context, val)
-		"""
 
 
 	def _load(self, source):
 		'''
-		source - the underlying name reference that we to provide access to
+		source - the underlying name reference that we need to provide access to
 		'''
 		tmp = PyObjectLL(None)
 		tmp.declare(self.scope.context)
@@ -314,7 +309,17 @@ class Py2C(ASTVisitor):
 
 	def visit_Attribute(self, node):
 		if node.ctx == py.Store:
-			return self.visit(node.value)
+			# load the lhs object into the local c scope
+			if isinstance(node.value, py.Name):
+				lhs = self._load(node.value)
+			else:
+				lhs = self.visit(node.value)
+
+			# load the attr off of the lhs, for use as a storage target
+			inst = PyObjectLL(None)
+			inst.declare(self.scope.context)
+			lhs.get_attr_string(self.context, str(node.attr), inst)
+			return inst
 
 		elif node.ctx == py.Load:
 			# load the attr lhs as normal
@@ -325,7 +330,6 @@ class Py2C(ASTVisitor):
 			tmp = PyObjectLL(None)
 			tmp.declare(self.scope.context)
 			inst.get_attr_string(self.context, str(node.attr), tmp)
-
 			return tmp
 
 		else:
@@ -351,7 +355,6 @@ class Py2C(ASTVisitor):
 		l = self.visit(node.left)
 		r = self.visit(node.right)
 
-		pdb.set_trace()
 		inst = self.create_ll_instance(node.hl)
 		inst.declare(self.context)
 
@@ -624,22 +627,42 @@ class Py2C(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
-		#TODO: keyword functions and other call types
+		#FIXME: PyCFunction cannot take an attr for __defaults__, __kwdefaults__, or __annotations__!?!
 		#TODO: do we want to do cleanup of our locals dicts in main before PyFinalize()?
 
+		# declare
 		docstring, body = self.split_docstring(node.body)
 		inst = self.create_ll_instance(node.hl)
-		inst.declare_locals(self.tu)
-		inst.declare_pystubfunc(self.tu)
-		# NOTE: we create _all_ functions, even nested/class functions, in the module, instead of their surrounding scope
-		#		so that we don't have to re-create the full infrastructure every time we visit the outer scope 
-		inst.declare_funcdef(self.ll_module.c_builder_func.body, self.tu, docstring)
+		inst.create_locals(self.tu)
+		if node.args.defaults:
+			inst.create_defaults(self.tu, len(node.args.defaults))
+		if node.args.kw_defaults:
+			inst.create_kwdefaults(self.tu, len(node.args.kw_defaults))
+		#inst.create_annotations(self.tu)
+		inst.create_pystubfunc(self.tu)
 
-		# declare the defaults in the module scope
+		# the runner func needs the full param list
+		inst.create_runnerfunc(self.tu, node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
+
+		# NOTE: we create _all_ functions, even nested/class functions, in the module, instead of their surrounding scope
+		#		so that we don't have to re-create the full infrastructure every time we visit the outer scope
 		with self.module_scope():
-			for default in node.args.defaults + node.args.kw_defaults:
-				inst = self.visit(default)
-				# tie the default into the pycfunc where it needs to be
+			self.comment("Build function {}".format(str(node.name)))
+			pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
+
+			# attach defaults to the pycfunction instance
+			if node.args.defaults:
+				for i, default in enumerate(node.args.defaults):
+					default_inst = self.visit(default)
+					self.context.add(c.Assignment('=', c.ArrayRef(inst.c_defaults_name, i), c.ID(default_inst.name)))
+
+			# attach kwonly defaults to the pycfunction instance
+			if node.args.kw_defaults:
+				for i, default in enumerate(node.args.kw_defaults):
+					default_inst = self.visit(default)
+					self.context.add(c.Assignment('=', c.ArrayRef(inst.c_kwdefaults_name, i), c.ID(default_inst.name)))
+
+			# attach annotations to the pycfunction instance
 
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
@@ -651,75 +674,109 @@ class Py2C(ASTVisitor):
 			self.context.reserve_name('args')
 			args_tuple = PyTupleLL(None)
 			args_tuple.name = 'args'
-			
+
 			self.context.reserve_name('kwargs')
 			kwargs_dict = PyDictLL(None)
 			kwargs_dict.name = 'kwargs'
-			
+
 			self.comment('Python interface stub function "{}"'.format(str(node.name)))
-			inst.intro(self.context)
+			inst.stub_intro(self.context)
 
-			# get the number of args
-			c_args_size = CIntegerLL(None)
-			c_args_size.declare(self.scope.context, name='args_size')
-			args_tuple.get_size_unchecked(self.context, c_args_size)
+			# load positional and normal keyword args
+			if node.args.args:
+				c_args_size = CIntegerLL(None)
+				c_args_size.declare(self.scope.context, name='args_size')
+				args_tuple.get_size_unchecked(self.context, c_args_size)
+				arg_insts = [None] * len(node.args.args)
+				for i, arg in enumerate(node.args.args):
+					# declare local variable for arg ref
+					arg_insts[i] = self.create_ll_instance(arg.arg.hl)
+					arg_insts[i].declare(self.scope.context)
 
-			arg_insts = [None] * len(node.args.args)
-			for i, arg in enumerate(node.args.args):
-				# declare local variable for arg ref
-				arg_insts[i] = self.create_ll_instance(arg.arg.hl)
-				arg_insts[i].declare(self.scope.context)
-				
-				# query if in positional args
-				self.comment("Grab arg {}".format(str(arg.arg)))
-				query_inst = c.If(c.BinaryOp('>', c.ID(c_args_size.name), c.Constant('integer', i)),
-									c.Compound(), c.Compound())
-				self.context.add(query_inst)
-				
-				# get the positional arg
-				with self.new_context(query_inst.iftrue):
-					args_tuple.get_unchecked(self.context, i, arg_insts[i])
-				
-				# get the keyword arg
-				with self.new_context(query_inst.iffalse):
-					kwargs_dict.get_item_string(self.context, str(arg.arg), arg_insts[i])
-					query_default_inst = c.If(c.UnaryOp('!', c.ID(arg_insts[i].name)),
-											c.Compound(), None)
-					self.context.add(query_default_inst)
-					
-					# try loading from defaults
-					default = node.args.defaults[i]
-					if default:
+					# query if in positional args
+					self.comment("Grab arg {}".format(str(arg.arg)))
+					query_inst = c.If(c.BinaryOp('>', c.ID(c_args_size.name), c.Constant('integer', i)),
+										c.Compound(), c.Compound())
+					self.context.add(query_inst)
+
+					# get the positional arg
+					with self.new_context(query_inst.iftrue):
+						args_tuple.get_unchecked(self.context, i, arg_insts[i])
+
+					# get the keyword arg
+					with self.new_context(query_inst.iffalse):
+						have_kwarg = c.If(c.ID('kwargs'), c.Compound(), None)
+						self.context.add(have_kwarg)
+						with self.new_context(have_kwarg.iftrue):
+							kwargs_dict.get_item_string_nofail(self.context, str(arg.arg), arg_insts[i])
+
+						query_default_inst = c.If(c.UnaryOp('!', c.ID(arg_insts[i].name)), c.Compound(), None)
+						self.context.add(query_default_inst)
+						# try loading from defaults
 						with self.new_context(query_default_inst.iftrue):
-							default_inst = None #load this from the pycfunc instace
-							arg_insts[i].assign(self.context, default_inst)
-					else:
-						# emit an error for an unpassed arg
+							#TODO: only get the defaults / kwdefaults once
+							kwstartoffset = len(node.args.args) - len(node.args.defaults)
+							if i >= kwstartoffset:
+								default_offset = i - kwstartoffset
+								self.context.add(c.Assignment('=', c.ID(arg_insts[i].name), c.ArrayRef(inst.c_defaults_name, default_offset)))
+							else:
+								# emit an error for an unpassed arg
+								PyObjectLL.fail(self.context, 'Missing arg {}'.format(str(arg)))
 
-			return
+				# check if we have extra args remaining that need to go into varargs and kwargs
+				#have_extra_args = c.If(c.BinaryOp('>', c.ID(c_args_size.name), c.Constant('integer', len(node.args.args))))
+				#self.context.add(have_extra_args)
+				#with self.new_context(have_extra_args.iftrue):
+				#	# collect 
+				#
+				#	varargs_inst = PyListLL(None)
+				#	args_tuple.slice(
 
-			c_i = CIntegerLL(None)
-			c_i.declare(self.context, name='i')
 
-			posargs_iter = c.For(
-					c.Assignment('=', c.ID(c_i.name), c.Constant('integer', 0)),
-					c.BinaryOp('<', c.ID(c_i.name), c.ID(c_args_size.name)),
-					c.UnaryOp('++', c.ID(c_i.name)),
-					c.Compound())
-			self.context.add(posargs_iter)
+			# load all keyword only args
+			#		PyObjectLL.fail(self.context, 'Require kwargs for function with kwonlyargs')
+			if node.args.kwonlyargs:
+				kwarg_insts = [None] * len(node.args.kwonlyargs)
+				for i, arg in enumerate(node.args.kwonlyargs):
+					kwarg_insts[i] = self.create_ll_instance(arg.arg.hl)
+					kwarg_insts[i].declare(self.scope.context)
 
-			#TODO:
-			#self.visit(node.args.vararg)
-			#self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
-			#self.visit(node.args.kwarg)
+				# ensure we have kwargs at all
+				have_kwarg = c.If(c.ID('kwargs'), c.Compound(), c.Compound())
+				self.context.add(have_kwarg)
+				with self.new_context(have_kwarg.iftrue):
+					# load all kwarg insts
+					for i, arg in enumerate(node.args.kwonlyargs):
+						kwargs_dict.get_item_string_nofail(self.context, str(arg.arg), kwarg_insts[i])
+						need_default = c.If(c.UnaryOp('!', c.ID(kwarg_insts[i].name)), c.Compound(), None)
+						self.context.add(need_default)
+						with self.new_context(need_default.iftrue):
+							self.context.add(c.Assignment('=', c.ID(kwarg_insts[i].name), c.ArrayRef(inst.c_kwdefaults_name, i)))
+				with self.new_context(have_kwarg.iffalse):
+					for i, arg in enumerate(node.args.kwonlyargs):
+						self.context.add(c.Assignment('=', c.ID(kwarg_insts[i].name), c.ArrayRef(inst.c_kwdefaults_name, i)))
 
-			# write the body
-			self.visit_nodelist(body)
+			#TODO: add unused args to varargs and pass if needed or error if not
+			#TODO: add unused kwargs to varargs and pass if needed or error if not
+
+			# call the runner func
+			inst.call_runnerfunc(self.context, node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
+			with self.new_scope(self.scope, inst.c_runner_func.body):
+				inst.runner_intro(self.context)
+
+				# attach args to locals
+				for i, arg in enumerate(node.args.args or []):
+					inst.set_attr_string(self.context, str(arg.arg), arg_insts[i])
+				for i, arg in enumerate(node.args.kwonlyargs or []):
+					inst.set_attr_string(self.context, str(arg.arg), kwarg_insts[i])
+
+				self.visit_nodelist(node.body)
+				inst.runner_outro(self.context)
 
 			# emit cleanup and return code
-			inst.emit_outro(self.context)
+			inst.stub_outro(self.context)
 
-		self._store(node.name, funcobj_inst)
+		self._store(node.name, pycfunc)
 
 		return inst
 
