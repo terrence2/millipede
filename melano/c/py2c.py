@@ -10,6 +10,7 @@ from melano.c.types.lltype import LLType
 from melano.c.types.pybool import PyBoolLL
 from melano.c.types.pybytes import PyBytesLL
 from melano.c.types.pycfunction import PyCFunctionLL
+from melano.c.types.pyclass import PyClassLL
 from melano.c.types.pydict import PyDictLL
 from melano.c.types.pyfloat import PyFloatLL
 from melano.c.types.pyinteger import PyIntegerLL
@@ -25,6 +26,7 @@ from melano.hl.types.hltype import HLType
 from melano.hl.types.integer import CIntegerType
 from melano.hl.types.pybool import PyBoolType
 from melano.hl.types.pybytes import PyBytesType
+from melano.hl.types.pyclass import PyClassType
 from melano.hl.types.pydict import PyDictType
 from melano.hl.types.pyfloat import PyFloatType
 from melano.hl.types.pyfunction import PyFunctionType
@@ -81,6 +83,7 @@ class Py2C(ASTVisitor):
 		PyObjectType: PyObjectLL,
 		PyModuleType: PyModuleLL,
 		PyFunctionType: PyCFunctionLL,
+		PyClassType: PyClassLL,
 		PyBoolType: PyBoolLL,
 		PyBytesType: PyBytesLL,
 		PyDictType: PyDictLL,
@@ -114,13 +117,13 @@ class Py2C(ASTVisitor):
 		self.tu.add_include(c.Comment(' ***Includes*** '))
 		self.tu.add_include(c.Include('Python.h', True))
 		self.tu.add_include(c.Include('data/c/env.h', False))
+		self.tu.add_include(c.Include('data/c/melanofuncobject.h', False))
 
 		# add common names
-		self.tu.reserve_name('builtins')
-		self.tu.reserve_name('None')
-		self.tu.add_fwddecl(c.Comment(' ***Global Vars*** '))
-		self.tu.add_fwddecl(c.Decl('builtins', c.PtrDecl(c.TypeDecl('builtins', c.IdentifierType('PyObject'))), ['static']))
-		self.tu.add_fwddecl(c.Decl('None', c.PtrDecl(c.TypeDecl('None', c.IdentifierType('PyObject'))), ['static']))
+		self.builtins = PyObjectLL(None)
+		self.builtins.declare(self.tu, quals=['static'], name='builtins')
+		self.none = PyObjectLL(None)
+		self.none.declare(self.tu, quals=['static'], name='None')
 
 		# the main function -- handles init, cleanup, and error printing at top level
 		self.tu.reserve_name('main')
@@ -281,6 +284,15 @@ class Py2C(ASTVisitor):
 		scope = target.hl.parent
 		scope.ll.set_attr_string(self.context, str(target), val)
 
+		# Note: some nodes do not get a visit_Name pass, since we don't have any preceding rhs for the assignment
+		#		where we can correctly or easily get the type, 'as' or 'class', etc.  In these cases, we can just retrofit the
+		#		value we actually created into the ll target for the hl slot so that future users of the hl instance will be able
+		#		to find the correct ll name to use, rather than re-creating it when that users happens to visit_Name on the
+		#		node with a missing ll slot.
+		if not scope.symbols[str(target)].ll:
+			scope.symbols[str(target)].ll = val
+
+
 		#TODO: destructuring assignment
 		#target.hl.parent.inst.set_item_string(self.context, str(target), val)
 
@@ -426,7 +438,7 @@ class Py2C(ASTVisitor):
 						args2.set_item_string(self.context, keyname, valinst)
 
 			# begin call output
-			self.comment('Call function "{}"'.format(str(node.func)))
+			self.comment('do call "{}"'.format(str(node.func)))
 
 			# build the output variable
 			rv = PyObjectLL(None)
@@ -446,6 +458,9 @@ class Py2C(ASTVisitor):
 		#TODO: track "type" so we can dispatch to PyCFunction_Call or PyFunction_Call instead of PyObject_Call 
 		#TODO: track all call methods (callsite usage types) and see if we can't unpack into a direct c call
 
+		# begin call output
+		self.comment('Call function "{}"'.format(str(node.func)))
+
 		# prepare the func name node
 		funcinst = self.visit(node.func)
 
@@ -456,86 +471,73 @@ class Py2C(ASTVisitor):
 		#	return _call_remote(self, node, funcinst)
 		return _call_remote(self, node, funcinst)
 
-		'''			
-			expect_args = node.func.hl.scope.expect_args[:]
-			expect_kwargs = node.func.hl.scope.expect_kwargs[:]
 
-		# otherwise, we have to trust that the caller is doing it right
-		else:
-			expect_args = [str(arg) for arg in node.args]
-			expect_kwargs = [str(kw.keyword) for kw in node.keywords]
+	def visit_ClassDef(self, node):
+		# declare
+		docstring, body = self.split_docstring(node.body)
+		inst = self.create_ll_instance(node.hl)
+		inst.create_builderfunc(self.tu)
+		pyclass_inst = inst.declare_pyclass(self.tu)
 
-		# reorganize the passed args into the required format
-		pos_args = []
-		kw_args = []
-		for arg in node.args:
-			# fill into positional if we expect them there
-			if len(expect_args):
-				pos_args.append(arg)
-				expect_args = expect_args[1:]
-			# otherwise, fill left to right into keyworked args 
-			else:
-				assert len(expect_kwargs), "Not enough args passed to function: {}".format(str(node.func))
-				kw_args.append(arg)
-				expect_kwargs = expect_kwargs[1:]
-		pos_args = pos_args + [None] * (len(expect_args) - len(pos_args)) #extend with None's so we can have random insertion
-		for kw in node.keywords:
-			# we need to match any passed keyword args up to remaining positional args, in the correct position
-			if expect_args and str(kw.keyword) in expect_args:
-				offset = expect_args.index(str(kw.keyword))
-				pos_args[offset] = kw.value
-				del expect_args[offset]
-			elif str(kw.keyword) in expect_kwargs:
-				kw_args.append(kw)
-				expect_kwargs.remove(str(kw.keyword))
-			else:
-				raise NotImplementedError("this arg needs to go in **kwargs")
+		# build the class setup -- this has the side-effect of building all other module-level stuff before
+		#	we do the class setup
+		with self.new_scope(node.hl, inst.c_builder_func.body):
+			self.context.reserve_name('self')
+			self_inst = PyObjectLL(None)
+			self_inst.name = 'self'
+			self.context.reserve_name('args')
+			args_tuple = PyTupleLL(None)
+			args_tuple.name = 'args'
+			self.context.reserve_name('kwargs')
+			kwargs_dict = PyDictLL(None)
+			kwargs_dict.name = 'kwargs'
 
-		# build the actual arg tuple/dicts
-		args_insts = []
-		for arg in pos_args:
-			idinst = self.visit(arg)
-			idinst = idinst.as_pyobject(self.context)
-			args_insts.append(idinst)
-		for idinst in args_insts:
-			# pytuple pack will steal the ref, but we want to be able to cleanup the node later
-			# note: do this after visiting all other nodes to minimize our probability of leaking the extra ref
-			#FIXME: make it possible for a failure in the tuple packing to free these refs?  Or is this a bad idea
-			#		because a failure halfway through would end up with us double-freeing half of our refs?
-			idinst.incref(self.context)
-		args1 = PyTupleLL(None)
-		args1.declare(self.scope.context)
-		args1.pack(self.context, *args_insts)
-		'''
+			# unpack the namespace dict that we will be writing to
+			namespace_inst = PyDictLL(None)
+			namespace_inst.declare(self.scope.context, name='namespace')
+			args_tuple.get_unchecked(self.context, 0, namespace_inst)
+			namespace_inst.fail_if_null(self.context, namespace_inst.name)
+			namespace_inst.incref(self.context)
 
-		'''
-		if kw_args:
-			args2 = PyDictType(self.scope.context.tmpname())
-			args2.declare(self.scope.context)
-			args2.new(self.context)
-			for kw in kw_args:
-				print("AT KW: {}:{}".format(str(kw.keyword), str(kw.value)))
-				val_inst = self.visit(kw.value)
-				args2.set_item_string(self.context, str(kw.keyword), val_inst)
-		'''
+			inst.set_namespace(namespace_inst)
 
-		'''
-		# begin call output
-		self.comment('Call function "{}"'.format(str(node.func)))
+			inst.intro(self.context, docstring, self.hl_module.owner.name)
+			self.visit_nodelist(body)
+			inst.outro(self.context)
 
-		# build the output variable
-		rv = PyObjectLL(None)
-		rv.declare(self.scope.context)
 
-		# make the call
-		funcinst.call(self.context, args1, None, rv)
+		# load the build_class method from builtins
+		with self.module_scope():
+			self.comment("Build class {}".format(str(node.name)))
 
-		# cleanup the args
-		args1.delete(self.context)
-		#if kw_args: kw_args.delete(self.context)
+			# TODO: i don't think we need to run the store code for this?
+			#name_inst = self.visit(node.name)
 
-		return rv
-		'''
+			# create the name ref string
+			c_name_str = PyStringLL(None)
+			c_name_str.declare(self.scope.context, name=str(node.name) + '_name')
+			c_name_str.new(self.context, str(node.name))
+
+			pyfunc = inst.create_builder_funcdef(self.context, self.tu)
+
+			build_class_inst = PyObjectLL(None)
+			build_class_inst.declare(self.scope.context)
+			self.builtins.get_attr_string(self.context, '__build_class__', build_class_inst)
+
+			base_insts = []
+			if node.bases:
+				for b in node.bases:
+					base_insts.append(self.visit(b))
+
+			args = PyTupleLL(None)
+			args.declare(self.scope.context)
+			args.pack(self.context, pyfunc, c_name_str, *base_insts)
+			build_class_inst.call(self.context, args, node.kwargs, pyclass_inst)
+
+
+
+		# store the name in the scope where we are "created"
+		self._store(node.name, pyclass_inst)
 
 
 	def visit_Compare(self, node):
@@ -669,8 +671,6 @@ class Py2C(ASTVisitor):
 			# Attach all parameters and names into the local namespace
 			# We can't know the convention the caller used, so we need to handle all 
 			#  possiblities -- local callers do their own setup and just call the runner.
-			self.context.reserve_name('self')
-
 			self.context.reserve_name('args')
 			args_tuple = PyTupleLL(None)
 			args_tuple.name = 'args'
@@ -723,6 +723,7 @@ class Py2C(ASTVisitor):
 								# emit an error for an unpassed arg
 								PyObjectLL.fail(self.context, 'Missing arg {}'.format(str(arg)))
 
+				#TODO: fill overflow into varargs and kwargs vars, if the func has them, otherwise error
 				# check if we have extra args remaining that need to go into varargs and kwargs
 				#have_extra_args = c.If(c.BinaryOp('>', c.ID(c_args_size.name), c.Constant('integer', len(node.args.args))))
 				#self.context.add(have_extra_args)
@@ -762,18 +763,29 @@ class Py2C(ASTVisitor):
 			# call the runner func
 			inst.call_runnerfunc(self.context, node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
 			with self.new_scope(self.scope, inst.c_runner_func.body):
+				# create insts for the args we passed
+				for arg in node.args.args or []:
+					arg_inst = self.create_ll_instance(arg.arg.hl)
+					arg_inst.name = str(arg.arg)
+					inst.set_attr_string(self.context, str(arg.arg), arg_inst)
+				for arg in node.args.kwonlyargs or []:
+					arg_inst = self.create_ll_instance(arg.arg.hl)
+					arg_inst.name = str(arg.arg)
+					inst.set_attr_string(self.context, str(arg.arg), arg_inst)
+
 				inst.runner_intro(self.context)
 
 				# attach args to locals
-				for i, arg in enumerate(node.args.args or []):
-					inst.set_attr_string(self.context, str(arg.arg), arg_insts[i])
-				for i, arg in enumerate(node.args.kwonlyargs or []):
-					inst.set_attr_string(self.context, str(arg.arg), kwarg_insts[i])
+				#for i, arg in enumerate(node.args.args or []):
+				#	inst.set_attr_string(self.context, str(arg.arg), arg_insts[i])
+				#for i, arg in enumerate(node.args.kwonlyargs or []):
+				#	inst.set_attr_string(self.context, str(arg.arg), kwarg_insts[i])
 
 				self.visit_nodelist(node.body)
 				inst.runner_outro(self.context)
 
 			# emit cleanup and return code
+			#FIXME: clean up locals!
 			inst.stub_outro(self.context)
 
 		self._store(node.name, pycfunc)

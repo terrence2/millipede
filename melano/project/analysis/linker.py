@@ -39,6 +39,17 @@ class Linker(ASTVisitor):
 	#		node.hl = ref
 
 
+	def visit_ClassDef(self, node):
+		self.visit(node.name)
+		self.visit_nodelist(node.bases)
+		self.visit_nodelist(node.keywords)
+		self.visit(node.starargs)
+		self.visit(node.kwargs)
+		with self.scope(node.hl):
+			self.visit_nodelist(node.body)
+		self.visit_nodelist(node.decorator_list)
+
+
 	def visit_FunctionDef(self, node):
 		self.visit(node.returns) # return annotation
 		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations

@@ -5,6 +5,6 @@ All rights reserved.
 from melano.hl.types.pyobject import PyObjectType
 
 
-class PyFunctionType(PyObjectType):
+class PyClassType(PyObjectType):
 	def __init__(self):
 		pass

@@ -1,4 +1,3 @@
-#fail
 class Foo:
 	FOO = 0
 	print(FOO)

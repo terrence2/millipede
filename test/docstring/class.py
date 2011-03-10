@@ -1,4 +1,3 @@
-#fail
 class Foo:
 	'a'
 print(Foo.__doc__)

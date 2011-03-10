@@ -1,5 +1,4 @@
-#fail
-def foo(a, b, c, d, e, f):
+def foo(a:int, b:int, c:int, d:int, e:int, f:int) -> int:
 	print(a, b, c, d, e, f)
 	return a + b + c + d + e + f
 rv = foo(1, 2, 3, 4, 5, 6)

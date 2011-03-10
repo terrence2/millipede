@@ -1,8 +1,7 @@
-#fail
 def foo():
 	class Foo:
 		print('a')
-	return Foo()
+	Foo()
 	print('b')
 foo()
 #out: a

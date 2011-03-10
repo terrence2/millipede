@@ -10,7 +10,9 @@ sys.path = [TESTDIR] + sys.path
 from melano.c.out import COut
 from melano.project.project import MelanoProject
 import pytest
+import re
 import subprocess
+
 
 
 
@@ -47,7 +49,7 @@ def test_all(testfile, root):
 
 def filter_output(data:bytes) -> [str]:
 	out = data.strip().decode('UTF-8').split('\n') # turn into text lines
-	return [o.strip() for o in out if o] # remove empty elements
+	return [o.strip() for o in out if o and not re.match(r'\[\d+ refs\]', o)] # remove empty elements
 
 
 def load_expectations(testfile):

@@ -1,4 +1,3 @@
-#fail
 class Foo:
 	class Bar:
 		def foo(self):

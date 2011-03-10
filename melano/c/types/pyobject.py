@@ -13,8 +13,7 @@ class PyObjectLL(LLType):
 
 
 	def delete(self, ctx):
-		ctx.add(c.FuncCall(c.ID('Py_DECREF'), c.ID(self.name)))
-		ctx.add(c.Assignment('=', c.ID(self.name), c.ID('NULL')))
+		ctx.add(c.FuncCall(c.ID('Py_CLEAR'), c.ID(self.name)))
 
 
 	def incref(self, ctx):

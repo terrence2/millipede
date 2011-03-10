@@ -15,9 +15,6 @@ class MelanoFunction(Scope):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
-		self.expect_args = [] # [str]
-		self.expect_kwargs = [] # [str] -- these are ordered because keyworded args can get set from positional args in the caller
-
 		# flags
 		self.is_generator = False # set by yield stmt when indexing
 
