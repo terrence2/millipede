@@ -21,6 +21,8 @@ from melano.c.types.pyset import PySetLL
 from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
 from melano.c.types.pytype import PyTypeLL
+from melano.hl.class_ import MelanoClass
+from melano.hl.function import MelanoFunction
 from melano.hl.module import MelanoModule
 from melano.hl.types.hltype import HLType
 from melano.hl.types.integer import CIntegerType
@@ -43,7 +45,8 @@ import itertools
 import pdb
 import tc
 
-HLType
+class InvalidScope(Exception):
+	'''Raised when a keyword or operation appears in a place where it should not appear.'''
 
 
 class Py2C(ASTVisitor):
@@ -110,6 +113,11 @@ class Py2C(ASTVisitor):
 		self.globals = None
 		self.scopes = []
 
+		# There are a number of constructs that change the flow of control in python in ways that are not directly
+		# 		representable in c without goto.  We use the flow-control list to allow constructs that change the flow of
+		#		control to work together to create a correct goto-web.
+		self.flowcontrol = []
+
 		# the main unit where we put top-level entries
 		self.tu = c.TranslationUnit()
 
@@ -149,7 +157,7 @@ class Py2C(ASTVisitor):
 
 		# the low-level statment emission context... e.g. the Compound for functions, ifs, etc.
 		self.context = self.main.body
-		self.context._visitor = self
+		self.context.visitor = self
 
 		# the module we are currently processing
 		self.module = None
@@ -175,16 +183,16 @@ class Py2C(ASTVisitor):
 	def new_scope(self, scope, ctx):
 		self.scopes.append(scope)
 		scope.context = ctx # set the scope's low-level context
-		with self.new_context(ctx):
-			yield
+		with self.new_label('end'):
+			with self.new_context(ctx):
+				yield
 		self.scopes.pop()
 
 
 	@contextmanager
 	def new_context(self, ctx):
 		'''Sets a new context (e.g. C-level {}), without adjusting the python scope or the c scope-context'''
-		ctx._visitor = self # give low-level access to high-level data for printing error messages
-		ctx._tu = self.tu
+		ctx.visitor = self # give low-level access to high-level data for printing error messages
 
 		prior = self.context
 		self.context = ctx
@@ -200,11 +208,17 @@ class Py2C(ASTVisitor):
 		prior_context = self.context
 		self.scopes = [self.hl_module]
 		self.context = self.ll_module.c_builder_func.body
-		self.context._visitor = self
-		self.context._tu = self.tu
+		self.context.visitor = self
 		yield
 		self.scopes = prior_scopes
 		self.context = prior_context
+
+
+	@contextmanager
+	def new_label(self, label_name:str):
+		self.flowcontrol.append(label_name)
+		yield
+		self.flowcontrol.pop()
 
 
 	@property
@@ -233,41 +247,30 @@ class Py2C(ASTVisitor):
 		return inst
 
 
-	def find_owning_parent_scope(self, node):
-		name = str(node)
-		pos = len(self.scopes) - 1
-		current = self.scopes[pos]
-		while not current.owns_name(name):
-			pos -= 1
-			current = self.scopes[pos]
-			if pos < 0:
-				break
-		return pos, current
+	def find_nearest_class_scope(self, err=''):
+		for s in reversed(self.scopes):
+			if isinstance(s, MelanoClass):
+				return s
+		raise InvalidScope(err)
+
+	def find_nearest_function_scope(self, err=''):
+		for s in reversed(self.scopes):
+			if isinstance(s, MelanoFunction):
+				return s
+		raise InvalidScope(err)
+
+	def find_nearest_method_scope(self, err=''):
+		for s in reversed(self.scopes):
+			if isinstance(s, MelanoFunction):
+				if isinstance(s.owner.scope, MelanoClass):
+					return s
+		raise InvalidScope(err)
 
 
-	def visit_Assign(self, node):
-		self.comment("Assign: {} = {}".format([str(t) for t in node.targets], str(node.value)))
-		val = self.visit(node.value)
-		for target in node.targets:
-			if isinstance(target, py.Attribute):
-				o = self.visit(target.value)
-				o.set_attr_string(self.context, str(target.attr), val)
-			elif isinstance(target, py.Subscript):
-				o = self.visit(target.value)
-				i = self.visit(target.slice)
-				o.set_item(self.context, i, val)
-			elif isinstance(target, py.Name):
-				tgt = self.visit(target)
-				self._store(target, val)
-			else:
-				raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
-
-
-	def visit_Index(self, node):
-		#NOTE: Pass through index values... not sure why python ast wraps these rather than just having a value.
-		node.hl = node.value.hl
-		node.hl.ll = self.visit(node.value)
-		return node.hl.ll
+	def raise_exception(self):
+		# exceptions need to follow proper flow control....
+		#FIXME: make exceptions work
+		return c.Goto(self.flowcontrol[-1])
 
 
 	def _store(self, target, val):
@@ -317,6 +320,24 @@ class Py2C(ASTVisitor):
 		else:
 			self.ll_module.get_attr_string(self.context, str(source), tmp)
 		return tmp
+
+
+	def visit_Assign(self, node):
+		self.comment("Assign: {} = {}".format([str(t) for t in node.targets], str(node.value)))
+		val = self.visit(node.value)
+		for target in node.targets:
+			if isinstance(target, py.Attribute):
+				o = self.visit(target.value)
+				o.set_attr_string(self.context, str(target.attr), val)
+			elif isinstance(target, py.Subscript):
+				o = self.visit(target.value)
+				i = self.visit(target.slice)
+				o.set_item(self.context, i, val)
+			elif isinstance(target, py.Name):
+				tgt = self.visit(target)
+				self._store(target, val)
+			else:
+				raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
 
 
 	def visit_Attribute(self, node):
@@ -403,7 +424,27 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Call(self, node):
+		def _call_super(self, node, funcinst):
+			# get the class type and the instance
+			cls = self.find_nearest_class_scope(err='super must be called in a class context: {}'.format(node.start))
+			fn = self.find_nearest_method_scope(err='super must be called in a method context: {}'.format(node.start))
+
+			args = PyTupleLL(None)
+			args.declare(self.scope.context, name='__auto_super_call_args')
+			args.pack(self.context, cls.ll.c_obj, c.ArrayRef(fn.ll.c_locals_name, 0))
+
+			# do the actual call
+			rv = PyObjectLL(None)
+			rv.declare(self.scope.context)
+			funcinst.call(self.context, args, None, rv)
+			return rv
+
+
 		def _call_remote(self, node, funcinst):
+			# if we are calling super with no args, we need to provide them, since this is the framework's responsibility
+			if node.func.hl and node.func.hl.name == 'super' and not node.args:
+				return _call_super(self, node, funcinst)
+
 			# build the arg tuple
 			args_insts = []
 			if node.args:
@@ -424,8 +465,8 @@ class Py2C(ASTVisitor):
 
 			# build the keyword dict
 			args2 = None
+			kw_insts = []
 			if node.keywords:
-				kw_insts = []
 				for kw in node.keywords:
 					valinst = self.visit(kw.value)
 					valinst = valinst.as_pyobject(self.context)
@@ -440,11 +481,9 @@ class Py2C(ASTVisitor):
 			# begin call output
 			self.comment('do call "{}"'.format(str(node.func)))
 
-			# build the output variable
+			# make the call
 			rv = PyObjectLL(None)
 			rv.declare(self.scope.context)
-
-			# make the call
 			funcinst.call(self.context, args1, args2, rv)
 
 			# cleanup the args
@@ -865,8 +904,6 @@ class Py2C(ASTVisitor):
 				_import(self, node, alias.name)
 
 
-
-
 	def visit_ImportFrom(self, node):
 		# import the module
 		modname = '.' * node.level + str(node.module)
@@ -895,6 +932,13 @@ class Py2C(ASTVisitor):
 				self._store(alias.name, val)
 
 
+	def visit_Index(self, node):
+		#NOTE: Pass through index values... not sure why python ast wraps these rather than just having a value.
+		node.hl = node.value.hl
+		node.hl.ll = self.visit(node.value)
+		return node.hl.ll
+
+
 	def visit_Module(self, node):
 		# we need the toplevel available to all children so that we can do lookups for globals
 		self.hl_module = node.hl
@@ -905,28 +949,31 @@ class Py2C(ASTVisitor):
 
 		# set the initial context
 		with self.new_context(self.ll_module.c_builder_func.body):
-			# setup the module
-			self.ll_module.return_existing(self.context)
-			self.comment('Create module "{}" as "{}"'.format(self.hl_module.name, self.hl_module.owner.name))
-			self.ll_module.new(self.context)
-			self.ll_module.get_dict(self.context)
+			with self.new_label('end'):
+				# setup the module
+				self.ll_module.return_existing(self.context)
+				self.comment('Create module "{}" as "{}"'.format(self.hl_module.name, self.hl_module.owner.name))
+				self.ll_module.new(self.context)
+				self.ll_module.get_dict(self.context)
 
-			# load and attach special attributes to the module dict
-			self.ll_module.set_initial_string_attribute(self.context, '__name__', self.hl_module.owner.name)
-			self.ll_module.set_initial_string_attribute(self.context, '__file__', self.hl_module.filename)
-			docstring, body = self.split_docstring(node.body)
-			self.ll_module.set_initial_string_attribute(self.context, '__doc__', docstring)
+				self.ll_module.intro(self.context)
 
-			# visit all children
-			with self.global_scope(self.hl_module):
-				# record the top-level context in the scope, so we can declare toplevel variables when in a sub-contexts
-				self.scope.context = self.context
+				# load and attach special attributes to the module dict
+				self.ll_module.set_initial_string_attribute(self.context, '__name__', self.hl_module.owner.name)
+				self.ll_module.set_initial_string_attribute(self.context, '__file__', self.hl_module.filename)
+				docstring, body = self.split_docstring(node.body)
+				self.ll_module.set_initial_string_attribute(self.context, '__doc__', docstring)
 
 				# visit all children
-				self.visit_nodelist(body)
+				with self.global_scope(self.hl_module):
+					# record the top-level context in the scope, so we can declare toplevel variables when in a sub-contexts
+					self.scope.context = self.context
+
+					# visit all children
+					self.visit_nodelist(body)
 
 			# cleanup and return
-			self.ll_module.emit_outro(self.context)
+			self.ll_module.outro(self.context)
 
 		# add the function call to the main to set the module's global name
 		#FIXME: this will load all modules at startup time, and only fetch existing references at runtime... this is a fairly
@@ -953,67 +1000,6 @@ class Py2C(ASTVisitor):
 		# if we are loading a name, we have to search for the name's location
 		elif node.ctx == py.Load:
 			return self._load(node)
-			'''
-			# Since we already indexed, we know what can be found in our local scopes.  Look up the scope
-			# chain until we find a local with the given name.  If we hit scope[0] (globals), then emit code to 
-			# try globals, then fall back to builtins, unless static_globals is set, in which case, we can continue
-			# all the way to the top and only fallback to builtins.  Of course, if the name is present in the top
-			# scope, then we can just access the name locally.
-			name = str(node)
-
-			#FIXME: this needs to abort properly on use before set errors, rather than looking up-scope
-
-			# if the node is declared and stored into from this scope; and there is no closure which could modify us;
-			#	and the scope is not globals; then we can use it directly
-			if node.hl.inst and not self.scope.has_closure() and self.scope != self.globals and self.scope.owns_name(name) and self.scope.context.has_name(node.hl.inst.name):
-				return node.hl.inst
-
-			# find the proper scope for access
-			lvl, scope = self.find_owning_parent_scope(node)
-
-			# TODO: if not in globals, check against builtins and just go there if we are opt_static_globals
-
-			if lvl <= 0:
-				#NOTE: we have to create fully generic code to access globals and builtins, since they can change under us
-				tmp = self.scope.context.tmpname()
-				inst = PyObjectType(tmp)
-				inst.declare(self.scope.context)
-
-				# note; unless we declare that module globals are static (and thus fully discovered and unoverridable, we need
-				#		to check them first... the best op in this case is checking if the override is likely or not.
-				if name in PY_BUILTINS:
-					self.comment('Load (probable) builtin "{}"'.format(name))
-					mode = 'likely'
-				else:
-					self.comment('Load (probable) global "{}"'.format(name))
-					mode = 'unlikely'
-
-				# access globals first, fall back to builtins -- remember to ref the global if we get it, since dict get item borrows
-				self.context.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(self.globals.ll_scope), c.Constant('string', name)))))
-				self.context.add(c.If(c.FuncCall(c.ID(mode), c.ExprList(c.UnaryOp('!', c.ID(tmp)))),
-						c.Compound(
-							c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyObject_GetAttrString'),
-																c.ExprList(c.ID('builtins'), c.Constant('string', name)))),
-							c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(tmp)))), c.Compound(c.Goto('end')), None)
-						),
-						c.Compound(
-							c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(tmp)))
-						)))
-				inst.fail_if_null(self.context, tmp)
-
-				return inst
-			else:
-				#For higher non-local scopes, we can access the scope dict directly
-				assert scope.has_name(name)
-				tmp = self.scope.context.tmpname()
-				inst = node.hl.get_type()(tmp)
-				inst.declare(self.scope.context)
-				scope.inst.get_item_string(self.context, name, inst)
-				if node.hl.inst is None:
-					node.hl.inst = inst
-
-			return node.hl.inst
-			'''
 
 
 	def visit_Num(self, node):
@@ -1024,8 +1010,9 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Raise(self, node):
-		#FIXME: re-raise existing context if node.exc is not present
+		self.comment('raise')
 
+		#FIXME: re-raise existing context if node.exc is not present
 		inst = self.visit(node.exc)
 		'''
 		if(PyObject_IsInstance(inst.name, PyType_Type)) {
@@ -1046,18 +1033,68 @@ class Py2C(ASTVisitor):
 			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(ty_inst.name), c.ID(inst.name))))
 		self.context.add(LLType.capture_error(self.context))
 		self.context.add(if_stmt)
-		self.context.add(c.Goto('end'))
+
+		exc_info_0, exc_info_1, exc_info_2 = None, None, None
+		def _fwddecl():
+			nonlocal exc_info_0, exc_info_1, exc_info_2
+			if exc_info_0 is not None: return
+			exc_info_0, exc_info_1, exc_info_2 = PyObjectLL(None), PyObjectLL(None), PyObjectLL(None)
+			exc_info_0.declare(self.scope.context)
+			exc_info_1.declare(self.scope.context)
+			exc_info_2.declare(self.scope.context)
+
+		for label in reversed(self.flowcontrol):
+			if label.startswith('forelse') or label.startswith('whileelse'):
+				#TODO: check if this is totally correct
+				continue # skip, since, return supercedes no-break in this case
+			elif label.startswith('except'):
+				#FIXME: make this work
+				pass
+			elif label.startswith('finally'):
+				# Store current exception indicator during finally processing
+				_fwddecl()
+				self.context.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
+																		c.UnaryOp('&', c.ID(exc_info_0.name)),
+																		c.UnaryOp('&', c.ID(exc_info_1.name)),
+																		c.UnaryOp('&', c.ID(exc_info_2.name)))))
+				lbl = self.scope.get_label('return_from_finally')
+				self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(lbl))))
+				self.context.add(c.Goto(label))
+				self.context.add(c.Label(lbl))
+				# restore error indicator
+				#TODO: handle a second exception that occurs during finally processing
+				self.context.add(c.FuncCall(c.ID('PyErr_Restore'), c.ExprList(
+															c.ID(exc_info_0.name), c.ID(exc_info_1.name), c.ID(exc_info_2.name))))
+			elif label == 'end':
+				self.context.add(c.Goto('end'))
+				break
+			else:
+				raise NotImplementedError("Unknown flowcontrol label in return statement: {}".format(label))
 
 
 	def visit_Return(self, node):
+		# get the return value for when we exit
 		if node.value:
-			# return a specific value
 			inst = self.visit(node.value)
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
-			self.context.add(c.Goto('end'))
 		else:
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
-			self.context.add(c.Goto('end'))
+
+		# if there are finally statements between us and a clean exit, we need to run those in order
+		for label in reversed(self.flowcontrol):
+			if label.startswith('forelse') or label.startswith('whileelse') or label.startswith('except'):
+				#TODO: check if this is totally correct
+				continue # skip, since, return supercedes no-break in this case
+			elif label.startswith('finally'):
+				lbl = self.scope.get_label('return_from_finally')
+				self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(lbl))))
+				self.context.add(c.Goto(label))
+				self.context.add(c.Label(lbl))
+			elif label == 'end':
+				self.context.add(c.Goto('end'))
+				break
+			else:
+				raise NotImplementedError("Unknown flowcontrol label in return statement: {}".format(label))
 
 
 	def visit_Set(self, node):
@@ -1075,6 +1112,21 @@ class Py2C(ASTVisitor):
 		inst.declare(self.scope.context)
 		inst.new(self.context, PyStringLL.str2c(node.s))
 		return inst
+
+	def visit_TryExcept(self, node):
+		pdb.set_trace()
+
+	def visit_TryFinally(self, node):
+		# add flow-control so we jump to the finally
+		lbl = self.scope.get_label('finally')
+		with self.new_label(lbl):
+			self.visit_nodelist(node.body)
+
+		self.context.add(c.Label(lbl))
+		self.visit_nodelist(node.finalbody)
+
+		# if the top-level needs control back to complete, it will set __jmp_ctx__
+		self.context.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
 
 
 	def visit_Tuple(self, node):

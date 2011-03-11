@@ -112,7 +112,7 @@ class COut(ASTVisitor):
 			self.visit(exp)
 			self.fp.write(', ')
 		self.visit(node.exprs[-1])
-	
+
 	def visit_For(self, node):
 		self.fp.write('for(')
 		self.visit(node.init)
@@ -134,7 +134,12 @@ class COut(ASTVisitor):
 		self.visit(node.body)
 
 	def visit_Goto(self, node):
-		self.fp.write('goto ' + node.name)
+		# Note: computed goto's need to visit the name
+		if isinstance(node.name, c.AST):
+			self.fp.write('goto ')
+			self.visit(node.name)
+		else:
+			self.fp.write('goto ' + node.name)
 
 	def visit_ID(self, node):
 		self.fp.write(node.name)

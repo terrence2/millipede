@@ -77,8 +77,7 @@ class Compound(AST):
 		self.tmpcount = itertools.count()
 
 		# track the underlying converter visitor, so we can get to high-level state
-		self._visitor = None
-		self._tu = None
+		self.visitor = None
 
 
 	def tmp_pyobject(self):
@@ -101,7 +100,7 @@ class Compound(AST):
 		global name, only the local one we are aliasing.  This, of course, breaks down if we happen
 		to alias with one of our internal names, which is why we have this particular indirection.
 		'''
-		tu = self._tu
+		tu = self.visitor.tu
 		cnt = 0
 		nm = name
 		while nm in self.names or (tu and nm in tu.names) or nm in C_KEYWORDS:

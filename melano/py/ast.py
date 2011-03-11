@@ -393,7 +393,8 @@ class Attribute(expr):
 
 	def set_context(self, ctx):
 		self.ctx = ctx
-		self.value.set_context(ctx)
+		#NOTE: the lhs of an attribute is _always_ context load
+		#self.value.set_context(ctx)
 
 	def __str__(self):
 		return str(self.value) + '.' + str(self.attr)

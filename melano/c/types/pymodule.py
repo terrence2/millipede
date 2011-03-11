@@ -50,9 +50,6 @@ class PyModuleLL(PyObjectLL):
 
 
 	def new(self, ctx):
-		# fwddecl and init the return value
-		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
-
 		# create the module in the creation function
 		ctx.add(c.Assignment('=', c.ID(self.ll_mod.name), c.FuncCall(c.ID('PyModule_New'), c.ExprList(c.Constant('string', self.hlnode.name)))))
 		self.fail_if_null(ctx, self.ll_mod.name)
@@ -75,7 +72,12 @@ class PyModuleLL(PyObjectLL):
 		self.ll_dict.set_item_string(ctx, name, ps)
 
 
-	def emit_outro(self, ctx):
+	def intro(self, ctx):
+		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+		ctx.add_variable(c.Decl('__jmp_ctx__', c.PtrDecl(c.TypeDecl('__jmp_ctx__', c.IdentifierType('void'))), init=c.ID('NULL')), False)
+
+
+	def outro(self, ctx):
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.ll_mod.name)))
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):

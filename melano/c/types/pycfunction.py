@@ -164,6 +164,7 @@ class PyCFunctionLL(PyObjectLL):
 
 	def runner_intro(self, ctx):
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+		ctx.add_variable(c.Decl('__jmp_ctx__', c.PtrDecl(c.TypeDecl('__jmp_ctx__', c.IdentifierType('void'))), init=c.ID('NULL')), False)
 
 
 	def runner_outro(self, ctx):

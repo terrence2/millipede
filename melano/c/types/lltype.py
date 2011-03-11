@@ -14,7 +14,7 @@ class LLType:
 
 
 	def declare(self, ctx, quals=[], name=None):
-		assert isinstance(ctx, c.TranslationUnit) or not ctx._visitor.scopes or ctx._visitor.scope.context == ctx
+		assert isinstance(ctx, c.TranslationUnit) or not ctx.visitor.scopes or ctx.visitor.scope.context == ctx
 		assert self.name is None # we can only declare once
 		if name:
 			self.name = ctx.reserve_name(name)
@@ -27,18 +27,18 @@ class LLType:
 
 	@staticmethod
 	def capture_error(ctx):
-		filename = ctx._visitor.hl_module.filename
-		try: context = ctx._visitor.scope.owner.name
+		filename = ctx.visitor.hl_module.filename
+		try: context = ctx.visitor.scope.owner.name
 		except IndexError: context = '<module>'
-		st = ctx._visitor._current_node.start
-		end = ctx._visitor._current_node.end
+		st = ctx.visitor._current_node.start
+		end = ctx.visitor._current_node.end
 
 		if st[0] == end[0]: # one line only
-			src = ctx._visitor.hl_module.get_source_line(st[0])
+			src = ctx.visitor.hl_module.get_source_line(st[0])
 			rng = (st[1], end[1])
 		else:
 			# if we can't fit the full error context on one line, also print the number of lines longer it goes and the ending column
-			src = ctx._visitor.hl_module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
+			src = ctx.visitor.hl_module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
 			rng = (st[1], len(src))
 		src = src.strip().replace('"', '\\"')
 
@@ -56,16 +56,16 @@ class LLType:
 	def fail_if_null(self, ctx, name):
 		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(
 																		self.capture_error(ctx),
-																		c.Goto('end')), None))
+																		ctx.visitor.raise_exception()), None))
 
 
 	def fail_if_nonzero(self, ctx, name):
 		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(name)))), c.Compound(
 																		self.capture_error(ctx),
-																		c.Goto('end')), None))
+																		ctx.visitor.raise_exception()), None))
 
 
 	def fail_if_negative(self, ctx, name):
 		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('>', c.Constant('integer', 0), c.ID(name)))), c.Compound(
 																		self.capture_error(ctx),
-																		c.Goto('end')), None))
+																		ctx.visitor.raise_exception()), None))

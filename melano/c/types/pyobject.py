@@ -41,7 +41,7 @@ class PyObjectLL(LLType):
 
 	def set_attr_string(self, ctx, attrname, attrval):
 		tmp = CIntegerLL(None)
-		tmp.declare(ctx._visitor.scope.context, init= -1)
+		tmp.declare(ctx.visitor.scope.context, init= -1)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
@@ -49,7 +49,7 @@ class PyObjectLL(LLType):
 
 	def set_attr(self, ctx, attr, val):
 		tmp = CIntegerLL(None)
-		tmp.declare(ctx._visitor.scope.context, init= -1)
+		tmp.declare(ctx.visitor.scope.context, init= -1)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObjectSetAttr'), c.ExprList(
 															c.ID(self.name), c.ID(attr.name), c.ID(val.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
@@ -63,7 +63,7 @@ class PyObjectLL(LLType):
 
 	def set_item(self, ctx, key, val):
 		tmp = CIntegerLL(None)
-		tmp.declare(ctx._visitor.scope.context, init= -1)
+		tmp.declare(ctx.visitor.scope.context, init= -1)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
@@ -168,7 +168,7 @@ class PyObjectLL(LLType):
 
 	def rich_compare_bool(self, ctx, rhs, opid):
 		out = CIntegerLL(None)
-		out.declare(ctx._visitor.scope.context)
+		out.declare(ctx.visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_RichCompareBool'), c.ExprList(
 																				c.ID(self.name), c.ID(rhs.name), c.ID(opid)))))
 		self.fail_if_negative(ctx, out.name)
@@ -177,7 +177,7 @@ class PyObjectLL(LLType):
 
 	def sequence_contains(self, ctx, item):
 		out = CIntegerLL(None)
-		out.declare(ctx._visitor.scope.context)
+		out.declare(ctx.visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_Contains'), c.ExprList(
 																				c.ID(self.name), c.ID(item.name)))))
 		self.fail_if_negative(ctx, out.name)
@@ -186,7 +186,7 @@ class PyObjectLL(LLType):
 
 	def is_(self, ctx, other):
 		out = CIntegerLL(None)
-		out.declare(ctx._visitor.scope.context)
+		out.declare(ctx.visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.BinaryOp('==', c.ID(self.name), c.ID(other.name))))
 		return out
 
@@ -204,7 +204,7 @@ class PyObjectLL(LLType):
 
 	def is_instance(self, ctx, type_id):
 		out = CIntegerLL(None)
-		out.declare(ctx._visitor.scope.context)
+		out.declare(ctx.visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_IsInstance'), c.ExprList(
 																				c.ID(self.name), type_id))))
 		self.fail_if_negative(ctx, out.name)

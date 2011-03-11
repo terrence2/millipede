@@ -82,7 +82,7 @@ class PyClassLL(PyObjectLL):
 
 		# set the docstring
 		ds = PyStringLL(None)
-		ds.declare(ctx._visitor.scope.context)
+		ds.declare(ctx.visitor.scope.context)
 		if docstring:
 			ds.new(ctx, docstring)
 		else:
@@ -91,7 +91,7 @@ class PyClassLL(PyObjectLL):
 
 		# set the module name
 		ds = PyStringLL(None)
-		ds.declare(ctx._visitor.scope.context)
+		ds.declare(ctx.visitor.scope.context)
 		if module_name:
 			ds.new(ctx, module_name)
 			self.c_namespace_dict.set_item_string(ctx, '__module__', ds)

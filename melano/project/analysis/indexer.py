@@ -156,10 +156,14 @@ class Indexer(ASTVisitor):
 					logging.info("Skipping missing: {}".format(str(alias.name)))
 					self.missing.add(str(alias.name))
 			else:
-				self.visit(alias.name)
 				if isinstance(alias.name, py.Attribute):
+					# NOTE: this is the one funky instance where the lhs of an attribute is a Store, rather than a Load
+					#		so we just adjust it manually here
+					alias.name.first().set_context(py.Store)
+					self.visit(alias.name)
 					sym = alias.name.first().hl
 				else:
+					self.visit(alias.name)
 					sym = alias.name.hl
 				try:
 					sym.scope = self.module.refs[str(alias.name)]

@@ -8,9 +8,18 @@ from melano.c.types.pyobject import PyObjectLL
 
 class PyTupleLL(PyObjectLL):
 	def pack(self, ctx, *to_pack):
-		ids_to_pack = [c.ID(inst.name) if inst is not None else c.ID('None') for inst in to_pack]
+		ids_to_pack = []
+		for inst in to_pack:
+			if isinstance(inst, PyObjectLL):
+				ids_to_pack.append(c.ID(inst.name))
+			elif isinstance(inst, c.AST):
+				ids_to_pack.append(inst)
+			elif inst is None:
+				ids_to_pack.append(c.ID('None'))
+			else:
+				raise ValueError('unrecognized type to pack in PyTupleLL.pack: {}'.format(inst))
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyTuple_Pack'), c.ExprList(
-																							c.Constant('integer', len(ids_to_pack)), *ids_to_pack))))
+																						c.Constant('integer', len(ids_to_pack)), *ids_to_pack))))
 		self.fail_if_null(ctx, self.name)
 
 

@@ -6,6 +6,7 @@ from collections import OrderedDict
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
 from melano.hl.types.pydict import PyDictType
+import itertools
 import logging
 
 
@@ -23,6 +24,10 @@ class Scope:
 		# Records the scope's local "context" -- e.g. the lowlevel variable scope.
 		# Set in visit_FuncDef during the time we visit our children.
 		self.context = None
+
+		# Keep track of how many labels we have used per prefix, so that we can
+		#		ensure that each label we create is unique.
+		self.labels = {}
 
 
 	def lookup(self, name:str) -> Name:
@@ -42,6 +47,12 @@ class Scope:
 			if sym.scope:
 				return True
 		return False
+
+
+	def get_label(self, prefix):
+		if prefix not in self.labels:
+			self.labels[prefix] = itertools.count()
+		return prefix + str(next(self.labels[prefix]))
 
 
 	def add_symbol(self, name:str, init:object=None):
