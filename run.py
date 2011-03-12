@@ -22,12 +22,6 @@ def main():
 			project.build('test.c')
 		return
 
-
-	project = MelanoProject('zeuss', programs=['format'], roots=[os.path.expanduser('~/Projects/zeuss')])
-	project.configure(limit=os.path.expanduser('~/Projects/zeuss') + '/format.py')
-	project.build('test.c')
-
-
 	#app = MelanoApplication(project, sys.argv)
 	#signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c
 	#return app.exec_()
