@@ -50,22 +50,25 @@ class LLType:
 	@classmethod
 	def fail(cls, ctx, error):
 		ctx.add(cls.capture_error(ctx))
-		ctx.add(c.Goto('end'))
+		ctx.visitor.raise_exception(ctx)
 
 
 	def fail_if_null(self, ctx, name):
-		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(
-																		self.capture_error(ctx),
-																		ctx.visitor.raise_exception()), None))
+		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None)
+		ctx.add(check)
+		check.iftrue.add(self.capture_error(ctx))
+		ctx.visitor.raise_exception(check.iftrue)
 
 
 	def fail_if_nonzero(self, ctx, name):
-		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(name)))), c.Compound(
-																		self.capture_error(ctx),
-																		ctx.visitor.raise_exception()), None))
+		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(name)))), c.Compound(), None)
+		ctx.add(check)
+		check.iftrue.add(self.capture_error(ctx))
+		ctx.visitor.raise_exception(check.iftrue)
 
 
 	def fail_if_negative(self, ctx, name):
-		ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('>', c.Constant('integer', 0), c.ID(name)))), c.Compound(
-																		self.capture_error(ctx),
-																		ctx.visitor.raise_exception()), None))
+		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('>', c.Constant('integer', 0), c.ID(name)))), c.Compound(), None)
+		ctx.add(check)
+		check.iftrue.add(self.capture_error(ctx))
+		ctx.visitor.raise_exception(check.iftrue)

@@ -273,6 +273,21 @@ class Indexer(ASTVisitor):
 		node.hl = Constant(PyStringType())
 
 
+	def visit_TryExcept(self, node):
+		self.visit_nodelist(node.body)
+		for handler in node.handlers:
+			if handler.name:
+				name = str(handler.name)
+				if name not in self.context.symbols:
+					sym = self.context.add_symbol(name)
+					handler.name.hl = sym
+				# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
+				if not handler.name.hl:
+					handler.name.hl = self.context.lookup(name)
+			#NOTE: don't bother visiting the exception type, because we know it is a Load
+			self.visit_nodelist(handler.body)
+
+
 	def visit_Tuple(self, node):
 		node.hl = Constant(PyTupleType())
 		self.visit_nodelist(node.elts)

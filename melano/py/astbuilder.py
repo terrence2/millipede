@@ -458,17 +458,18 @@ class PythonASTBuilder:
 	def handle_except_clause(self, exc, body):
 		'''except_clause: 'except' [test ['as' NAME]]'''
 		test = None
-		target = None
+		name = None
 		suite = self.handle_suite(body)
-		child_count = len(exc.children)
+		children = self.children(exc)
+		child_count = len(children)
 		if child_count >= 2:
-			test = self.handle_expr(exc.children[1])
+			test = self.handle_expr(children[1])
 		if child_count == 4:
-			target = exc.children[3]
+			target = children[3]
+			assert children[2].type == self.tokens.NAME and children[2].value == 'as'
 			assert target.type == self.tokens.NAME
-			#target = self.handle_expr(target_child)
-			#self.set_context(target, ast.Store)
-		return ast.excepthandler(test, target, suite, exc)
+			name = ast.Name(target.value, ast.Store, target)
+		return ast.excepthandler(test, name, suite, exc)
 
 
 	def handle_try_stmt(self, try_node):

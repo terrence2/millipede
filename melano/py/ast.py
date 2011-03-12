@@ -97,7 +97,7 @@ class comprehension(AST):
 
 #| excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)
 class excepthandler(AST):
-	_fields = ('type', 'body')
+	_fields = ('type', 'name', 'body')
 	__slots__ = ('type', 'name', 'body')
 	def __init__(self, type_:expr, name:str, body:[stmt], *args, **kwargs):
 		super().__init__(*args, **kwargs)

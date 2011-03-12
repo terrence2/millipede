@@ -1,3 +1,4 @@
+import sys
 def foo():
 	try:
 		print('a')
@@ -6,7 +7,11 @@ def foo():
 	finally:
 		print('finally')
 	print('do not show!')
-foo()
+
+try:
+	foo()
+except:
+	pass
+
 #out: a
 #out: finally
-#returncode: 1

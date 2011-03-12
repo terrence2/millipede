@@ -31,14 +31,6 @@ class Linker(ASTVisitor):
 		self.context = prior
 
 
-	#def visit_Attribute(self, node):
-	#	# look up the attribute type and propagate it to a reference on the top-level attribute node
-	#	if node.ctx == py.Load:
-	#		self.visit(node.value)
-	#		ref = node.value.hl.reference_attribute(str(node.attr))
-	#		node.hl = ref
-
-
 	def visit_ClassDef(self, node):
 		self.visit(node.name)
 		self.visit_nodelist(node.bases)
@@ -108,98 +100,15 @@ class Linker(ASTVisitor):
 			node.hl = ref
 
 
-	'''
-	def visit_Module(self, node):
-		node.hl = self.module
+	def visit_TryExcept(self, node):
 		self.visit_nodelist(node.body)
-
-
-	def visit_ImportFrom(self, node):
-		# find the module
-		modname = '.' * node.level + str(node.module)
-		mod = self.module.refs[modname]
-		if mod is None: return
-
-		#print("import from: {}".format(mod.filename))
-		for alias in node.names:
-			assert not isinstance(alias.name, ast.Attribute)
-			name = str(alias.name)
-			if name == '*':
-				for n, ref in mod.lookup_star().items():
-					if n not in self.context.names:
-						self.context.names[n] = ref
+		# do lookup on exception type's here
+		for handler in node.handlers:
+			if handler.type:
+				sym = self.context.lookup(str(handler.type))
+				ref = self.context.add_reference(sym)
+				handler.type.hl = ref
 			else:
-				if alias.asname:
-					asname = str(alias.asname)
-				else:
-					asname = name
-				if self.project.is_local(mod):
-					if asname not in self.context.names:
-						try:
-							ref = mod.lookup_name(name)
-							self.context.names[asname] = ref
-						except KeyError:
-							try:
-								# the name could also be a sub-module under the module
-								ref = self.project.find_module(modname + '.' + name, self)
-								self.context.names[asname] = ref
-							except KeyError:
-								if not mod.filename.endswith('.py'):
-									print("SKIPPING NAME: {} in {}".format(name, mod.filename))
-								else:
-									import pdb; pdb.set_trace()
-				else:
-					self.context.names[asname] = ForeignObject(asname)
-
-
-	def visit_ClassDef(self, node):
-		self.visit_nodelist(node.bases)
-		self.visit_nodelist(node.keywords)
-		self.visit(node.starargs)
-		self.visit(node.kwargs)
-		with self.scope(node.hl):
-			self.visit_nodelist(node.body)
-		self.visit_nodelist(node.decorator_list)
-
-
-	def visit_FunctionDef(self, node):
-		self.visit(node.returns) # return annotation
-		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
-		self.visit(node.args.varargannotation) # *args annotation
-		self.visit_nodelist_field(node.args.kwonlyargs, 'annotation') # kwargs annotation
-		self.visit(node.args.kwargannotation) # **args annotation
-		self.visit_nodelist(node.args.defaults) # positional arg default values
-		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
-
-		with self.scope(node.hl):
-			# arg name defs are inside the func
-			self.visit_nodelist_field(node.args.args, 'arg')
-			self.visit(node.args.vararg)
-			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
-			self.visit(node.args.kwarg)
-
-			self.visit_nodelist(node.body)
-
-		self.visit_nodelist(node.decorator_list)
-
-
-	def visit_Name(self, node):
-		if node.ctx == ast.Load:
-			ref = self.context.lookup(str(node))
-			node.hl = ref
-			#print("VISIT: {} -> {} -> {}".format(str(node), type(ref), node.hl))
-
-
-	def visit_Attribute(self, node):
-		if node.ctx == ast.Load:
-			self.visit(node.value)
-			lhs = node.value.hl
-			if isinstance(lhs, MelanoModule):
-				if self.project.is_local(lhs):
-					node.hl = lhs.lookup(node.attr)
-				else:
-					node.hl = ForeignObject(node.attr)
-			else:
-				# NOTE: we only care about cross-module linkage at this point
-				pass
-	'''
+				assert handler is node.handlers[-1], "default 'except' must be last"
+			# NOTE: don't bother visiting the name, since we know it is a Store
+			self.visit_nodelist(handler.body)

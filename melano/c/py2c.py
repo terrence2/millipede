@@ -41,6 +41,7 @@ from melano.hl.types.pystring import PyStringType
 from melano.hl.types.pytuple import PyTupleType
 from melano.lang.visitor import ASTVisitor
 from melano.py import ast as py
+from tc import Nonable
 import itertools
 import pdb
 import tc
@@ -232,13 +233,45 @@ class Py2C(ASTVisitor):
 			self.context.add(c.Comment(cmt))
 
 
-	def split_docstring(self, nodes:[py.AST]) -> (tc.Nonable(str), [py.AST]):
+	def split_docstring(self, nodes:[py.AST]) -> (Nonable(str), [py.AST]):
 		'''Given the body, will pull off the docstring node and return it and the rest of the body.'''
 		if nodes and isinstance(nodes[0], py.Expr) and isinstance(nodes[0].value, py.Str):
 			if self.opt_elide_docstrings:
 				return None, nodes[1:]
 			return nodes[0].value.s, nodes[1:]
 		return None, nodes
+
+
+	def fetch_exception(self, exc_cookie:Nonable((PyObjectLL,) * 3)) -> Nonable((PyObjectLL,) * 3):
+		if exc_cookie is None:
+			exc_cookie = (PyObjectLL(None), PyObjectLL(None), PyObjectLL(None))
+			for part in exc_cookie:
+				part.declare(self.scope.context)
+		self.context.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
+																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
+		# NOTE: if we have a real exception here that we are replacing, then restore will decref it, but fetch doesn't incref it for us
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
+		return exc_cookie
+
+
+	def normalize_exception(self, exc_cookie):
+		'''Extract and return the real exception value (rather than the type, which is returned by PyErr_Occurred and
+			which gets used for matching.'''
+		self.context.add(c.FuncCall(c.ID('PyErr_NormalizeException'), c.ExprList(
+																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
+		exc_cookie[1].incref(self.context)
+		return exc_cookie[1]
+
+
+	def restore_exception(self, exc_cookie:Nonable((PyObjectLL,) * 3)):
+		self.context.add(c.FuncCall(c.ID('PyErr_Restore'), c.ExprList(
+													c.ID(exc_cookie[0].name), c.ID(exc_cookie[1].name), c.ID(exc_cookie[2].name))))
 
 
 	def create_ll_instance(self, hlnode:HLType):
@@ -253,24 +286,33 @@ class Py2C(ASTVisitor):
 				return s
 		raise InvalidScope(err)
 
+
 	def find_nearest_function_scope(self, err=''):
 		for s in reversed(self.scopes):
 			if isinstance(s, MelanoFunction):
 				return s
 		raise InvalidScope(err)
 
+
 	def find_nearest_method_scope(self, err=''):
 		for s in reversed(self.scopes):
 			if isinstance(s, MelanoFunction):
-				if isinstance(s.owner.scope, MelanoClass):
+				if isinstance(s.owner.parent, MelanoClass):
 					return s
 		raise InvalidScope(err)
 
 
-	def raise_exception(self):
+	def raise_exception(self, ctx):
 		# exceptions need to follow proper flow control....
 		#FIXME: make exceptions work
-		return c.Goto(self.flowcontrol[-1])
+		#return c.Goto(self.flowcontrol[-1])
+
+		with self.new_context(ctx):
+			exc_cookie_holder = [None]
+			self.handle_flowcontrol(
+								except_handler=self._except_flowcontrol,
+								finally_handler=lambda label: self._finally_exception_flowcontrol(label, exc_cookie_holder),
+								end_handler=self._end_flowcontrol)
 
 
 	def _store(self, target, val):
@@ -369,21 +411,6 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
 
 
-	def visit_Subscript(self, node):
-		if node.ctx == py.Store:
-			raise NotImplementedError("Subscript store needs special casing at assignment site")
-
-		elif node.ctx == py.Load:
-			kinst = self.visit(node.slice)
-			tgtinst = self.visit(node.value)
-			tmp = PyObjectLL(None)
-			tmp.declare(self.scope.context)
-			tgtinst.get_item(self.context, kinst, tmp)
-			return tmp
-		else:
-			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
-
-
 	def visit_BinOp(self, node):
 		l = self.visit(node.left)
 		r = self.visit(node.right)
@@ -421,6 +448,98 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError("BinOp({})".format(node.op))
 
 		return inst
+
+
+	def handle_flowcontrol(self, *, forloop_handler=None, whileloop_handler=None,
+						except_handler=None, finally_handler=None, end_handler=None):
+		'''Flow control needs to perform special actions for each flow-control label that the flow-changing operation
+			see's under us.  For instance, if we are breaking out of a loop, inside of a try/finally, we need to first
+			run the finally, before ending the loop.  This function helps us to visit all possible labels correctly, without
+			mistyping or otherwise messing up a relatively complicated loop in each of the several flow-control stmts.
+			
+			This function accepts per-label processing in kwonly args.  The label processor should emit stmts, as needed
+			and return a boolean, False to continue processing labels, and True to finish processing now.
+			
+			The caller must provide a handler for the 'end' label, as this closes a function and local flow control cannot
+			proceed after this point.  
+		'''
+		labelrules = {
+			'forloop': forloop_handler,
+			'whileloop': whileloop_handler,
+			'except': except_handler,
+			'finally': finally_handler,
+			'end': end_handler,
+		}
+		fin = False
+		for label in reversed(self.flowcontrol):
+			# search labels in the stack for matching handlers
+			for labelname, handler in labelrules.items():
+				if label.startswith(labelname):
+					if handler:
+						fin = handler(label)
+					else:
+						assert label != 'end'
+					# quit after we find the first handler, even if our only action is to continue processing
+					break
+			else:
+				raise NotImplementedError("Unknown flowcontrol label statement: {}".format(label))
+
+			# if our latest handler ends processing, continue
+			if fin:
+				return
+
+
+	def _end_flowcontrol(self, label):
+		self.context.add(c.Goto(label))
+		return True
+
+
+	def _except_flowcontrol(self, label):
+		self.context.add(c.Goto(label))
+		return True
+
+
+	def _finally_noexception_flowcontrol(self, label):
+		ret_label = self.scope.get_label('return_from_finally')
+		#TODO: only declare jmp_ctx when we use it the first time
+		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
+		self.context.add(c.Goto(label))
+		self.context.add(c.Label(ret_label))
+		return False
+
+
+	def _finally_exception_flowcontrol(self, label, exception_cookie_holder=None):
+		'''This is like the normal finally flow control, except that since we have an exception set,
+			we need to disable the exception context while we are processing.  This also takes
+			a cookie value that we can use to store the exception variables so that we can
+			reuse them, if we care enough to wrap a lambda around the callback and have
+			the value in the function closure.
+		'''
+		# Store current exception indicator during finally processing
+		exception_cookie_holder[0] = self.fetch_exception(exception_cookie_holder[0])
+
+		ret_label = self.scope.get_label('return_from_finally')
+		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
+		self.context.add(c.Goto(label))
+		self.context.add(c.Label(ret_label))
+
+		# restore error indicator
+		self.restore_exception(exception_cookie_holder[0])
+
+		#TODO: handle a second exception that occurs during finally processing
+
+
+	def visit_Break(self, node):
+		self.comment('break')
+		def loop_handler(label):
+			self.context.add(c.Goto(label))
+			return True
+		self.handle_flowcontrol(
+							whileloop_handler=loop_handler,
+							forloop_handler=loop_handler,
+							finally_handler=self._finally_noexception_flowcontrol,
+							end_handler=self._end_flowcontrol)
+
 
 
 	def visit_Call(self, node):
@@ -647,6 +766,9 @@ class Py2C(ASTVisitor):
 		#for <target> in <iter>: <body>
 		#else: <orelse>
 
+		# the break label
+		label = self.scope.get_label('forloop')
+
 		#TODO: for:else/break
 
 		tgt = self.visit(node.target)
@@ -663,8 +785,14 @@ class Py2C(ASTVisitor):
 		stmt = c.While(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound())
 		self.context.add(stmt)
 		with self.new_context(stmt.stmt):
-			self._store(node.target, tmp)
-			self.visit_nodelist(node.body)
+			with self.new_label(label):
+				self._store(node.target, tmp)
+				self.visit_nodelist(node.body)
+
+		# handle the no-break case: else
+
+		# after else, we get the break target
+		self.context.add(c.Label(label))
 
 
 	def visit_FunctionDef(self, node):
@@ -1014,6 +1142,8 @@ class Py2C(ASTVisitor):
 
 		#FIXME: re-raise existing context if node.exc is not present
 		inst = self.visit(node.exc)
+
+		#TODO: we can probably figure out if the object is a type if we have static_builtins or such
 		'''
 		if(PyObject_IsInstance(inst.name, PyType_Type)) {
 			PyErr_SetObject(inst.name, ??);
@@ -1034,42 +1164,12 @@ class Py2C(ASTVisitor):
 		self.context.add(LLType.capture_error(self.context))
 		self.context.add(if_stmt)
 
-		exc_info_0, exc_info_1, exc_info_2 = None, None, None
-		def _fwddecl():
-			nonlocal exc_info_0, exc_info_1, exc_info_2
-			if exc_info_0 is not None: return
-			exc_info_0, exc_info_1, exc_info_2 = PyObjectLL(None), PyObjectLL(None), PyObjectLL(None)
-			exc_info_0.declare(self.scope.context)
-			exc_info_1.declare(self.scope.context)
-			exc_info_2.declare(self.scope.context)
-
-		for label in reversed(self.flowcontrol):
-			if label.startswith('forelse') or label.startswith('whileelse'):
-				#TODO: check if this is totally correct
-				continue # skip, since, return supercedes no-break in this case
-			elif label.startswith('except'):
-				#FIXME: make this work
-				pass
-			elif label.startswith('finally'):
-				# Store current exception indicator during finally processing
-				_fwddecl()
-				self.context.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
-																		c.UnaryOp('&', c.ID(exc_info_0.name)),
-																		c.UnaryOp('&', c.ID(exc_info_1.name)),
-																		c.UnaryOp('&', c.ID(exc_info_2.name)))))
-				lbl = self.scope.get_label('return_from_finally')
-				self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(lbl))))
-				self.context.add(c.Goto(label))
-				self.context.add(c.Label(lbl))
-				# restore error indicator
-				#TODO: handle a second exception that occurs during finally processing
-				self.context.add(c.FuncCall(c.ID('PyErr_Restore'), c.ExprList(
-															c.ID(exc_info_0.name), c.ID(exc_info_1.name), c.ID(exc_info_2.name))))
-			elif label == 'end':
-				self.context.add(c.Goto('end'))
-				break
-			else:
-				raise NotImplementedError("Unknown flowcontrol label in return statement: {}".format(label))
+		# do exception flow-control
+		exc_cookie_holder = [None]
+		self.handle_flowcontrol(
+							except_handler=self._except_flowcontrol,
+							finally_handler=lambda label: self._finally_exception_flowcontrol(label, exc_cookie_holder),
+							end_handler=self._end_flowcontrol)
 
 
 	def visit_Return(self, node):
@@ -1080,21 +1180,10 @@ class Py2C(ASTVisitor):
 		else:
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
 
-		# if there are finally statements between us and a clean exit, we need to run those in order
-		for label in reversed(self.flowcontrol):
-			if label.startswith('forelse') or label.startswith('whileelse') or label.startswith('except'):
-				#TODO: check if this is totally correct
-				continue # skip, since, return supercedes no-break in this case
-			elif label.startswith('finally'):
-				lbl = self.scope.get_label('return_from_finally')
-				self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(lbl))))
-				self.context.add(c.Goto(label))
-				self.context.add(c.Label(lbl))
-			elif label == 'end':
-				self.context.add(c.Goto('end'))
-				break
-			else:
-				raise NotImplementedError("Unknown flowcontrol label in return statement: {}".format(label))
+		# do exit flowcontrol to handle finally blocks
+		self.handle_flowcontrol(
+							finally_handler=self._finally_noexception_flowcontrol,
+							end_handler=self._end_flowcontrol)
 
 
 	def visit_Set(self, node):
@@ -1113,16 +1202,88 @@ class Py2C(ASTVisitor):
 		inst.new(self.context, PyStringLL.str2c(node.s))
 		return inst
 
-	def visit_TryExcept(self, node):
-		pdb.set_trace()
 
-	def visit_TryFinally(self, node):
-		# add flow-control so we jump to the finally
-		lbl = self.scope.get_label('finally')
-		with self.new_label(lbl):
+	def visit_Subscript(self, node):
+		if node.ctx == py.Store:
+			raise NotImplementedError("Subscript store needs special casing at assignment site")
+
+		elif node.ctx == py.Load:
+			kinst = self.visit(node.slice)
+			tgtinst = self.visit(node.value)
+			tmp = PyObjectLL(None)
+			tmp.declare(self.scope.context)
+			tgtinst.get_item(self.context, kinst, tmp)
+			return tmp
+		else:
+			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
+
+
+	def visit_TryExcept(self, node):
+		# add this exception to the flow control context in the try body
+		label = self.scope.get_label('except')
+		with self.new_label(label):
 			self.visit_nodelist(node.body)
 
-		self.context.add(c.Label(lbl))
+		# branch target for jumping to this exception
+		self.context.add(c.Label(label))
+
+		### exception dispatch logic
+		# get the exception
+		exc_cookie = None
+		exc_type_inst = PyObjectLL(None)
+		exc_type_inst.declare(self.scope.context)
+		self.context.add(c.Assignment('=', c.ID(exc_type_inst.name), c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList())))
+		exc_type_inst.fail_if_null(self.context, exc_type_inst.name)
+		parts = [] # [c.If]
+		for handler in node.handlers:
+			# check if this is the exception that matches
+			if handler.type:
+				class_inst = self.visit(handler.type)
+				test = c.If(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))), c.Compound(), None)
+			else:
+				test = c.If(c.Constant('integer', 1), c.Compound(), None)
+			# implement the body
+			with self.new_context(test.iftrue):
+				exc_cookie = self.fetch_exception(exc_cookie)
+				if handler.name:
+					exc_val_inst = self.normalize_exception(exc_cookie)
+					self._store(handler.name, exc_val_inst)
+				self.visit_nodelist(handler.body)
+				self.restore_exception(exc_cookie)
+			parts.append(test)
+
+		# chain together all parts
+		current = parts[0]
+		for p in parts[1:]:
+			current.iffalse = p
+			current = p
+
+		current.iffalse = c.Compound()
+		with self.new_context(current.iffalse):
+			# if we have an else clause, implement it directly as an else here
+			if node.orelse:
+				self.visit_nodelist(node.orelse)
+			# otherwise, if we reach the else clause of the match, nobody handled the error; raise it to the next frame
+			else:
+				self.context.add(c.Goto(c.ID('end')))
+
+		# add the if-chain to the body
+		self.context.add(parts[0])
+
+		# if we fall off the end of the exception handler, we are considered cleared
+		self.context.add(c.FuncCall(c.ID('PyErr_Clear'), c.ExprList()))
+
+
+	def visit_TryFinally(self, node):
+		# add this finally to the flow control context in the try body
+		label = self.scope.get_label('finally')
+		with self.new_label(label):
+			self.visit_nodelist(node.body)
+
+		# branch target for jumping to a finally clause
+		self.context.add(c.Label(label))
+
+		# handle the final stmt
 		self.visit_nodelist(node.finalbody)
 
 		# if the top-level needs control back to complete, it will set __jmp_ctx__
@@ -1147,32 +1308,47 @@ class Py2C(ASTVisitor):
 	def visit_With(self, node):
 		ctx = self.visit(node.context_expr)
 
+		# load enter and exit
 		ent = PyObjectLL(None)
 		ent.declare(self.scope.context)
+		ctx.get_attr_string(self.context, '__enter__', ent)
 		ext = PyObjectLL(None)
 		ext.declare(self.scope.context)
+		ctx.get_attr_string(self.context, '__exit__', ext)
+
 		tmp = PyObjectLL(None)
 		tmp.declare(self.scope.context)
 
-		ctx.get_attr_string(self.context, '__exit__', ext)
-
-		ctx.get_attr_string(self.context, '__enter__', ent)
+		# call enter
 		args = PyTupleLL(None)
 		args.declare(self.scope.context)
 		args.pack(self.context)
 		ent.call(self.context, args, None, tmp)
 
+		# if we provide the result in the namespace, set it
 		if node.optional_vars:
 			var = self.visit(node.optional_vars)
 			self._store(node.optional_vars, tmp)
 
-		if isinstance(node.body, list):
-			self.visit_nodelist(node.body)
-		else:
-			self.visit(node.body)
+		# create a label we can jump to at with-stmt end if control flow tries to take us away
+		#		we just use a finally here, rather than taking a custom approach, because that is
+		#		the exact semantics we want to provide.
+		exit_label = self.scope.get_label('finally')
 
-		###FIXME: how do we ensure finally?
+		# visit the body, keeping a record of the finally context we need to use when exiting
+		with self.new_label(exit_label):
+			if isinstance(node.body, list):
+				self.visit_nodelist(node.body)
+			else:
+				self.visit(node.body)
+
+		# mark exit as a finally target
+		self.context.add(c.Label(exit_label))
+
 		#TODO: Check for exception
+		#FIXME: this needs to not be finally, but something else because exit does want to partially run in the
+		#		context of our current exception state
+
 		#if an exception was raised:
 		#	exc = copy of (exception, instance, traceback)
 		#else:
@@ -1184,6 +1360,9 @@ class Py2C(ASTVisitor):
 		out_var = PyObjectLL(None)
 		out_var.declare(self.scope.context)
 		ext.call(self.context, args, None, out_var)
+
+		# if the top-level needs control back to complete, it will set __jmp_ctx__
+		self.context.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
 
 
 	def visit_UnaryOp(self, node):
