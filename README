@@ -1,8 +1,81 @@
-Melano:
-    A Python exploration and visualization tool with the lofty goal of becoming a useful python IDE.
+Melano
+======
+
+Melano is a Python-to-C translator, using CPython's libpython, similar in concept to Pyrex or Cython, but with a significantly different focus.
 
 
-==Status==
+Goal
+----
 
-In development.  Given the highly experimental nature of this work (and the fact that the author has very little quality time to give it), this project does not expect to ship anything that could even squintingly be referred to as a useful IDE in the near term.
+Python is a blazingly fast language (really!), but only if the programming task is abstract enough to make use of the full suite of Python's features -- e.g. a program written in C at a similar level of abstraction would have similar speed.  Python appears slow compared to many other languages in benchmarks largely because many/most programming tasks (particularly in benchmarks) do not take advantage of the majority of Python's features.  The goal of Melano is to have our cake and eat it too -- to provide the full power of Python when it's called for and to automatically remove unused abstractions for maximal performance everywhere else.
+
+
+How we do this:
+---------------
+
+1) Static analysis --
+We use offline analysis of a project's source to pull out semantic information about how it uses Python.  Unfortunately, in order to get any level of useful knowledge out of a project's source we need to do whole-program analysis; furthermore, doing this sort of static analysis is slow.  The upshot is that this works best if we compile a full project at once, rather than doing the analysis one-file-at-a-time.  This is the one major incompatibility between Melano and Python.  However, it's not a total lost cause, since importing files we haven't analyzed simply emits a PyImport_ImportModule(...) and runs them in the normal Python interpreter loop.  Therefore, we can still be useful for programs that have a central core of functionality and add (at runtime) extensions or plugins to that base.
+
+2) Feedback from the Analysis --
+If compilation is a completely opaque process, it is hard for a programmer to understand why a certain bit of code is compiled the way it is.  Melano will integrate a GUI that shows the results of static analysis and tag that analysis with the information a programmer needs to optimize their code.  For example, if a module optionally aliases a builtin in a global variable, then using that builtin in a tight inner loop will be slow.  This is something that is easy for a programmer to fix (e.g. by assigning the builtin to a local), but only if they notice the problem in the first place.  
+
+It should be both fast and easy to scan a piece of code for potential trouble spots.  We see this becoming something like predator vision modes for code: the highlight color of a name will be based on the specificity of their derived type, the amount of indirection required for accesses, etc.
+
+3) Feed-forward to the Compiler --
+Some semantic aspects of a program are deviously hard to work out (in a reasonable amount of time) in a static analyzer.  For these cases (particularly in performance critical code) it may be helpful for a programmer to give hints to the compiler, based on what they see in the GUI.  If these appear as documentation (e.g. type annotations) in a form that is also useful to the human reader, then the cost to build an maintain them will hopefully be small enough to be worth the performance win.  
+
+Note well:
+Turning Python into C++ is not the goal!  We want our full, type-agnostic dynamism, but we need our performance too.  In cases where we can get that performance automatically, wonderful.  That said, pragmatism beats purity and if we can get a solid speed improvement by adding the occasional type annotation, so be it.
+
+
+What about JITing?
+------------------
+JITing is the way of the future.  Unfortunately though, that is the future, and not the whole story right now.
+
+Extenuating factors:
+
+1) Python3 support.  Right now.  (Although that's changing fast)
+
+2) Some applications are static by their very nature: i.e. serialization frameworks.  In these cases, dynamic recompilation is not going to be able to do much better than a static compiler.
+
+3) Some applications need low latency, so a JIT is inappropriate.
+
+4) As Python found out when trying to integrate LLVM, a JIT comes with some cost to the size of the program binary and startup times.  For some applications, a simple, small executable is preferable to having a JIT on-board.
+
+5) Other side benefits: http://brendaneich.com/2010/08/static-analysis-ftw/
+
+6) Consider the optimization of a C program from the perspective of a programmer using the language.  Compiling with -O1 is reliably more performant than -O0, and compiling with -O2 is reliably more performant than -O1.  But here things tend to break down.  On some programs, -Os is faster than -O3, and sometimes it is the other way around.  On the occasional pathological test case, -O0 will even beat -O3.
+
+In order to address this problem, gcc has introduced something called Profile Guided Optimization (PGO).  With PGO compilation, you run the target executable once on a representative workload while the infrastructure captures a trace of the run.  It then uses the trace to build a highly optimized binary for that workload.  If this sounds familiar, it is because this is JIT.  It is, however, a fairly poor form of JIT that cannot adapt to runtime workload changes.  Mark my words, the C programming language will have something along the lines of runtime recompilation (which they probably will not call JIT) within the next 20 years.  They will probably start pursuing this when "scripting languages" begin beating them reliably in performance benchmarks in the next 10 or so years.
+
+No matter what platform we decide to target, Melano's boat will rise with the tide as compiler technology gets more sophisticated.
+
+
+Current Status
+--------------
+Working:  Python-to-C compilation of the harder elements -- classes, functions, with statements, exceptions, nonlocal/global, and so on, (generator functions are the current top to-do), as well as a number of the easier elements.
+
+Todo: The rest of the missing easy stuff -- AugAssign, While, comprehensions, lambda, continue and some others.  Static and type analysis is still incredibly basic, but we need to know that fully general python translation works before we can start safely eliding bits of it.  
+
+Halfway: The GUI elements exist (built on PyQt4) although the highlighting engine is still mostly pointing at a prior experiment and are, thus, mainly broken at the moment.
+
+
+Playing with Melano
+-------------------
+For the truely brave/foolhardy:
+
+> python3 run.py path/to/translate.py
+### This will spit out some stuff and maybe create a test.c, if you are lucky.
+### Good candidates of things that are likely to work are in test/<foo>/<bar>.py
+> make
+### This makefile will try to link against python3.3 (e.g. cpython tip).
+### It will also work with 3.1 and 3.2, so just twiddle the Makefile if needed.
+> ./test-prog
+### And check the output against the code, if you value correct answers.
+
+Or:
+> py.test -k test/ -v test/
+### I'm writing tests as I go, so expect surprisingly little breakage.
+
+Problems reported at this juncture will be swept under the rug, so consider it a fun toy and nothing else for the moment.
 
