@@ -1,5 +1,3 @@
-#fail
-
 def foo(cls):
 	print('d')
 	return cls

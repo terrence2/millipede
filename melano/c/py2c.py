@@ -663,6 +663,12 @@ class Py2C(ASTVisitor):
 			self.visit_nodelist(body)
 			inst.outro(self.context)
 
+		# visit any decorators (e.g. calls decorators with args before defining the class)
+		deco_fn_insts = []
+		if node.decorator_list:
+			for deconame in reversed(node.decorator_list):
+				decoinst = self.visit(deconame)
+				deco_fn_insts.append(decoinst)
 
 		# load the build_class method from builtins
 		with self.module_scope():
@@ -692,7 +698,12 @@ class Py2C(ASTVisitor):
 			args.pack(self.context, pyfunc, c_name_str, *base_insts)
 			build_class_inst.call(self.context, args, node.kwargs, pyclass_inst)
 
-
+		# apply decorators to the class
+		for decoinst in deco_fn_insts:
+			decoargs = PyTupleLL(None)
+			decoargs.declare(self.scope.context)
+			decoargs.pack(self.context, pyclass_inst)
+			decoinst.call(self.context, decoargs, None, pyclass_inst)
 
 		# store the name in the scope where we are "created"
 		self._store(node.name, pyclass_inst)
@@ -833,6 +844,13 @@ class Py2C(ASTVisitor):
 
 			# attach annotations to the pycfunction instance
 
+		# visit any decorators (e.g. calls decorators with args before defining the function)
+		deco_fn_insts = []
+		if node.decorator_list:
+			for deconame in reversed(node.decorator_list):
+				decoinst = self.visit(deconame)
+				deco_fn_insts.append(decoinst)
+
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
 			# Attach all parameters and names into the local namespace
@@ -955,6 +973,14 @@ class Py2C(ASTVisitor):
 			#FIXME: clean up locals!
 			inst.stub_outro(self.context)
 
+		# apply any decorators
+		for decoinst in deco_fn_insts:
+			decoargs = PyTupleLL(None)
+			decoargs.declare(self.scope.context)
+			decoargs.pack(self.context, pycfunc)
+			decoinst.call(self.context, decoargs, None, pycfunc)
+
+		# store the resulting function into the scope where it's defined
 		self._store(node.name, pycfunc)
 
 		return inst
