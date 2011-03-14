@@ -10,9 +10,13 @@ class NoCommonBasesError(Exception):
 
 
 class PyObjectType(HLType):
+	def __init__(self):
+		pass
+
 
 	@classmethod
 	def common_base_type(cls, other):
+		"""Find and return the common base type between this object and 'other'."""
 		if cls == other:
 			return cls()
 		for ty0 in cls.__mro__:

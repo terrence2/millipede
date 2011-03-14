@@ -3,10 +3,11 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.py import ast as py
-from melano.lang.visitor import ASTVisitor
 from melano.hl.module import MelanoModule
+from melano.hl.name import Name
 from melano.hl.nameref import NameRef
+from melano.lang.visitor import ASTVisitor
+from melano.py import ast as py
 import pdb
 
 
@@ -29,6 +30,29 @@ class Linker(ASTVisitor):
 		self.context = ctx
 		yield
 		self.context = prior
+
+
+	def visit_Attribute(self, node):
+		# Note: references through the lhs of an attribute are always a ref, not a name, so we need to do
+		#		attribute value updates in linking
+		self.visit(node.value)
+
+		# note that the attribute almost certainly has not hl value here here -- we will eventually propagate
+		#		correct type info into the attribute at, e.g. assignment, because we assign this attribute node
+		#		as a ref into the name we create here on the actual attribute.
+		assert node.attr.hl is None
+		node.attr.hl = Name(str(node.attr), node.value.hl)
+		node.hl = NameRef(node.attr.hl)
+		node.value.hl.add_attribute(str(node.attr), node.attr.hl)
+
+
+	def visit_Call(self, node):
+		self.visit(node.func)
+		self.visit_nodelist(node.args)
+		self.visit_nodelist(node.keywords)
+		self.visit_nodelist(node.starargs)
+		self.visit_nodelist(node.kwargs)
+		node.hl = node.func.hl
 
 
 	def visit_ClassDef(self, node):

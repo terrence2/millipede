@@ -20,6 +20,10 @@ class PyObjectLL(LLType):
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ID(self.name)))
 
 
+	def decref(self, ctx):
+		ctx.add(c.FuncCall(c.ID('Py_DECREF'), c.ID(self.name)))
+
+
 	def as_pyobject(self, ctx):
 		return self
 
@@ -41,7 +45,7 @@ class PyObjectLL(LLType):
 
 	def set_attr_string(self, ctx, attrname, attrval):
 		tmp = CIntegerLL(None)
-		tmp.declare(ctx.visitor.scope.context, init= -1)
+		tmp.declare(ctx.visitor.scope.context, init= -1, name="setattr_rv")
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
@@ -78,7 +82,7 @@ class PyObjectLL(LLType):
 		self.fail_if_null(ctx, out_var.name)
 
 
-
+	## Binary Ops ##
 	def bitor(self, ctx, rhs, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Or'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
@@ -137,8 +141,61 @@ class PyObjectLL(LLType):
 	def power(self, ctx, rhs, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Power'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID('None')))))
 		self.fail_if_null(ctx, out.name)
+	## END Binary Ops ##
 
 
+	## Inplace Binary Ops ##
+	def inplace_bitor(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceOr'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_bitxor(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceXor'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_bitand(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceAnd'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_lshift(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceLshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_rshift(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceRshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_add(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceAdd'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_subtract(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceSubtract'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_multiply(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceMultiply'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_divide(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceTrueDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_floor_divide(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceFloorDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_modulus(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceRemainder'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
+		self.fail_if_null(ctx, out.name)
+
+	def inplace_power(self, ctx, rhs, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlacePower'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID('None')))))
+		self.fail_if_null(ctx, out.name)
+## END Inplace Binary Ops ##
+
+
+	## Unary Ops ##
 	def invert(self, ctx, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Invert'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
@@ -157,6 +214,7 @@ class PyObjectLL(LLType):
 	def not_(self, ctx, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Not'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
+	## END Unary Ops ##
 
 
 	def is_true(self, ctx):

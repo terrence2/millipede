@@ -53,8 +53,8 @@ class MelanoModule(Scope):
 		#	mapping from the accessing module name to the module itself).
 		self.refs = {}
 
-		# the hl type definition -- used mostly as an identity badge in the module
-		self.type = PyModuleType()
+		# the hl type definition
+		self.type = PyModuleType(self)
 
 
 	def __read_file(self):

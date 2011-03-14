@@ -149,7 +149,12 @@ class COut(ASTVisitor):
 
 	def visit_If(self, node):
 		self.fp.write('if(')
-		self.visit(node.cond)
+		if isinstance(node.cond, c.Assignment):
+			self.fp.write('(')
+			self.visit(node.cond)
+			self.fp.write(')')
+		else:
+			self.visit(node.cond)
 		self.fp.write(')')
 		self.visit(node.iftrue)
 		if(node.iffalse):
@@ -211,6 +216,11 @@ class COut(ASTVisitor):
 
 	def visit_While(self, node):
 		self.fp.write('while(')
-		self.visit(node.cond)
+		if isinstance(node.cond, c.Assignment):
+			self.fp.write('(')
+			self.visit(node.cond)
+			self.fp.write(')')
+		else:
+			self.visit(node.cond)
 		self.fp.write(')')
 		self.visit(node.stmt)

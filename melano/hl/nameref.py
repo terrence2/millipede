@@ -16,14 +16,6 @@ class NameRef:
 		self.is_nonlocal = False
 
 
-	def create_instance(self, name:str):
-		'''
-		Instance the type with a name.  Sets the new instance on the 'inst' variable.
-		'''
-		assert not self.inst
-		self.inst = self.ref.get_type()(name)
-
-
 	@property
 	def name(self):
 		return self.ref.name
@@ -58,6 +50,13 @@ class NameRef:
 
 	def add_type(self, ty):
 		self.ref.add_type(ty)
+
+
+	def lookup_attribute(self, attrname):
+		return self.ref.lookup_attribute(self, attrname)
+
+	def add_attribute(self, attrname, attrtype):
+		return self.ref.add_attribute(attrname, attrtype)
 
 
 	def show(self, level):

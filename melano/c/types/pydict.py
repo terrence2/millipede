@@ -18,6 +18,7 @@ class PyDictLL(PyObjectLL):
 		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_SetItemString'), c.ExprList(
 											c.ID(self.name), c.Constant('string', name), c.ID(var.name)))))
 		self.fail_if_nonzero(ctx, tmp)
+		var.incref(ctx)
 
 
 	def set_item(self, ctx, key:PyObjectLL, val:PyObjectLL):

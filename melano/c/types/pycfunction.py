@@ -117,14 +117,8 @@ class PyCFunctionLL(PyObjectLL):
 		ctx.add(c.Comment('Declare Python stub function "{}"'.format(self.hlnode.owner.name)))
 
 		# create the function definition structure
-		#self.funcdef_name = ctx.reserve_name(self.hlnode.owner.name + '_def')
 		c_name = c.Constant('string', PyStringLL.str2c(self.hlnode.owner.name))
 		c_docstring = c.Constant('string', PyStringLL.str2c(docstring)) if docstring else c.ID('NULL')
-		#ctx.add_variable(c.Decl(self.funcdef_name, c.TypeDecl(self.funcdef_name, c.Struct('PyMethodDef')),
-		#		init=c.ExprList(
-		#					c.Constant('string', str(self.hlnode.owner.name)),
-		#					c.Cast(c.IdentifierType('PyCFunction'), c.ID(self.c_pystub_name)),
-		#					c.BinaryOp('|', c.ID('METH_VARARGS'), c.ID('METH_KEYWORDS')), c_docstring)), False)
 
 		# create the function pyobject itself
 		self.c_obj = PyObjectLL(self.hlnode)
@@ -147,6 +141,7 @@ class PyCFunctionLL(PyObjectLL):
 	def get_attr_string(self, ctx, attrname, outvar):
 		attroffset = self.hlnode.locals_map[attrname]
 		ctx.add(c.Assignment('=', c.ID(outvar.name), c.ArrayRef(self.c_locals_name, attroffset)))
+		outvar.incref(ctx)
 
 		#TODO: use a local?
 
@@ -172,4 +167,6 @@ class PyCFunctionLL(PyObjectLL):
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):
 			ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+		# NOTE: we do not clear the locals after a function runs because those contain references that will be used
+		#		inside of calls to an inner closure -- which it is perfectly valid to return from this function. 
 		ctx.add(c.Return(c.ID('__return_value__')))

@@ -23,15 +23,22 @@ class Typer(ASTVisitor):
 		for target in node.targets:
 			self.visit(target)
 			if isinstance(target, py.Attribute):
-				logging.debug("Skipping typing of attribute assignment")
+				target.attr.hl.add_type(node.value.hl.get_type())
+				#logging.error("Skipping typing of attribute assignment")
 			elif isinstance(target, py.Subscript):
-				logging.debug("Skipping typing of subscript assignment")
+				logging.error("Skipping typing of subscript assignment")
 			elif isinstance(target, py.Name):
 				target.hl.add_type(node.value.hl.get_type())
 			else:
 				raise NotImplementedError("Assignment to unknown node class in typer")
+		#node.hl = Coerce(Coerce.OVERRIDE, *([t.hl for t in node.targets] + [node.value]))
 
 
+	def visit_AugAssign(self, node):
+		self.visit(node.value)
+		self.visit(node.target)
+		node.target.hl.add_type(node.value.hl.get_type())
+		node.hl = Coerce(Coerce.INPLACE, node.target.hl, node.value.hl)
 
 	'''
 	def visit_Call(self, node):

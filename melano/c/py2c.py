@@ -83,6 +83,20 @@ class Py2C(ASTVisitor):
 		py.In: 'in',
 		py.NotIn: 'not in',
 	}
+	AUGASSIGN_PRETTY = {
+		py.BitOr: '|=',
+		py.BitXor: '^=',
+		py.BitAnd: '&=',
+		py.LShift: '<<=',
+		py.RShift: '>>=',
+		py.Add: '+=',
+		py.Sub: '-=',
+		py.Mult: '*=',
+		py.Div: '/=',
+		py.FloorDiv: '//=',
+		py.Mod: '%=',
+		py.Pow: '**=',
+	}
 	TYPEMAP = {
 		PyObjectType: PyObjectLL,
 		PyModuleType: PyModuleLL,
@@ -315,141 +329,6 @@ class Py2C(ASTVisitor):
 								end_handler=self._end_flowcontrol)
 
 
-	def _store(self, target, val):
-		'''
-		Common "normal" assignment handler.  Things like for-loop targets and with-stmt vars 
-			need the same full suite of potential assignment targets as normal assignments.  With
-			the caveat that only assignment will have non-Name children.
-		
-		target -- the node that is the lhs of the storage.
-		'''
-		assert isinstance(target, py.Name)
-
-		# NOTE: the hl Name or Ref will always be parented under  the right scope
-		scope = target.hl.parent
-		scope.ll.set_attr_string(self.context, str(target), val)
-
-		# Note: some nodes do not get a visit_Name pass, since we don't have any preceding rhs for the assignment
-		#		where we can correctly or easily get the type, 'as' or 'class', etc.  In these cases, we can just retrofit the
-		#		value we actually created into the ll target for the hl slot so that future users of the hl instance will be able
-		#		to find the correct ll name to use, rather than re-creating it when that users happens to visit_Name on the
-		#		node with a missing ll slot.
-		if not scope.symbols[str(target)].ll:
-			scope.symbols[str(target)].ll = val
-
-
-		#TODO: destructuring assignment
-		#target.hl.parent.inst.set_item_string(self.context, str(target), val)
-
-		#TODO: this is an optimization; we only want to do it when we can get away with it, and when we can
-		#		get away with it, we don't want to assign to the namespace.
-		#if tgt:
-		#	tgt.assign_name(self.context, val)
-
-
-
-	def _load(self, source):
-		'''
-		source - the underlying name reference that we need to provide access to
-		'''
-		tmp = PyObjectLL(None)
-		tmp.declare(self.scope.context)
-
-		# if we have a scope, load from it
-		if source.hl.parent.ll:
-			source.hl.parent.ll.get_attr_string(self.context, str(source), tmp)
-		# otherwise, load from the global scope
-		else:
-			self.ll_module.get_attr_string(self.context, str(source), tmp)
-		return tmp
-
-
-	def visit_Assign(self, node):
-		self.comment("Assign: {} = {}".format([str(t) for t in node.targets], str(node.value)))
-		val = self.visit(node.value)
-		for target in node.targets:
-			if isinstance(target, py.Attribute):
-				o = self.visit(target.value)
-				o.set_attr_string(self.context, str(target.attr), val)
-			elif isinstance(target, py.Subscript):
-				o = self.visit(target.value)
-				i = self.visit(target.slice)
-				o.set_item(self.context, i, val)
-			elif isinstance(target, py.Name):
-				tgt = self.visit(target)
-				self._store(target, val)
-			else:
-				raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
-
-
-	def visit_Attribute(self, node):
-		if node.ctx == py.Store:
-			# load the lhs object into the local c scope
-			if isinstance(node.value, py.Name):
-				lhs = self._load(node.value)
-			else:
-				lhs = self.visit(node.value)
-
-			# load the attr off of the lhs, for use as a storage target
-			inst = PyObjectLL(None)
-			inst.declare(self.scope.context)
-			lhs.get_attr_string(self.context, str(node.attr), inst)
-			return inst
-
-		elif node.ctx == py.Load:
-			# load the attr lhs as normal
-			inst = self.visit(node.value)
-			self.comment('Load Attribute "{}.{}"'.format(str(node.value), str(node.attr)))
-
-			# store the attr value into a local tmp variable
-			tmp = PyObjectLL(None)
-			tmp.declare(self.scope.context)
-			inst.get_attr_string(self.context, str(node.attr), tmp)
-			return tmp
-
-		else:
-			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
-
-
-	def visit_BinOp(self, node):
-		l = self.visit(node.left)
-		r = self.visit(node.right)
-
-		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.context)
-
-		#TODO: python detects str + str at runtime and skips dispatch through PyNumber_Add, so we can 
-		#		assume that would be faster
-		if node.op == py.BitOr:
-			l.bitor(self.context, r, inst)
-		elif node.op == py.BitXor:
-			l.bitxor(self.context, r, inst)
-		elif node.op == py.BitAnd:
-			l.bitand(self.context, r, inst)
-		elif node.op == py.LShift:
-			l.lshift(self.context, r, inst)
-		elif node.op == py.RShift:
-			l.rshift(self.context, r, inst)
-		elif node.op == py.Add:
-			l.add(self.context, r, inst)
-		elif node.op == py.Sub:
-			l.subtract(self.context, r, inst)
-		elif node.op == py.Mult:
-			l.multiply(self.context, r, inst)
-		elif node.op == py.Div:
-			l.divide(self.context, r, inst)
-		elif node.op == py.FloorDiv:
-			l.floor_divide(self.context, r, inst)
-		elif node.op == py.Mod:
-			l.modulus(self.context, r, inst)
-		elif node.op == py.Pow:
-			l.power(self.context, r, inst)
-		else:
-			raise NotImplementedError("BinOp({})".format(node.op))
-
-		return inst
-
-
 	def handle_flowcontrol(self, *, forloop_handler=None, whileloop_handler=None,
 						except_handler=None, finally_handler=None, end_handler=None):
 		'''Flow control needs to perform special actions for each flow-control label that the flow-changing operation
@@ -527,6 +406,199 @@ class Py2C(ASTVisitor):
 		self.restore_exception(exception_cookie_holder[0])
 
 		#TODO: handle a second exception that occurs during finally processing
+
+
+	def _store(self, target, val):
+		'''
+		Common "normal" assignment handler.  Things like for-loop targets and with-stmt vars 
+			need the same full suite of potential assignment targets as normal assignments.  With
+			the caveat that only assignment will have non-Name children.
+		
+		target -- the node that is the lhs of the storage.
+		'''
+		assert isinstance(target, py.Name)
+
+		# NOTE: the hl Name or Ref will always be parented under  the right scope
+		scope = target.hl.parent
+		scope.ll.set_attr_string(self.context, str(target), val)
+
+		# Note: some nodes do not get a visit_Name pass, since we don't have any preceding rhs for the assignment
+		#		where we can correctly or easily get the type, 'as' or 'class', etc.  In these cases, we can just retrofit the
+		#		value we actually created into the ll target for the hl slot so that future users of the hl instance will be able
+		#		to find the correct ll name to use, rather than re-creating it when that users happens to visit_Name on the
+		#		node with a missing ll slot.
+		if not scope.symbols[str(target)].ll:
+			scope.symbols[str(target)].ll = val
+
+
+		#TODO: destructuring assignment
+		#target.hl.parent.inst.set_item_string(self.context, str(target), val)
+
+		#TODO: this is an optimization; we only want to do it when we can get away with it, and when we can
+		#		get away with it, we don't want to assign to the namespace.
+		#if tgt:
+		#	tgt.assign_name(self.context, val)
+
+
+	def _load(self, source):
+		'''
+		source - the underlying name reference that we need to provide access to
+		'''
+		tmp = PyObjectLL(None)
+		tmp.declare(self.scope.context)
+
+		# if we have a scope, load from it
+		if source.hl.parent.ll:
+			source.hl.parent.ll.get_attr_string(self.context, str(source), tmp)
+		# otherwise, load from the global scope
+		else:
+			self.ll_module.get_attr_string(self.context, str(source), tmp)
+		return tmp
+
+
+	def visit_Assign(self, node):
+		self.comment("Assign: {} = {}".format([str(t) for t in node.targets], str(node.value)))
+		val = self.visit(node.value)
+		for target in node.targets:
+			if isinstance(target, py.Attribute):
+				o = self.visit(target.value)
+				o.set_attr_string(self.context, str(target.attr), val)
+			elif isinstance(target, py.Subscript):
+				o = self.visit(target.value)
+				i = self.visit(target.slice)
+				o.set_item(self.context, i, val)
+			elif isinstance(target, py.Name):
+				tgt = self.visit(target)
+				self._store(target, val)
+			else:
+				raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
+
+
+	def visit_Attribute(self, node):
+		if node.hl.ll:
+			inst = node.hl.ll
+		else:
+			inst = self.create_ll_instance(node.hl)
+			inst.declare(self.scope.context)
+
+		self.comment('Load Attribute "{}.{}"'.format(str(node.value), str(node.attr)))
+		if node.ctx == py.Store or node.ctx == py.Aug:
+			# load the lhs object into the local c scope
+			if isinstance(node.value, py.Name):
+				lhs = self._load(node.value)
+			else:
+				lhs = self.visit(node.value)
+
+			# load the attr off of the lhs, for use as a storage target
+			lhs.get_attr_string(self.context, str(node.attr), inst)
+			return inst
+
+		elif node.ctx == py.Load:
+			# load the attr lhs as normal
+			if isinstance(node.value, py.Name):
+				lhs = self._load(node.value)
+			else:
+				lhs = self.visit(node.value)
+
+			# store the attr value into a local tmp variable
+			lhs.get_attr_string(self.context, str(node.attr), inst)
+			return inst
+
+		else:
+			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
+
+
+	def visit_AugAssign(self, node):
+		self.comment('AugAssign: {} {} {}'.format(str(node.target), self.AUGASSIGN_PRETTY[node.op], str(node.value)))
+		val_inst = self.visit(node.value)
+		if isinstance(node.target, py.Name):
+			tgt_inst = self._load(node.target)
+		else:
+			tgt_inst = self.visit(node.target)
+
+		# get the intermediate instance
+		out_inst = self.create_ll_instance(node.hl)
+		out_inst.declare(self.scope.context)
+
+		# perform the op, either returning a copy or getting a new instance
+		if node.op == py.BitOr:
+			tgt_inst.inplace_bitor(self.context, val_inst, out_inst)
+		elif node.op == py.BitXor:
+			tgt_inst.inplace_bitxor(self.context, val_inst, out_inst)
+		elif node.op == py.BitAnd:
+			tgt_inst.inplace_bitand(self.context, val_inst, out_inst)
+		elif node.op == py.LShift:
+			tgt_inst.inplace_lshift(self.context, val_inst, out_inst)
+		elif node.op == py.RShift:
+			tgt_inst.inplace_rshift(self.context, val_inst, out_inst)
+		elif node.op == py.Add:
+			tgt_inst.inplace_add(self.context, val_inst, out_inst)
+		elif node.op == py.Sub:
+			tgt_inst.inplace_subtract(self.context, val_inst, out_inst)
+		elif node.op == py.Mult:
+			tgt_inst.inplace_multiply(self.context, val_inst, out_inst)
+		elif node.op == py.Div:
+			tgt_inst.inplace_divide(self.context, val_inst, out_inst)
+		elif node.op == py.FloorDiv:
+			tgt_inst.inplace_floor_divide(self.context, val_inst, out_inst)
+		elif node.op == py.Mod:
+			tgt_inst.inplace_modulus(self.context, val_inst, out_inst)
+		elif node.op == py.Pow:
+			tgt_inst.inplace_power(self.context, val_inst, out_inst)
+
+		# store back to the owner location
+		if isinstance(node.target, py.Attribute):
+			node.target.value.hl.ll.set_attr_string(self.context, str(node.target.attr), out_inst)
+		elif isinstance(node.target, py.Subscript):
+			tgt_inst.set_item(self.context, i_inst, out_inst)
+		elif isinstance(node.target, py.Name):
+			self._store(node.target, out_inst)
+		else:
+			raise NotImplementedError("Don't know how to augassign to type: {}".format(type(node.target)))
+
+		# decrement the old value
+		#tgt_inst.decref(self.context)
+
+		return out_inst
+
+
+	def visit_BinOp(self, node):
+		l = self.visit(node.left)
+		r = self.visit(node.right)
+
+		inst = self.create_ll_instance(node.hl)
+		inst.declare(self.context)
+
+		#TODO: python detects str + str at runtime and skips dispatch through PyNumber_Add, so we can 
+		#		assume that would be faster
+		if node.op == py.BitOr:
+			l.bitor(self.context, r, inst)
+		elif node.op == py.BitXor:
+			l.bitxor(self.context, r, inst)
+		elif node.op == py.BitAnd:
+			l.bitand(self.context, r, inst)
+		elif node.op == py.LShift:
+			l.lshift(self.context, r, inst)
+		elif node.op == py.RShift:
+			l.rshift(self.context, r, inst)
+		elif node.op == py.Add:
+			l.add(self.context, r, inst)
+		elif node.op == py.Sub:
+			l.subtract(self.context, r, inst)
+		elif node.op == py.Mult:
+			l.multiply(self.context, r, inst)
+		elif node.op == py.Div:
+			l.divide(self.context, r, inst)
+		elif node.op == py.FloorDiv:
+			l.floor_divide(self.context, r, inst)
+		elif node.op == py.Mod:
+			l.modulus(self.context, r, inst)
+		elif node.op == py.Pow:
+			l.power(self.context, r, inst)
+		else:
+			raise NotImplementedError("BinOp({})".format(node.op))
+
+		return inst
 
 
 	def visit_Break(self, node):
@@ -1145,7 +1217,7 @@ class Py2C(ASTVisitor):
 
 	def visit_Name(self, node):
 		# if we are storing to the name, we just need to return the instance, so we can assign to it
-		if node.ctx == py.Store or node.ctx == py.Param:
+		if node.ctx in [py.Store, py.Param, py.Aug]:
 			if not node.hl.ll:
 				inst = self.create_ll_instance(node.hl)
 				inst.declare(self.scope.context)
@@ -1154,6 +1226,9 @@ class Py2C(ASTVisitor):
 		# if we are loading a name, we have to search for the name's location
 		elif node.ctx == py.Load:
 			return self._load(node)
+
+		else:
+			raise NotImplementedError("unknown context for name: {}".format(node.ctx))
 
 
 	def visit_Num(self, node):
@@ -1205,6 +1280,7 @@ class Py2C(ASTVisitor):
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
 		else:
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
+		self.context.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID('__return_value__'))))
 
 		# do exit flowcontrol to handle finally blocks
 		self.handle_flowcontrol(

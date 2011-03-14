@@ -25,8 +25,22 @@ class Name:
 		# the types that we have proven this name can take
 		self.types = []
 
+		# The attribute map -- we record all potentially attribute usage in the name
+		self.attributes = {} # {str: HLType}
+
 		# the ll instance
 		self.ll = None
+
+
+	def add_attribute(self, attrname, hltype):
+		if attrname not in self.attributes:
+			self.attributes[attrname] = []
+		if hltype:
+			self.attributes[attrname].append(hltype)
+
+
+	def lookup_attribute(self, attrname):
+		return self.attributes[attrname]
 
 
 	@property
@@ -40,6 +54,10 @@ class Name:
 		'''
 		Query the type list to find the most appropriate type for this name.
 		'''
+		# if we have a scope, then that scope should always know our type correctly
+		#if self.scope:
+		#	return self.scope.get_type()
+
 		# if we have only one type assigned, just use it
 		if len(self.types) == 1:
 			return self.types[0]

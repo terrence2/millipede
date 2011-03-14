@@ -224,7 +224,7 @@ class Indexer(ASTVisitor):
 
 
 	def visit_Name(self, node):
-		if node.ctx in [py.Store, py.Param]:
+		if node.ctx in [py.Store, py.Param, py.Aug]:
 			#NOTE: store to global/nonlocal will have already visited the global/nonlocal node and created
 			#		this name as a ref, thus preventing us from doing the (incorrect) lookup here
 			name = str(node)

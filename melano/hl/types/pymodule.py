@@ -6,4 +6,6 @@ from melano.hl.types.pyobject import PyObjectType
 
 
 class PyModuleType(PyObjectType):
-	pass
+	def __init__(self, scope):
+		super().__init__()
+		self.scope = scope

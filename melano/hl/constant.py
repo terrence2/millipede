@@ -11,6 +11,9 @@ class Constant:
 		self.type = ty
 		self.ll = None
 
+		# The attribute map -- we record all potentially attribute usage in the name
+		self.attributes = {} # {str: HLType}
+
 
 	def get_type(self):
 		return self.type
@@ -18,3 +21,14 @@ class Constant:
 
 	def reference_attribute(self, attr:str):
 		self.type.reference_attribute(attr)
+
+
+	def add_attribute(self, attrname, hltype):
+		if attrname not in self.attributes:
+			self.attributes[attrname] = []
+		if hltype:
+			self.attributes[attrname].append(hltype)
+
+
+	def lookup_attribute(self, attrname):
+		return self.attributes[attrname]

@@ -12,8 +12,6 @@ from melano.lang.ast import AST
 Load = 0
 Store = 1
 Del = 2
-AugLoad = 3
-AugStore = 4
 Param = 5
 Aug = 6
 
