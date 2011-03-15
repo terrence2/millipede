@@ -218,10 +218,10 @@ class PyObjectLL(LLType):
 
 
 	def is_true(self, ctx):
-		tmp = ctx.tmpname()
-		ctx.add_variable(c.Decl(tmp, c.TypeDecl(tmp, c.IdentifierType('int'))), False)
-		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyObject_IsTrue'), c.ExprList(c.ID(self.name)))))
-		return tmp
+		out = CIntegerLL(None)
+		out.declare(ctx.visitor.scope.context)
+		ctx.add(c.Assignment('=', c.ID(out.tmp), c.FuncCall(c.ID('PyObject_IsTrue'), c.ExprList(c.ID(self.name)))))
+		return out
 
 
 	def rich_compare_bool(self, ctx, rhs, opid):

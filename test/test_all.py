@@ -7,12 +7,12 @@ import sys
 TESTDIR = os.path.realpath('.')
 sys.path = [TESTDIR] + sys.path
 
-from melano.c.out import COut
+from contextlib import contextmanager
 from melano.project.project import MelanoProject
 import pytest
 import re
+import shutil
 import subprocess
-
 
 
 
@@ -20,7 +20,7 @@ def pytest_generate_tests(metafunc):
 	if "testfile" in metafunc.funcargnames:
 		for root, _, files in os.walk('test'):
 			for fn in files:
-				if fn.endswith('.py') and fn != 'test_all.py':
+				if fn.endswith('.py') and not fn.startswith('_') and fn != 'test_all.py':
 					path = os.path.join(root, fn)
 					metafunc.addcall(funcargs=dict(testfile=path, root=root), id=path)
 
@@ -32,7 +32,8 @@ def test_all(testfile, root):
 
 	fn = os.path.basename(testfile)
 	project = MelanoProject('test', programs=[fn[:-3]], roots=[root])
-	project.configure(limit=testfile, verbose=False)
+	#project.configure(limit=testfile, verbose=False)
+	project.configure(limit='', verbose=False)
 	project.build('test.c')
 
 	p = subprocess.Popen(['make'])
@@ -73,3 +74,4 @@ def load_expectations(testfile):
 			elif ln.startswith('#skip_io'):
 				out['skip_io'] = True
 	return out
+

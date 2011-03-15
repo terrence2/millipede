@@ -42,6 +42,9 @@ class CIntegerLL(LLType):
 		return out
 
 
+	def is_true(self, ctx):
+		return self
+
 from melano.c.types.pybool import PyBoolLL
 from melano.c.types.pyinteger import PyIntegerLL
 

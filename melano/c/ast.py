@@ -39,7 +39,8 @@ class BinaryOp(AST):
 		self.right = right
 
 
-class Break(AST): pass
+class Break(AST):
+	def __init__(self): pass
 
 
 class Case(AST):

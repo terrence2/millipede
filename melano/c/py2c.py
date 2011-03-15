@@ -792,6 +792,10 @@ class Py2C(ASTVisitor):
 		out = CIntegerLL(None, is_a_bool=True)
 		out.declare(self.scope.context, init=0)
 
+		# Note: we need to initialize the output variable to 0 before the compare since compare can be
+		#		used in, for instance, loops, where we need to re-do the comparison correctly every time.
+		self.context.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 0)))
+
 		# store this because when we bail we will come all the way back to our starting context at once
 		base_context = self.context
 
@@ -852,8 +856,6 @@ class Py2C(ASTVisitor):
 		# the break label
 		label = self.scope.get_label('forloop')
 
-		#TODO: for:else/break
-
 		tgt = self.visit(node.target)
 		iter_obj = self.visit(node.iter)
 
@@ -873,6 +875,8 @@ class Py2C(ASTVisitor):
 				self.visit_nodelist(node.body)
 
 		# handle the no-break case: else
+		# if we don't jump to forloop, then we need to just run the else block
+		self.visit_nodelist(node.orelse)
 
 		# after else, we get the break target
 		self.context.add(c.Label(label))
@@ -1405,6 +1409,39 @@ class Py2C(ASTVisitor):
 		inst.pack(self.context, *to_pack)
 		return node.hl.ll
 	visit_List = visit_Tuple
+
+
+	def visit_While(self, node):
+		# get a break label
+		label = self.scope.get_label('whileloop')
+
+		# Note: we use a do{}while(1) with manual break, instead of the more direct while(){}, so that we only
+		#		have to visit/emit the test code once, rather than once outside and once at the end of the loop.
+		dowhile = c.DoWhile(c.Constant('integer', 1), c.Compound())
+		self.context.add(dowhile)
+		with self.new_context(dowhile.stmt):
+			with self.new_label(label):
+				# perform the test
+				test_inst = self.visit(node.test)
+				#TODO: short circuit this somehow... make is_true for CIntegerLL perhaps?
+				#			also fix in visit_If if we do work it out
+				if isinstance(test_inst, PyObjectLL):
+					tmpvar = test_inst.is_true(self.context)
+					test = c.BinaryOp('==', c.Constant('integer', 0), c.ID(tmpvar))
+				elif isinstance(test_inst, CIntegerLL):
+					test = c.UnaryOp('!', c.ID(test_inst.name))
+				else:
+					raise NotImplementedError('Non-pyobject as value for If test')
+
+				# exit if our test failed
+				self.context.add(c.If(test, c.Compound(c.Break()), None))
+
+				# do loop actions
+				self.visit_nodelist(node.body)
+
+		# add the non-break (at the python level, not the c level) case for else
+		self.visit_nodelist(node.orelse)
+		self.context.add(c.Label(label))
 
 
 	def visit_With(self, node):

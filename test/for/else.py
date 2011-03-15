@@ -1,4 +1,3 @@
-#fail
 for c in 'abc':
 	if c == 'b':
 		print('b')

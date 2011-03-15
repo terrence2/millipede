@@ -44,6 +44,9 @@ class COut(ASTVisitor):
 		self.fp.write(' ' + node.op + ' ')
 		self.visit(node.right)
 
+	def visit_Break(self, node):
+		self.fp.write('break')
+
 	def visit_Cast(self, node):
 		self.fp.write('(')
 		self.visit(node.to_type)
@@ -105,6 +108,13 @@ class COut(ASTVisitor):
 				self.fp.write('}')
 			else:
 				self.visit(node.init)
+
+	def visit_DoWhile(self, node):
+		self.fp.write('do')
+		self.visit(node.stmt)
+		self.fp.write(' while(')
+		self.visit(node.cond)
+		self.fp.write(')')
 
 	def visit_ExprList(self, node):
 		if not len(node.exprs): return
