@@ -141,6 +141,7 @@ class Py2C(ASTVisitor):
 		self.tu.add_include(c.Include('Python.h', True))
 		self.tu.add_include(c.Include('data/c/env.h', False))
 		self.tu.add_include(c.Include('data/c/melanofuncobject.h', False))
+		self.tu.add_include(c.Include('data/c/melanogenobject.h', False))
 
 		# add common names
 		self.builtins = PyObjectLL(None)
@@ -456,6 +457,10 @@ class Py2C(ASTVisitor):
 		return tmp
 
 
+	def visit_Assert(self, node):
+		raise NotImplementedError
+
+
 	def visit_Assign(self, node):
 		self.comment("Assign: {} = {}".format([str(t) for t in node.targets], str(node.value)))
 		val = self.visit(node.value)
@@ -601,6 +606,14 @@ class Py2C(ASTVisitor):
 		return inst
 
 
+	def visit_BoolOp(self, node):
+		raise NotImplementedError
+
+
+	def visit_Bytes(self, node):
+		raise NotImplementedError
+
+
 	def visit_Break(self, node):
 		self.comment('break')
 		def loop_handler(label):
@@ -622,7 +635,7 @@ class Py2C(ASTVisitor):
 
 			args = PyTupleLL(None)
 			args.declare(self.scope.context, name='__auto_super_call_args')
-			args.pack(self.context, cls.ll.c_obj, c.ArrayRef(fn.ll.c_locals_name, 0))
+			args.pack(self.context, cls.ll.c_obj, c.ArrayRef(c.ID(fn.ll.c_locals_name), c.Constant('integer', 0)))
 
 			# do the actual call
 			rv = PyObjectLL(None)
@@ -837,6 +850,14 @@ class Py2C(ASTVisitor):
 		return out
 
 
+	def visit_Continue(self, node):
+		raise NotImplementedError
+
+
+	def visit_Delete(self, node):
+		raise NotImplementedError
+
+
 	def visit_Dict(self, node):
 		inst = self.create_ll_instance(node.hl)
 		inst.declare(self.scope.context)
@@ -847,6 +868,22 @@ class Py2C(ASTVisitor):
 				vinst = self.visit(v)
 				inst.set_item(self.context, kinst, vinst)
 		return inst
+
+
+	def visit_DictComp(self, node):
+		raise NotImplementedError
+
+
+	def visit_Ellipsis(self, node):
+		raise NotImplementedError
+
+
+	def visit_Expr(self, node):
+		return self.visit(node.value)
+
+
+	def visit_ExtSlice(self, node):
+		raise NotImplementedError
 
 
 	def visit_For(self, node):
@@ -883,22 +920,30 @@ class Py2C(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
-		#FIXME: PyCFunction cannot take an attr for __defaults__, __kwdefaults__, or __annotations__!?!
+		'''
+		Notes:
+			- Decorators run in the definition scope, not the module scope (unless defined at module scope, obviously)
+		'''
+		#FIXME: make MelanoCFunction take an attr for __defaults__, __kwdefaults__, and __annotations__
 		#TODO: do we want to do cleanup of our locals dicts in main before PyFinalize()?
 
 		# declare
 		docstring, body = self.split_docstring(node.body)
 		inst = self.create_ll_instance(node.hl)
 		inst.create_locals(self.tu)
-		if node.args.defaults:
-			inst.create_defaults(self.tu, len(node.args.defaults))
-		if node.args.kw_defaults:
-			inst.create_kwdefaults(self.tu, len(node.args.kw_defaults))
+		inst.create_defaults(self.tu, node.args.defaults)
+		inst.create_kwdefaults(self.tu, node.args.kw_defaults)
 		#inst.create_annotations(self.tu)
 		inst.create_pystubfunc(self.tu)
 
+		# for use everywhere else in this function when we need to pass our entire args descriptor down to the implementor
+		full_args = (node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
+
 		# the runner func needs the full param list
-		inst.create_runnerfunc(self.tu, node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
+		if node.hl.is_generator:
+			inst.create_generatorfunc(self.tu)
+		else:
+			inst.create_runnerfunc(self.tu, *full_args)
 
 		# NOTE: we create _all_ functions, even nested/class functions, in the module, instead of their surrounding scope
 		#		so that we don't have to re-create the full infrastructure every time we visit the outer scope
@@ -906,150 +951,52 @@ class Py2C(ASTVisitor):
 			self.comment("Build function {}".format(str(node.name)))
 			pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
 
-			# attach defaults to the pycfunction instance
-			if node.args.defaults:
-				for i, default in enumerate(node.args.defaults):
-					default_inst = self.visit(default)
-					self.context.add(c.Assignment('=', c.ArrayRef(inst.c_defaults_name, i), c.ID(default_inst.name)))
-
-			# attach kwonly defaults to the pycfunction instance
-			if node.args.kw_defaults:
-				for i, default in enumerate(node.args.kw_defaults):
-					default_inst = self.visit(default)
-					self.context.add(c.Assignment('=', c.ArrayRef(inst.c_kwdefaults_name, i), c.ID(default_inst.name)))
+			# enumerate and attach defaults and keyword defaults
+			inst.attach_defaults(self.context, [self.visit(default) for default in (node.args.defaults or [])])
+			inst.attach_kwdefaults(self.context, [self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
 
 			# attach annotations to the pycfunction instance
 
-		# visit any decorators (e.g. calls decorators with args before defining the function)
-		deco_fn_insts = []
-		if node.decorator_list:
-			for deconame in reversed(node.decorator_list):
-				decoinst = self.visit(deconame)
-				deco_fn_insts.append(decoinst)
+		# visit any decorators (e.g. run decorators with args to get real decorators _before_ defining the function)
+		deco_fn_insts = [self.visit(dn) for dn in reversed(node.decorator_list or [])]
 
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
-			# Attach all parameters and names into the local namespace
-			# We can't know the convention the caller used, so we need to handle all 
-			#  possiblities -- local callers do their own setup and just call the runner.
-			self.context.reserve_name('args')
-			args_tuple = PyTupleLL(None)
-			args_tuple.name = 'args'
-
-			self.context.reserve_name('kwargs')
-			kwargs_dict = PyDictLL(None)
-			kwargs_dict.name = 'kwargs'
-
 			self.comment('Python interface stub function "{}"'.format(str(node.name)))
 			inst.stub_intro(self.context)
 
-			# load positional and normal keyword args
-			if node.args.args:
-				c_args_size = CIntegerLL(None)
-				c_args_size.declare(self.scope.context, name='args_size')
-				args_tuple.get_size_unchecked(self.context, c_args_size)
-				arg_insts = [None] * len(node.args.args)
-				for i, arg in enumerate(node.args.args):
-					# declare local variable for arg ref
-					arg_insts[i] = self.create_ll_instance(arg.arg.hl)
-					arg_insts[i].declare(self.scope.context)
+			# Attach all parameters and names into the local namespace
+			# We can't know the convention the caller used, so we need to handle all 
+			#  possiblities -- local callers do their own setup and just call the runner.
+			inst.stub_load_args(self.context,
+										node.args.args or [], node.args.defaults or [],
+										node.args.vararg,
+										node.args.kwonlyargs or [], node.args.kw_defaults or [],
+										node.args.kwarg)
 
-					# query if in positional args
-					self.comment("Grab arg {}".format(str(arg.arg)))
-					query_inst = c.If(c.BinaryOp('>', c.ID(c_args_size.name), c.Constant('integer', i)),
-										c.Compound(), c.Compound())
-					self.context.add(query_inst)
-
-					# get the positional arg
-					with self.new_context(query_inst.iftrue):
-						args_tuple.get_unchecked(self.context, i, arg_insts[i])
-
-					# get the keyword arg
-					with self.new_context(query_inst.iffalse):
-						have_kwarg = c.If(c.ID('kwargs'), c.Compound(), None)
-						self.context.add(have_kwarg)
-						with self.new_context(have_kwarg.iftrue):
-							kwargs_dict.get_item_string_nofail(self.context, str(arg.arg), arg_insts[i])
-
-						query_default_inst = c.If(c.UnaryOp('!', c.ID(arg_insts[i].name)), c.Compound(), None)
-						self.context.add(query_default_inst)
-						# try loading from defaults
-						with self.new_context(query_default_inst.iftrue):
-							#TODO: only get the defaults / kwdefaults once
-							kwstartoffset = len(node.args.args) - len(node.args.defaults)
-							if i >= kwstartoffset:
-								default_offset = i - kwstartoffset
-								self.context.add(c.Assignment('=', c.ID(arg_insts[i].name), c.ArrayRef(inst.c_defaults_name, default_offset)))
-							else:
-								# emit an error for an unpassed arg
-								PyObjectLL.fail(self.context, 'Missing arg {}'.format(str(arg)))
-
-				#TODO: fill overflow into varargs and kwargs vars, if the func has them, otherwise error
-				# check if we have extra args remaining that need to go into varargs and kwargs
-				#have_extra_args = c.If(c.BinaryOp('>', c.ID(c_args_size.name), c.Constant('integer', len(node.args.args))))
-				#self.context.add(have_extra_args)
-				#with self.new_context(have_extra_args.iftrue):
-				#	# collect 
-				#
-				#	varargs_inst = PyListLL(None)
-				#	args_tuple.slice(
-
-
-			# load all keyword only args
-			#		PyObjectLL.fail(self.context, 'Require kwargs for function with kwonlyargs')
-			if node.args.kwonlyargs:
-				kwarg_insts = [None] * len(node.args.kwonlyargs)
-				for i, arg in enumerate(node.args.kwonlyargs):
-					kwarg_insts[i] = self.create_ll_instance(arg.arg.hl)
-					kwarg_insts[i].declare(self.scope.context)
-
-				# ensure we have kwargs at all
-				have_kwarg = c.If(c.ID('kwargs'), c.Compound(), c.Compound())
-				self.context.add(have_kwarg)
-				with self.new_context(have_kwarg.iftrue):
-					# load all kwarg insts
-					for i, arg in enumerate(node.args.kwonlyargs):
-						kwargs_dict.get_item_string_nofail(self.context, str(arg.arg), kwarg_insts[i])
-						need_default = c.If(c.UnaryOp('!', c.ID(kwarg_insts[i].name)), c.Compound(), None)
-						self.context.add(need_default)
-						with self.new_context(need_default.iftrue):
-							self.context.add(c.Assignment('=', c.ID(kwarg_insts[i].name), c.ArrayRef(inst.c_kwdefaults_name, i)))
-				with self.new_context(have_kwarg.iffalse):
-					for i, arg in enumerate(node.args.kwonlyargs):
-						self.context.add(c.Assignment('=', c.ID(kwarg_insts[i].name), c.ArrayRef(inst.c_kwdefaults_name, i)))
-
-			#TODO: add unused args to varargs and pass if needed or error if not
-			#TODO: add unused kwargs to varargs and pass if needed or error if not
-
-			# call the runner func
-			inst.call_runnerfunc(self.context, node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
-			with self.new_scope(self.scope, inst.c_runner_func.body):
-				# create insts for the args we passed
-				for arg in node.args.args or []:
-					arg_inst = self.create_ll_instance(arg.arg.hl)
-					arg_inst.name = str(arg.arg)
-					inst.set_attr_string(self.context, str(arg.arg), arg_inst)
-				for arg in node.args.kwonlyargs or []:
-					arg_inst = self.create_ll_instance(arg.arg.hl)
-					arg_inst.name = str(arg.arg)
-					inst.set_attr_string(self.context, str(arg.arg), arg_inst)
-
-				inst.runner_intro(self.context)
-
-				# attach args to locals
-				#for i, arg in enumerate(node.args.args or []):
-				#	inst.set_attr_string(self.context, str(arg.arg), arg_insts[i])
-				#for i, arg in enumerate(node.args.kwonlyargs or []):
-				#	inst.set_attr_string(self.context, str(arg.arg), kwarg_insts[i])
-
-				self.visit_nodelist(node.body)
-				inst.runner_outro(self.context)
+			# perform the low-level call operation
+			if not node.hl.is_generator:
+				inst.call_runnerfunc(self.context, *full_args)
+			else:
+				inst.call_generatorfunc(self.context, *full_args)
 
 			# emit cleanup and return code
-			#FIXME: clean up locals!
 			inst.stub_outro(self.context)
 
+		# build the actual runner function
+		with self.new_scope(node.hl, inst.c_runner_func.body):
+			if not node.hl.is_generator:
+				inst.runner_load_args(self.context, *full_args)
+			else:
+				inst.generator_load_args(self.context, *full_args)
+
+			inst.runner_intro(self.context)
+			self.comment('body')
+			self.visit_nodelist(node.body)
+			inst.runner_outro(self.context)
+
 		# apply any decorators
+		self.comment('decorate {}'.format(str(node.name)))
 		for decoinst in deco_fn_insts:
 			decoargs = PyTupleLL(None)
 			decoargs.declare(self.scope.context)
@@ -1062,11 +1009,19 @@ class Py2C(ASTVisitor):
 		return inst
 
 
+	def visit_GeneratorExp(self, node):
+		raise NotImplementedError
+
+
+	#def visit_Global(self, node):
+	#	raise NotImplementedError
+
+
 	def visit_If(self, node):
 		inst = self.visit(node.test)
 		if isinstance(inst, PyObjectLL):
 			tmpvar = inst.is_true(self.context)
-			test = c.BinaryOp('==', c.Constant('integer', 1), c.ID(tmpvar))
+			test = c.BinaryOp('==', c.Constant('integer', 1), c.ID(tmpvar.name))
 		elif isinstance(inst, CIntegerLL):
 			test = c.ID(inst.name)
 		else:
@@ -1080,6 +1035,10 @@ class Py2C(ASTVisitor):
 				self.visit_nodelist(node.orelse)
 
 		self.context.add(stmt)
+
+
+	def visit_IfExp(self, node):
+		raise NotImplementedError
 
 
 	def visit_Import(self, node):
@@ -1169,6 +1128,18 @@ class Py2C(ASTVisitor):
 		return node.hl.ll
 
 
+	def visit_Lambda(self, node):
+		raise NotImplementedError
+
+
+	def visit_List(self, node):
+		raise NotImplementedError
+
+
+	def visit_ListComp(self, node):
+		raise NotImplementedError
+
+
 	def visit_Module(self, node):
 		# we need the toplevel available to all children so that we can do lookups for globals
 		self.hl_module = node.hl
@@ -1235,11 +1206,19 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError("unknown context for name: {}".format(node.ctx))
 
 
+	#def visit_NonLocal(self, node):
+	#	raise NotImplementedError
+
+
 	def visit_Num(self, node):
 		inst = self.create_ll_instance(node.hl)
 		inst.declare(self.scope.context)
 		inst.new(self.context, node.n)
 		return inst
+
+
+	def visit_Pass(self, node):
+		pass
 
 
 	def visit_Raise(self, node):
@@ -1300,6 +1279,18 @@ class Py2C(ASTVisitor):
 			vinst = self.visit(v)
 			inst.add(self.context, vinst)
 		return inst
+
+
+	def visit_SetComp(self, node):
+		raise NotImplementedError
+
+
+	def visit_Slice(self, node):
+		raise NotImplementedError
+
+
+	def visit_Starred(self, node):
+		raise NotImplementedError
 
 
 	def visit_Str(self, node):
@@ -1522,3 +1513,9 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError("UnaryOp({})".format(node.op))
 
 		return inst
+
+
+	def visit_Yield(self, node):
+		rv_inst = self.visit(node.value)
+		self.context.add(c.FuncCall(c.ID('co_set_data'), c.ExprList(c.FuncCall(c.ID('co_current'), c.ExprList()), c.ID(rv_inst.name))))
+		self.context.add(c.FuncCall(c.ID('co_resume'), c.ExprList()))

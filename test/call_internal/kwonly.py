@@ -5,7 +5,7 @@ foo()
 foo(b='hello')
 #out: 0 hello {}
 
-#PyCFunction doesn't have these attrs
+#FIXME: re-add these tests after we get the proper attrs on MelanoFunc
 #print(foo.__defaults__)
 #-out: None
 #print(foo.__kwdefaults__['a'])

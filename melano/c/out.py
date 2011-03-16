@@ -32,7 +32,11 @@ class COut(ASTVisitor):
 		self.visit(node.type)
 
 	def visit_ArrayRef(self, node):
-		self.fp.write(str(node.name) + '[' + str(node.subscript) + ']')
+		self.visit(node.name)
+		self.fp.write('[')
+		self.visit(node.subscript)
+		self.fp.write(']')
+		#self.fp.write(str(node.name) + '[' + str(node.subscript) + ']')
 
 	def visit_Assignment(self, node):
 		self.visit(node.lvalue)

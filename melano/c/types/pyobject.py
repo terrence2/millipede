@@ -7,6 +7,10 @@ from melano.c.types.lltype import LLType
 
 
 class PyObjectLL(LLType):
+	@staticmethod
+	def typedecl():
+		return c.PtrDecl(c.TypeDecl(None, c.IdentifierType('PyObject')))
+
 	def declare(self, ctx, quals=[], name=None):
 		super().declare(ctx, quals, name)
 		ctx.add_variable(c.Decl(self.name, c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('PyObject'))), quals=quals, init=c.ID('NULL')), True)
@@ -220,7 +224,7 @@ class PyObjectLL(LLType):
 	def is_true(self, ctx):
 		out = CIntegerLL(None)
 		out.declare(ctx.visitor.scope.context)
-		ctx.add(c.Assignment('=', c.ID(out.tmp), c.FuncCall(c.ID('PyObject_IsTrue'), c.ExprList(c.ID(self.name)))))
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_IsTrue'), c.ExprList(c.ID(self.name)))))
 		return out
 
 

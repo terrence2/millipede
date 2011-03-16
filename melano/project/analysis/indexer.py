@@ -296,3 +296,4 @@ class Indexer(ASTVisitor):
 	def visit_Yield(self, node):
 		assert isinstance(self.context, MelanoFunction), 'Yield in non-function scope'
 		self.context.is_generator = True
+		self.visit(node.value)
