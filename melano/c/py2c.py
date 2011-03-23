@@ -9,10 +9,12 @@ from melano.c.types.integer import CIntegerLL
 from melano.c.types.lltype import LLType
 from melano.c.types.pybool import PyBoolLL
 from melano.c.types.pybytes import PyBytesLL
-from melano.c.types.pycfunction import PyCFunctionLL
 from melano.c.types.pyclass import PyClassLL
+from melano.c.types.pyclosure import PyClosureLL
 from melano.c.types.pydict import PyDictLL
 from melano.c.types.pyfloat import PyFloatLL
+from melano.c.types.pyfunction import PyFunctionLL
+from melano.c.types.pygenerator import PyGeneratorLL
 from melano.c.types.pyinteger import PyIntegerLL
 from melano.c.types.pylist import PyListLL
 from melano.c.types.pymodule import PyModuleLL
@@ -29,9 +31,11 @@ from melano.hl.types.integer import CIntegerType
 from melano.hl.types.pybool import PyBoolType
 from melano.hl.types.pybytes import PyBytesType
 from melano.hl.types.pyclass import PyClassType
+from melano.hl.types.pyclosure import PyClosureType
 from melano.hl.types.pydict import PyDictType
 from melano.hl.types.pyfloat import PyFloatType
 from melano.hl.types.pyfunction import PyFunctionType
+from melano.hl.types.pygenerator import PyGeneratorType
 from melano.hl.types.pyinteger import PyIntegerType
 from melano.hl.types.pylist import PyListType
 from melano.hl.types.pymodule import PyModuleType
@@ -100,7 +104,9 @@ class Py2C(ASTVisitor):
 	TYPEMAP = {
 		PyObjectType: PyObjectLL,
 		PyModuleType: PyModuleLL,
-		PyFunctionType: PyCFunctionLL,
+		PyFunctionType: PyFunctionLL,
+		PyGeneratorType: PyGeneratorLL,
+		PyClosureType: PyClosureLL,
 		PyClassType: PyClassLL,
 		PyBoolType: PyBoolLL,
 		PyBytesType: PyBytesLL,
@@ -133,6 +139,13 @@ class Py2C(ASTVisitor):
 		#		control to work together to create a correct goto-web.
 		self.flowcontrol = []
 
+		# A) If we get an exception from within an exception handling context, we need to
+		#	(1) trigger a nested exception output in our traceback line list
+		# -- i think this is all -- the new exception appears to stomp the old exception in libpython
+		#	TODO -- does python track multiple exceptions internally or does it rely on traceback inspection to recreate this info?
+		#	B) Also, if we have a bare raise in an exception handler, we need to know what exception to raise.
+		self.exc_cookie_stack = []
+
 		# the main unit where we put top-level entries
 		self.tu = c.TranslationUnit()
 
@@ -140,13 +153,13 @@ class Py2C(ASTVisitor):
 		self.tu.add_include(c.Comment(' ***Includes*** '))
 		self.tu.add_include(c.Include('Python.h', True))
 		self.tu.add_include(c.Include('data/c/env.h', False))
-		self.tu.add_include(c.Include('data/c/melanofuncobject.h', False))
-		self.tu.add_include(c.Include('data/c/melanogenobject.h', False))
+		self.tu.add_include(c.Include('data/c/funcobject.h', False))
+		self.tu.add_include(c.Include('data/c/genobject.h', False))
 
 		# add common names
-		self.builtins = PyObjectLL(None)
+		self.builtins = PyObjectLL(None, self)
 		self.builtins.declare(self.tu, quals=['static'], name='builtins')
-		self.none = PyObjectLL(None)
+		self.none = PyObjectLL(None, self)
 		self.none.declare(self.tu, quals=['static'], name='None')
 
 		# the main function -- handles init, cleanup, and error printing at top level
@@ -161,8 +174,7 @@ class Py2C(ASTVisitor):
 			c.Compound(
 					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('Py_UNICODE'))), c.Constant('integer', 4)))),
 					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('wchar_t'))), c.Constant('integer', 4)))),
-					c.FuncCall(c.ID('Py_Initialize'), c.ExprList()),
-					c.FuncCall(c.ID('PySys_SetArgv'), c.ExprList(c.ID('argc'), c.ID('argv'))),
+					c.FuncCall(c.ID('__init__'), c.ExprList(c.ID('argc'), c.ID('argv'))),
 					c.Assignment('=', c.ID('builtins'), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(c.Constant('string', 'builtins')))),
 					c.Assignment('=', c.ID('None'), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID('builtins'), c.Constant('string', 'None')))),
 			)
@@ -212,6 +224,7 @@ class Py2C(ASTVisitor):
 
 		prior = self.context
 		self.context = ctx
+		self.context.visitor = self
 		yield
 		self.context = prior
 
@@ -257,40 +270,8 @@ class Py2C(ASTVisitor):
 		return None, nodes
 
 
-	def fetch_exception(self, exc_cookie:Nonable((PyObjectLL,) * 3)) -> Nonable((PyObjectLL,) * 3):
-		if exc_cookie is None:
-			exc_cookie = (PyObjectLL(None), PyObjectLL(None), PyObjectLL(None))
-			for part in exc_cookie:
-				part.declare(self.scope.context)
-		self.context.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
-																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
-																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
-																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
-		# NOTE: if we have a real exception here that we are replacing, then restore will decref it, but fetch doesn't incref it for us
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
-		return exc_cookie
-
-
-	def normalize_exception(self, exc_cookie):
-		'''Extract and return the real exception value (rather than the type, which is returned by PyErr_Occurred and
-			which gets used for matching.'''
-		self.context.add(c.FuncCall(c.ID('PyErr_NormalizeException'), c.ExprList(
-																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
-																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
-																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
-		exc_cookie[1].incref(self.context)
-		return exc_cookie[1]
-
-
-	def restore_exception(self, exc_cookie:Nonable((PyObjectLL,) * 3)):
-		self.context.add(c.FuncCall(c.ID('PyErr_Restore'), c.ExprList(
-													c.ID(exc_cookie[0].name), c.ID(exc_cookie[1].name), c.ID(exc_cookie[2].name))))
-
-
 	def create_ll_instance(self, hlnode:HLType):
-		inst = self.TYPEMAP[hlnode.get_type().__class__](hlnode)
+		inst = self.TYPEMAP[hlnode.get_type().__class__](hlnode, self)
 		hlnode.ll = inst
 		return inst
 
@@ -317,20 +298,157 @@ class Py2C(ASTVisitor):
 		raise InvalidScope(err)
 
 
-	def raise_exception(self, ctx):
+	### Exception Handling ###
+	def set_exception(self, ty_inst, inst):
+		c_inst = c.ID(inst.name) if inst else c.ID('NULL')
+		self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(ty_inst.name), c_inst)))
+
+
+	def set_exception_str(self, type_name, message):
+		if message:
+			self.context.add(c.FuncCall(c.ID('PyErr_SetString'), c.ExprList(c.ID(type_name),
+																c.Constant('string', PyStringLL.str2c(message)))))
+		else:
+			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(type_name), c.ID('NULL'))))
+
+
+
+	def clear_exception(self):
+		self.context.add(c.FuncCall(c.ID('__err_clear__'), c.ExprList()))
+
+
+	def capture_error(self):
+		filename = self.hl_module.filename
+		try: context = self.scope.owner.name
+		except IndexError: context = '<module>'
+		st = self._current_node.start
+		end = self._current_node.end
+
+		if st[0] == end[0]: # one line only
+			src = self.hl_module.get_source_line(st[0])
+			rng = (st[1], end[1])
+		else:
+			# if we can't fit the full error context on one line, also print the number of lines longer it goes and the ending column
+			src = self.hl_module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
+			rng = (st[1], len(src))
+		src = src.strip().replace('"', '\\"')
+
+		self.context.add(
+					c.FuncCall(c.ID('__err_capture__'), c.ExprList(
+						c.Constant('string', filename), c.Constant('integer', st[0]), c.ID('__LINE__'), c.Constant('string', context),
+						c.Constant('string', src), c.Constant('integer', rng[0]), c.Constant('integer', rng[1]))))
+
+
+	@contextmanager
+	def save_exception(self):
+		'''Stores asside the exception with fetch/store for the yielded block'''
+		exc_cookie = self.fetch_exception()
+		yield exc_cookie
+		self.restore_exception(exc_cookie)
+
+
+	@contextmanager
+	def maybe_save_exception(self):
+		'''Like save_exception, but checks if an exception is set before saving/restoring.'''
+		# if we have an exception set, store it asside during finally processing
+		check_err = c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), None)
+		self.context.add(check_err)
+		with self.new_context(check_err.iftrue):
+			exc_cookie = self.fetch_exception()
+
+		yield exc_cookie
+
+		# if we stored an exception, restore it
+		check_restore = c.If(c.ID(exc_cookie[0].name), c.Compound(), None)
+		self.context.add(check_restore)
+		with self.new_context(check_restore.iftrue):
+			self.restore_exception(exc_cookie)
+
+
+	@contextmanager
+	def maybe_save_exception_normalized(self):
+		'''Like maybe_save_exception, but normalizes the cookie and packing it into a tuple before handing 
+			it back to the yielded block.'''
+		vec = PyTupleLL(None, self)
+		vec.declare(self.scope.context)
+
+		# if we have an exception set, store it asside during finally processing
+		check_err = c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), c.Compound())
+		self.context.add(check_err)
+		with self.new_context(check_err.iftrue):
+			exc_cookie = self.fetch_exception()
+			self.normalize_exception_full(exc_cookie)
+			vec.new(self.context, 3)
+			exc_cookie[0].incref(self.context)
+			vec.set_item_unchecked(self.context, 0, exc_cookie[0])
+			exc_cookie[1].incref(self.context)
+			vec.set_item_unchecked(self.context, 1, exc_cookie[1])
+			self.none.incref(self.context)
+			vec.set_item_unchecked(self.context, 2, self.none)
+		with self.new_context(check_err.iffalse):
+			vec.pack(self.context, None, None, None)
+
+		yield vec
+
+		# if we stored an exception, restore it
+		check_restore = c.If(c.ID(exc_cookie[0].name), c.Compound(), None)
+		self.context.add(check_restore)
+		with self.new_context(check_restore.iftrue):
+			self.restore_exception(exc_cookie)
+
+
+
+	def fetch_exception(self):
+		exc_cookie = (PyObjectLL(None, self), PyObjectLL(None, self), PyObjectLL(None, self))
+		self.exc_cookie_stack.append(exc_cookie) #NOTE: this must be matched by a restore
+		for part in exc_cookie:
+			part.declare(self.scope.context)
+		self.context.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
+																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
+		# NOTE: if we have a real exception here that we are replacing, then restore will decref it, but fetch doesn't incref it for us
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
+		return exc_cookie
+
+
+	def normalize_exception_full(self, exc_cookie):
+		'''Returns the full, normalized exception vector.'''
+		self.context.add(c.FuncCall(c.ID('PyErr_NormalizeException'), c.ExprList(
+																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
+																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
+		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
+
+
+	def normalize_exception(self, exc_cookie):
+		'''Extract and return the real exception value (rather than the type, which is returned by PyErr_Occurred and
+			which gets used for matching.'''
+		self.normalize_exception_full(exc_cookie)
+		exc_cookie[1].incref(self.context)
+		return exc_cookie[1]
+
+
+	def restore_exception(self, exc_cookie:Nonable((PyObjectLL,) * 3)):
+		top_cookie = self.exc_cookie_stack.pop()
+		assert top_cookie is exc_cookie
+		self.context.add(c.FuncCall(c.ID('PyErr_Restore'), c.ExprList(
+													c.ID(exc_cookie[0].name), c.ID(exc_cookie[1].name), c.ID(exc_cookie[2].name))))
+
+
+	def exit_with_exception(self):
 		# exceptions need to follow proper flow control....
-		#FIXME: make exceptions work
-		#return c.Goto(self.flowcontrol[-1])
-
-		with self.new_context(ctx):
-			exc_cookie_holder = [None]
-			self.handle_flowcontrol(
-								except_handler=self._except_flowcontrol,
-								finally_handler=lambda label: self._finally_exception_flowcontrol(label, exc_cookie_holder),
-								end_handler=self._end_flowcontrol)
+		self.handle_flowcontrol(
+							except_handler=self._except_flowcontrol,
+							finally_handler=self._finally_flowcontrol,
+							end_handler=self._end_flowcontrol)
 
 
-	def handle_flowcontrol(self, *, forloop_handler=None, whileloop_handler=None,
+	def handle_flowcontrol(self, *, break_handler=None, continue_handler=None,
 						except_handler=None, finally_handler=None, end_handler=None):
 		'''Flow control needs to perform special actions for each flow-control label that the flow-changing operation
 			see's under us.  For instance, if we are breaking out of a loop, inside of a try/finally, we need to first
@@ -344,8 +462,8 @@ class Py2C(ASTVisitor):
 			proceed after this point.  
 		'''
 		labelrules = {
-			'forloop': forloop_handler,
-			'whileloop': whileloop_handler,
+			'break': break_handler,
+			'continue': continue_handler,
 			'except': except_handler,
 			'finally': finally_handler,
 			'end': end_handler,
@@ -379,34 +497,14 @@ class Py2C(ASTVisitor):
 		return True
 
 
-	def _finally_noexception_flowcontrol(self, label):
+	def _finally_flowcontrol(self, label):
 		ret_label = self.scope.get_label('return_from_finally')
 		#TODO: only declare jmp_ctx when we use it the first time
 		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
 		self.context.add(c.Goto(label))
 		self.context.add(c.Label(ret_label))
+		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.ID('NULL')))
 		return False
-
-
-	def _finally_exception_flowcontrol(self, label, exception_cookie_holder=None):
-		'''This is like the normal finally flow control, except that since we have an exception set,
-			we need to disable the exception context while we are processing.  This also takes
-			a cookie value that we can use to store the exception variables so that we can
-			reuse them, if we care enough to wrap a lambda around the callback and have
-			the value in the function closure.
-		'''
-		# Store current exception indicator during finally processing
-		exception_cookie_holder[0] = self.fetch_exception(exception_cookie_holder[0])
-
-		ret_label = self.scope.get_label('return_from_finally')
-		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
-		self.context.add(c.Goto(label))
-		self.context.add(c.Label(ret_label))
-
-		# restore error indicator
-		self.restore_exception(exception_cookie_holder[0])
-
-		#TODO: handle a second exception that occurs during finally processing
 
 
 	def _store(self, target, val):
@@ -419,7 +517,7 @@ class Py2C(ASTVisitor):
 		'''
 		assert isinstance(target, py.Name)
 
-		# NOTE: the hl Name or Ref will always be parented under  the right scope
+		# NOTE: the hl Name or Ref will always be parented under the right scope
 		scope = target.hl.parent
 		scope.ll.set_attr_string(self.context, str(target), val)
 
@@ -445,7 +543,7 @@ class Py2C(ASTVisitor):
 		'''
 		source - the underlying name reference that we need to provide access to
 		'''
-		tmp = PyObjectLL(None)
+		tmp = PyObjectLL(None, self)
 		tmp.declare(self.scope.context)
 
 		# if we have a scope, load from it
@@ -458,7 +556,15 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Assert(self, node):
-		raise NotImplementedError
+		inst = self.visit(node.test)
+		istrue_inst = inst.is_true(self.context)
+		check = c.If(c.UnaryOp('!', c.ID(istrue_inst.name)), c.Compound(), None)
+		self.context.add(check)
+		with self.new_context(check.iftrue):
+			s = node.msg.s if node.msg else None
+			self.set_exception_str('PyExc_AssertionError', s)
+			self.capture_error()
+			self.exit_with_exception()
 
 
 	def visit_Assign(self, node):
@@ -475,6 +581,14 @@ class Py2C(ASTVisitor):
 			elif isinstance(target, py.Name):
 				tgt = self.visit(target)
 				self._store(target, val)
+			elif isinstance(target, py.Tuple):
+				key = PyIntegerLL(None, self)
+				key.declare(self.scope.context)
+				for i, elt in enumerate(target.elts):
+					tgt = self.visit(elt)
+					key.set_constant(self.context, i)
+					val.get_item(self.context, key, elt.hl.ll)
+					self._store(elt, elt.hl.ll)
 			else:
 				raise NotImplementedError("Don't know how to assign to type: {}".format(type(target)))
 
@@ -572,7 +686,7 @@ class Py2C(ASTVisitor):
 		r = self.visit(node.right)
 
 		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.context)
+		inst.declare(self.scope.context)
 
 		#TODO: python detects str + str at runtime and skips dispatch through PyNumber_Add, so we can 
 		#		assume that would be faster
@@ -616,13 +730,16 @@ class Py2C(ASTVisitor):
 
 	def visit_Break(self, node):
 		self.comment('break')
-		def loop_handler(label):
+		def break_handler(label): # the next break is our ultimate target
+			self.context.add(c.FuncCall(c.ID('__err_clear__'), c.ExprList()))
 			self.context.add(c.Goto(label))
 			return True
+		#def except_handler(label): # if we break out of an except, clear the error
+		#	self.context.add(c.FuncCall(c.ID('__err_clear__'), c.ExprList()))
+		#	return False
 		self.handle_flowcontrol(
-							whileloop_handler=loop_handler,
-							forloop_handler=loop_handler,
-							finally_handler=self._finally_noexception_flowcontrol,
+							break_handler=break_handler,
+							finally_handler=self._finally_flowcontrol,
 							end_handler=self._end_flowcontrol)
 
 
@@ -633,12 +750,12 @@ class Py2C(ASTVisitor):
 			cls = self.find_nearest_class_scope(err='super must be called in a class context: {}'.format(node.start))
 			fn = self.find_nearest_method_scope(err='super must be called in a method context: {}'.format(node.start))
 
-			args = PyTupleLL(None)
+			args = PyTupleLL(None, self)
 			args.declare(self.scope.context, name='__auto_super_call_args')
 			args.pack(self.context, cls.ll.c_obj, c.ArrayRef(c.ID(fn.ll.c_locals_name), c.Constant('integer', 0)))
 
 			# do the actual call
-			rv = PyObjectLL(None)
+			rv = PyObjectLL(None, self)
 			rv.declare(self.scope.context)
 			funcinst.call(self.context, args, None, rv)
 			return rv
@@ -663,7 +780,7 @@ class Py2C(ASTVisitor):
 					#		because a failure halfway through would end up with us double-freeing half of our refs?
 					idinst.incref(self.context)
 			# Note: we always need to pass a tuple as args, even if there is nothing in it
-			args1 = PyTupleLL(None)
+			args1 = PyTupleLL(None, self)
 			args1.declare(self.scope.context)
 			args1.pack(self.context, *args_insts)
 
@@ -676,7 +793,7 @@ class Py2C(ASTVisitor):
 					valinst = valinst.as_pyobject(self.context)
 					kw_insts.append((str(kw.keyword), valinst))
 				if kw_insts:
-					args2 = PyDictLL(None)
+					args2 = PyDictLL(None, self)
 					args2.declare(self.scope.context)
 					args2.new(self.context)
 					for keyname, valinst in kw_insts:
@@ -686,7 +803,7 @@ class Py2C(ASTVisitor):
 			self.comment('do call "{}"'.format(str(node.func)))
 
 			# make the call
-			rv = PyObjectLL(None)
+			rv = PyObjectLL(None, self)
 			rv.declare(self.scope.context)
 			funcinst.call(self.context, args1, args2, rv)
 
@@ -726,17 +843,17 @@ class Py2C(ASTVisitor):
 		#	we do the class setup
 		with self.new_scope(node.hl, inst.c_builder_func.body):
 			self.context.reserve_name('self')
-			self_inst = PyObjectLL(None)
+			self_inst = PyObjectLL(None, self)
 			self_inst.name = 'self'
 			self.context.reserve_name('args')
-			args_tuple = PyTupleLL(None)
+			args_tuple = PyTupleLL(None, self)
 			args_tuple.name = 'args'
 			self.context.reserve_name('kwargs')
-			kwargs_dict = PyDictLL(None)
+			kwargs_dict = PyDictLL(None, self)
 			kwargs_dict.name = 'kwargs'
 
 			# unpack the namespace dict that we will be writing to
-			namespace_inst = PyDictLL(None)
+			namespace_inst = PyDictLL(None, self)
 			namespace_inst.declare(self.scope.context, name='namespace')
 			args_tuple.get_unchecked(self.context, 0, namespace_inst)
 			namespace_inst.fail_if_null(self.context, namespace_inst.name)
@@ -763,13 +880,13 @@ class Py2C(ASTVisitor):
 			#name_inst = self.visit(node.name)
 
 			# create the name ref string
-			c_name_str = PyStringLL(None)
+			c_name_str = PyStringLL(None, self)
 			c_name_str.declare(self.scope.context, name=str(node.name) + '_name')
 			c_name_str.new(self.context, str(node.name))
 
 			pyfunc = inst.create_builder_funcdef(self.context, self.tu)
 
-			build_class_inst = PyObjectLL(None)
+			build_class_inst = PyObjectLL(None, self)
 			build_class_inst.declare(self.scope.context)
 			self.builtins.get_attr_string(self.context, '__build_class__', build_class_inst)
 
@@ -778,14 +895,14 @@ class Py2C(ASTVisitor):
 				for b in node.bases:
 					base_insts.append(self.visit(b))
 
-			args = PyTupleLL(None)
+			args = PyTupleLL(None, self)
 			args.declare(self.scope.context)
 			args.pack(self.context, pyfunc, c_name_str, *base_insts)
 			build_class_inst.call(self.context, args, node.kwargs, pyclass_inst)
 
 		# apply decorators to the class
 		for decoinst in deco_fn_insts:
-			decoargs = PyTupleLL(None)
+			decoargs = PyTupleLL(None, self)
 			decoargs.declare(self.scope.context)
 			decoargs.pack(self.context, pyclass_inst)
 			decoinst.call(self.context, decoargs, None, pyclass_inst)
@@ -802,7 +919,7 @@ class Py2C(ASTVisitor):
 		self.comment(s)
 
 		# initialize new tmp variable with default value of false
-		out = CIntegerLL(None, is_a_bool=True)
+		out = CIntegerLL(None, self, is_a_bool=True)
 		out.declare(self.scope.context, init=0)
 
 		# Note: we need to initialize the output variable to 0 before the compare since compare can be
@@ -837,6 +954,7 @@ class Py2C(ASTVisitor):
 			stmt = c.If(c.ID(rv.name), c.Compound(), None)
 			self.context.add(stmt)
 			self.context = stmt.iftrue
+			self.context.visitor = self
 
 			# next lhs is current rhs
 			a = b
@@ -851,7 +969,14 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Continue(self, node):
-		raise NotImplementedError
+		self.comment('continue')
+		def loop_handler(label):
+			self.context.add(c.Goto(label))
+			return True
+		self.handle_flowcontrol(
+							continue_handler=loop_handler,
+							finally_handler=self._finally_flowcontrol,
+							end_handler=self._end_flowcontrol)
 
 
 	def visit_Delete(self, node):
@@ -890,33 +1015,35 @@ class Py2C(ASTVisitor):
 		#for <target> in <iter>: <body>
 		#else: <orelse>
 
-		# the break label
-		label = self.scope.get_label('forloop')
+		# the break and continue label
+		break_label = self.scope.get_label('break_for')
+		continue_label = self.scope.get_label('continue_for')
 
 		tgt = self.visit(node.target)
 		iter_obj = self.visit(node.iter)
 
 		# get the PyIter for the iteration object
-		iter = PyObjectLL(None)
+		iter = PyObjectLL(None, self)
 		iter.declare(self.scope.context)
 		iter_obj.get_iter(self.context, iter)
 
 		# the gets the object locally inside of the while expr; we do the full assignment inside the body
-		tmp = PyObjectLL(None)
+		tmp = PyObjectLL(None, self)
 		tmp.declare(self.scope.context)
 		stmt = c.While(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound())
 		self.context.add(stmt)
 		with self.new_context(stmt.stmt):
-			with self.new_label(label):
+			with self.new_label(break_label), self.new_label(continue_label):
 				self._store(node.target, tmp)
 				self.visit_nodelist(node.body)
+			self.context.add(c.Label(continue_label))
 
 		# handle the no-break case: else
 		# if we don't jump to forloop, then we need to just run the else block
 		self.visit_nodelist(node.orelse)
 
 		# after else, we get the break target
-		self.context.add(c.Label(label))
+		self.context.add(c.Label(break_label))
 
 
 	def visit_FunctionDef(self, node):
@@ -925,43 +1052,63 @@ class Py2C(ASTVisitor):
 			- Decorators run in the definition scope, not the module scope (unless defined at module scope, obviously)
 		'''
 		#FIXME: make MelanoCFunction take an attr for __defaults__, __kwdefaults__, and __annotations__
-		#TODO: do we want to do cleanup of our locals dicts in main before PyFinalize()?
-
-		# declare
-		docstring, body = self.split_docstring(node.body)
-		inst = self.create_ll_instance(node.hl)
-		inst.create_locals(self.tu)
-		inst.create_defaults(self.tu, node.args.defaults)
-		inst.create_kwdefaults(self.tu, node.args.kw_defaults)
-		#inst.create_annotations(self.tu)
-		inst.create_pystubfunc(self.tu)
 
 		# for use everywhere else in this function when we need to pass our entire args descriptor down to the implementor
 		full_args = (node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
 
-		# the runner func needs the full param list
-		if node.hl.is_generator:
-			inst.create_generatorfunc(self.tu)
-		else:
-			inst.create_runnerfunc(self.tu, *full_args)
+		# prepare the lowlevel
+		docstring, body = self.split_docstring(node.body)
+		inst = self.create_ll_instance(node.hl)
 
-		# NOTE: we create _all_ functions, even nested/class functions, in the module, instead of their surrounding scope
-		#		so that we don't have to re-create the full infrastructure every time we visit the outer scope
-		with self.module_scope():
+		# declare and create non-dependent stuff
+		#inst.create_locals(self.tu)
+		inst.create_defaults(self.tu, node.args.defaults, node.args.kw_defaults)
+		#inst.create_annotations(self.tu)
+		inst.create_pystubfunc(self.tu)
+		inst.create_runnerfunc(self.tu, *full_args)
+
+		# NOTE: we create all "normal" functions (e.g. methods and non nested funcs) at the module scope (and funcs 
+		#		_at_ the module scope) so that class instanciation does not have to re-declare the function object constantly.
+		# NOTE: For generator functions, we need to create the function in the containing context so that we have access 
+		#		to the parent's coroutine context at runtime.
+		# NOTE: For functions that are defined nested, such that they need to keep a closure, we have to create them in 
+		#		their runtime context so that we can build and attach the current values of all names so that when they are
+		#		called later, they will have access to the correct values (e.g. with recursive use of a returned inner function).
+		if not node.hl.is_generator and not node.hl.has_closure:
+			with self.module_scope():
+				self.comment("Build function {}".format(str(node.name)))
+				pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
+				# enumerate and attach defaults and keyword defaults
+				inst.attach_defaults(self.context,
+									[self.visit(default) for default in (node.args.defaults or [])],
+							 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
+				# attach annotations to the pycfunction instance
+				#inst.attach_annotations(self.context, ...)
+		else:
 			self.comment("Build function {}".format(str(node.name)))
 			pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
-
 			# enumerate and attach defaults and keyword defaults
-			inst.attach_defaults(self.context, [self.visit(default) for default in (node.args.defaults or [])])
-			inst.attach_kwdefaults(self.context, [self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
-
+			inst.attach_defaults(self.context,
+								[self.visit(default) for default in (node.args.defaults or [])],
+						 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
 			# attach annotations to the pycfunction instance
+			#inst.attach_annotations(self.context, ...)
 
 		# visit any decorators (e.g. run decorators with args to get real decorators _before_ defining the function)
 		deco_fn_insts = [self.visit(dn) for dn in reversed(node.decorator_list or [])]
 
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
+			self.context.reserve_name('self')
+			self_inst = PyObjectLL(None, self)
+			self_inst.name = 'self'
+			self.context.reserve_name('args')
+			args_tuple = PyTupleLL(None, self)
+			args_tuple.name = 'args'
+			self.context.reserve_name('kwargs')
+			kwargs_dict = PyDictLL(None, self)
+			kwargs_dict.name = 'kwargs'
+
 			self.comment('Python interface stub function "{}"'.format(str(node.name)))
 			inst.stub_intro(self.context)
 
@@ -974,36 +1121,32 @@ class Py2C(ASTVisitor):
 										node.args.kwonlyargs or [], node.args.kw_defaults or [],
 										node.args.kwarg)
 
-			# perform the low-level call operation
-			if not node.hl.is_generator:
-				inst.call_runnerfunc(self.context, *full_args)
-			else:
-				inst.call_generatorfunc(self.context, *full_args)
+			# call the low-level runner function from the stub
+			inst.transfer_to_runnerfunc(self.context, *full_args)
 
 			# emit cleanup and return code
 			inst.stub_outro(self.context)
 
 		# build the actual runner function
 		with self.new_scope(node.hl, inst.c_runner_func.body):
-			if not node.hl.is_generator:
-				inst.runner_load_args(self.context, *full_args)
-			else:
-				inst.generator_load_args(self.context, *full_args)
-
+			inst.runner_load_args(self.context, *full_args)
+			inst.runner_load_locals(self.context)
 			inst.runner_intro(self.context)
 			self.comment('body')
 			self.visit_nodelist(node.body)
 			inst.runner_outro(self.context)
 
 		# apply any decorators
-		self.comment('decorate {}'.format(str(node.name)))
+		if deco_fn_insts:
+			self.comment('decorate {}'.format(str(node.name)))
 		for decoinst in deco_fn_insts:
-			decoargs = PyTupleLL(None)
+			decoargs = PyTupleLL(None, self)
 			decoargs.declare(self.scope.context)
 			decoargs.pack(self.context, pycfunc)
 			decoinst.call(self.context, decoargs, None, pycfunc)
 
 		# store the resulting function into the scope where it's defined
+		self.comment('store function name into scope')
 		self._store(node.name, pycfunc)
 
 		return inst
@@ -1014,7 +1157,7 @@ class Py2C(ASTVisitor):
 
 
 	#def visit_Global(self, node):
-	#	raise NotImplementedError
+	#	not needed
 
 
 	def visit_If(self, node):
@@ -1028,13 +1171,12 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError('Non-pyobject as value for If test')
 
 		stmt = c.If(test, c.Compound(), c.Compound() if node.orelse else None)
+		self.context.add(stmt)
 		with self.new_context(stmt.iftrue):
 			self.visit_nodelist(node.body)
 		if node.orelse:
 			with self.new_context(stmt.iffalse):
 				self.visit_nodelist(node.orelse)
-
-		self.context.add(stmt)
 
 
 	def visit_IfExp(self, node):
@@ -1045,14 +1187,17 @@ class Py2C(ASTVisitor):
 		def _import_as_name(self, node, name, asname):
 			ref = asname.hl.scope
 			assert ref is not None
-			assert ref.modtype != MelanoModule.PROJECT
 			tgt = self.visit(asname)
 			self.comment("Import module {} as {}".format(str(name), str(asname)))
-			tmp = PyObjectLL(None)
+			tmp = PyObjectLL(None, self)
 			tmp.declare(self.scope.context)
-			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+			if ref.modtype == MelanoModule.PROJECT:
+				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(ref.ll.c_builder_name), c.ExprList())))
+			else:
+				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
 																												c.Constant('string', str(name))))))
 			tmp.fail_if_null(self.context, tmp.name)
+			tmp.incref(self.context)
 			self._store(asname, tmp)
 
 		def _import(self, node, name):
@@ -1065,15 +1210,17 @@ class Py2C(ASTVisitor):
 				tgt = self.visit(name.first())
 
 			assert ref is not None
-			#FIXME: need to implement in-project imports
-			#assert ref.modtype != MelanoModule.PROJECT
 
 			self.comment("Import module {}".format(str(name)))
-			tmp = PyObjectLL(None)
+			tmp = PyObjectLL(None, self)
 			tmp.declare(self.scope.context)
-			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+			if ref.modtype == MelanoModule.PROJECT:
+				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(ref.ll.c_builder_name), c.ExprList())))
+			else:
+				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
 																												c.Constant('string', str(name))))))
 			tmp.fail_if_null(self.context, tmp.name)
+			tmp.incref(self.context)
 
 			#NOTE: if we are importing from an attribute, we also need to import the goal name, so it exists, _and_ we 
 			#		need to import the base name so that we can assign it to the target name
@@ -1094,31 +1241,48 @@ class Py2C(ASTVisitor):
 
 
 	def visit_ImportFrom(self, node):
-		# import the module
-		modname = '.' * node.level + str(node.module)
-		tmp = PyObjectLL(None)
+		mod = node.module.hl
+
+		# load the module reference
+		tmp = PyObjectLL(None, self)
 		tmp.declare(self.scope.context)
-		self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																											c.Constant('string', str(modname))))))
+		if mod.modtype == MelanoModule.PROJECT:
+			# call the builder function to construct or access the module
+			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(mod.ll.c_builder_name), c.ExprList())))
+		else:
+			# import the module at the c level
+			modname = '.' * node.level + str(node.module)
+			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+																												c.Constant('string', str(modname))))))
 		tmp.fail_if_null(self.context, tmp.name)
+		tmp.incref(self.context)
 
-		for alias in node.names:
-			name = str(alias.name)
-			if name == '*':
-				raise NotImplementedError
-
+		# pluck names out of the module and into our namespace
+		def _import_name(name, asname):
 			# load the name off of the module
-			val = PyObjectLL(None)
+			val = PyObjectLL(None, self)
 			val.declare(self.scope.context)
 			self.context.add(c.Assignment('=', c.ID(val.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
-																		c.ID(tmp.name), c.Constant('string', name)))))
+																		c.ID(tmp.name), c.Constant('string', PyStringLL.str2c(str(name)))))))
 			val.fail_if_null(self.context, val.name)
+			if asname:
+				self._store(asname, val)
+			else:
+				self._store(name, val)
+
+		for alias in node.names:
 			if alias.asname:
 				tgt = self.visit(alias.asname)
-				self._store(alias.asname, val)
+				_import_name(alias.name, alias.asname)
 			else:
-				tgt = self.visit(alias.name)
-				self._store(alias.name, val)
+				if str(alias.name) == '*':
+					for name in mod.lookup_star():
+						py_name = py.Name(name, py.Store, None)
+						py_name.hl = self.hl_module.symbols[name]
+						_import_name(py_name, None)
+				else:
+					tgt = self.visit(alias.name)
+					_import_name(alias.name, alias.asname)
 
 
 	def visit_Index(self, node):
@@ -1140,10 +1304,16 @@ class Py2C(ASTVisitor):
 		raise NotImplementedError
 
 
+	def preallocate(self, node):
+		'''Called once for every module before we enter the emit phase.  We use this to acquire a ll builder name
+			for every module so that we can do things like triangular imports without running into problems.'''
+		node.hl.ll = self.create_ll_instance(node.hl)
+
+
 	def visit_Module(self, node):
 		# we need the toplevel available to all children so that we can do lookups for globals
 		self.hl_module = node.hl
-		self.ll_module = self.create_ll_instance(self.hl_module)
+		self.ll_module = self.hl_module.ll
 
 		# setup the module
 		self.ll_module.declare(self.tu)
@@ -1176,16 +1346,15 @@ class Py2C(ASTVisitor):
 			# cleanup and return
 			self.ll_module.outro(self.context)
 
-		# add the function call to the main to set the module's global name
-		#FIXME: this will load all modules at startup time, and only fetch existing references at runtime... this is a fairly
-		#		significant change from standard python, and i should probably think of a way to fix it.
-		tmp = self.main.body.tmp_pyobject()
-		self.main.body.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(self.ll_module.c_builder_name), c.ExprList())))
-		self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
-								c.FuncCall(c.ID('__err_show_traceback__'), c.ExprList()),
-								c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
-								c.Return(c.Constant('integer', 1),
-							)), None))
+		# the only module we want to load automatically at runtime is the main module
+		if self.hl_module.owner.name == '__main__':
+			tmp = self.main.body.tmp_pyobject()
+			self.main.body.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(self.ll_module.c_builder_name), c.ExprList())))
+			self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
+									c.FuncCall(c.ID('__err_show_traceback__'), c.ExprList()),
+									c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
+									c.Return(c.Constant('integer', 1),
+								)), None))
 
 		return self.ll_module
 
@@ -1224,6 +1393,16 @@ class Py2C(ASTVisitor):
 	def visit_Raise(self, node):
 		self.comment('raise')
 
+		if not node.exc:
+			exc_cookie = self.exc_cookie_stack[-1]
+			self.restore_exception(exc_cookie)
+			self.exc_cookie_stack.append(exc_cookie)
+			self.handle_flowcontrol(
+								except_handler=self._except_flowcontrol,
+								finally_handler=self._finally_flowcontrol,
+								end_handler=self._end_flowcontrol)
+			return
+
 		#FIXME: re-raise existing context if node.exc is not present
 		inst = self.visit(node.exc)
 
@@ -1236,23 +1415,23 @@ class Py2C(ASTVisitor):
 		}
 		goto end;
 		'''
-		is_a_type = inst.is_instance(self.context, c.Cast(c.PtrDecl(c.TypeDecl(None, c.IdentifierType('PyObject'))), c.UnaryOp('&', c.ID('PyType_Type'))))
+		is_a_type = inst.is_instance(self.context, PyTypeLL)
 		if_stmt = c.If(c.ID(is_a_type.name), c.Compound(), c.Compound())
+		self.context.add(if_stmt)
 		with self.new_context(if_stmt.iftrue):
-			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(inst.name), c.ID('NULL'))))
+			self.set_exception(inst, None)
 		with self.new_context(if_stmt.iffalse):
-			ty_inst = PyTypeLL(None)
+			ty_inst = PyTypeLL(None, self)
 			ty_inst.declare(self.scope.context)
 			inst.get_type(self.context, ty_inst)
-			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(ty_inst.name), c.ID(inst.name))))
-		self.context.add(LLType.capture_error(self.context))
-		self.context.add(if_stmt)
+			self.set_exception(ty_inst, inst)
+		self.capture_error()
+		self.exit_with_exception()
 
 		# do exception flow-control
-		exc_cookie_holder = [None]
 		self.handle_flowcontrol(
 							except_handler=self._except_flowcontrol,
-							finally_handler=lambda label: self._finally_exception_flowcontrol(label, exc_cookie_holder),
+							finally_handler=self._finally_flowcontrol,
 							end_handler=self._end_flowcontrol)
 
 
@@ -1267,7 +1446,7 @@ class Py2C(ASTVisitor):
 
 		# do exit flowcontrol to handle finally blocks
 		self.handle_flowcontrol(
-							finally_handler=self._finally_noexception_flowcontrol,
+							finally_handler=self._finally_flowcontrol,
 							end_handler=self._end_flowcontrol)
 
 
@@ -1307,7 +1486,7 @@ class Py2C(ASTVisitor):
 		elif node.ctx == py.Load:
 			kinst = self.visit(node.slice)
 			tgtinst = self.visit(node.value)
-			tmp = PyObjectLL(None)
+			tmp = PyObjectLL(None, self)
 			tmp.declare(self.scope.context)
 			tgtinst.get_item(self.context, kinst, tmp)
 			return tmp
@@ -1316,62 +1495,92 @@ class Py2C(ASTVisitor):
 
 
 	def visit_TryExcept(self, node):
+		self.comment('try-except')
+		tryend_label = self.scope.get_label('tryend')
+		tryelseend_label = self.scope.get_label('tryelseend')
+
 		# add this exception to the flow control context in the try body
-		label = self.scope.get_label('except')
-		with self.new_label(label):
+		except_label = self.scope.get_label('except')
+		with self.new_label(except_label):
 			self.visit_nodelist(node.body)
 
+		# if we get to the end of the try block without failing, jump past the except block 
+		self.context.add(c.Goto(tryend_label))
+
 		# branch target for jumping to this exception
-		self.context.add(c.Label(label))
+		self.context.add(c.Label(except_label))
 
 		### exception dispatch logic
-		# get the exception
-		exc_cookie = None
-		exc_type_inst = PyObjectLL(None)
+		## Check if there was actually an exception -- raise if not
+		exc_type_inst = PyObjectLL(None, self)
 		exc_type_inst.declare(self.scope.context)
 		self.context.add(c.Assignment('=', c.ID(exc_type_inst.name), c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList())))
 		exc_type_inst.fail_if_null(self.context, exc_type_inst.name)
-		parts = [] # [c.If]
-		for handler in node.handlers:
-			# check if this is the exception that matches
-			if handler.type:
-				class_inst = self.visit(handler.type)
-				test = c.If(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))), c.Compound(), None)
-			else:
-				test = c.If(c.Constant('integer', 1), c.Compound(), None)
-			# implement the body
-			with self.new_context(test.iftrue):
-				exc_cookie = self.fetch_exception(exc_cookie)
-				if handler.name:
-					exc_val_inst = self.normalize_exception(exc_cookie)
-					self._store(handler.name, exc_val_inst)
-				self.visit_nodelist(handler.body)
-				self.restore_exception(exc_cookie)
-			parts.append(test)
+		## Store the exception during exception processing
+		with self.save_exception() as exc_cookie:
+			## check the exception handles against the exception that occurred
+			parts = [] # [c.If]
+			for handler in node.handlers:
+				# check if this is the exception that matches
+				if handler.type:
+					class_inst = self.visit(handler.type)
+					test = c.If(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))), c.Compound(), None)
+				# if no handler type, this is the catchall
+				# Note: we use an ifelse for this, since else is our no-match case
+				else:
+					test = c.If(c.Constant('integer', 1), c.Compound(), None)
+				# implement the body of the matching handler
+				with self.new_context(test.iftrue):
+					# if we named the exception, fetch (or build it) from the cookie
+					if handler.name:
+						exc_val_inst = self.normalize_exception(exc_cookie)
+						self._store(handler.name, exc_val_inst)
+					self.visit_nodelist(handler.body)
+				# append next if/handler
+				parts.append(test)
 
-		# chain together all parts
-		current = parts[0]
-		for p in parts[1:]:
-			current.iffalse = p
-			current = p
+			## chain together all if's into a big if-elif structure
+			# Note: leave last if as 'current' so we can attach an else to it's iffalse
+			current = parts[0]
+			for p in parts[1:]:
+				current.iffalse = p
+				current = p
 
-		current.iffalse = c.Compound()
-		with self.new_context(current.iffalse):
-			# if we have an else clause, implement it directly as an else here
-			if node.orelse:
-				self.visit_nodelist(node.orelse)
-			# otherwise, if we reach the else clause of the match, nobody handled the error; raise it to the next frame
-			else:
-				self.context.add(c.Goto(c.ID('end')))
+			## the final else triggers if we didn't match an exception
+			current.iffalse = c.Compound()
+			with self.new_context(current.iffalse):
+				# if we have an else clause, implement it directly as an else here
+				if node.orelse:
+					self.visit_nodelist(node.orelse)
 
-		# add the if-chain to the body
-		self.context.add(parts[0])
+				# otherwise, if we reach the else clause of the match, nobody handled the error; raise it to the next frame
+				else:
+					#NOTE: if we get here we will be leaving, so we need to restore the exception before visiting this
+					top_cookie = self.exc_cookie_stack[-1]
+					self.restore_exception(top_cookie)
+					self.exc_cookie_stack.append(top_cookie) # re-save so we can pop again at exit
+					self.handle_flowcontrol(
+										finally_handler=self._finally_flowcontrol,
+										end_handler=self._end_flowcontrol)
+
+			## add the if-chain to the body
+			self.context.add(parts[0])
 
 		# if we fall off the end of the exception handler, we are considered cleared
-		self.context.add(c.FuncCall(c.ID('PyErr_Clear'), c.ExprList()))
+		self.clear_exception()
+		self.context.add(c.Goto(tryelseend_label))
+
+		# if we finish, successfully, jump here to skip the exeption handling and run the else block
+		self.context.add(c.Label(tryend_label))
+		self.visit_nodelist(node.orelse)
+
+		# if we reach the end of the except block, don't run the else block
+		self.context.add(c.Label(tryelseend_label))
 
 
 	def visit_TryFinally(self, node):
+		self.comment('try-finally')
+
 		# add this finally to the flow control context in the try body
 		label = self.scope.get_label('finally')
 		with self.new_label(label):
@@ -1381,7 +1590,8 @@ class Py2C(ASTVisitor):
 		self.context.add(c.Label(label))
 
 		# handle the final stmt
-		self.visit_nodelist(node.finalbody)
+		with self.maybe_save_exception():
+			self.visit_nodelist(node.finalbody)
 
 		# if the top-level needs control back to complete, it will set __jmp_ctx__
 		self.context.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
@@ -1403,15 +1613,16 @@ class Py2C(ASTVisitor):
 
 
 	def visit_While(self, node):
-		# get a break label
-		label = self.scope.get_label('whileloop')
+		# get a break and continue label
+		break_label = self.scope.get_label('break_while')
+		continue_label = self.scope.get_label('continue_while')
 
 		# Note: we use a do{}while(1) with manual break, instead of the more direct while(){}, so that we only
 		#		have to visit/emit the test code once, rather than once outside and once at the end of the loop.
 		dowhile = c.DoWhile(c.Constant('integer', 1), c.Compound())
 		self.context.add(dowhile)
 		with self.new_context(dowhile.stmt):
-			with self.new_label(label):
+			with self.new_label(break_label), self.new_label(continue_label):
 				# perform the test
 				test_inst = self.visit(node.test)
 				#TODO: short circuit this somehow... make is_true for CIntegerLL perhaps?
@@ -1430,30 +1641,33 @@ class Py2C(ASTVisitor):
 				# do loop actions
 				self.visit_nodelist(node.body)
 
+			# continue on to immediately before test for continue
+			self.context.add(c.Label(continue_label))
+
 		# add the non-break (at the python level, not the c level) case for else
 		self.visit_nodelist(node.orelse)
-		self.context.add(c.Label(label))
+		self.context.add(c.Label(break_label))
 
 
 	def visit_With(self, node):
 		ctx = self.visit(node.context_expr)
 
 		# load enter and exit
-		ent = PyObjectLL(None)
-		ent.declare(self.scope.context)
-		ctx.get_attr_string(self.context, '__enter__', ent)
-		ext = PyObjectLL(None)
-		ext.declare(self.scope.context)
-		ctx.get_attr_string(self.context, '__exit__', ext)
+		enter_fn_inst = PyObjectLL(None, self)
+		enter_fn_inst.declare(self.scope.context)
+		ctx.get_attr_string(self.context, '__enter__', enter_fn_inst)
+		exit_fn_inst = PyObjectLL(None, self)
+		exit_fn_inst.declare(self.scope.context)
+		ctx.get_attr_string(self.context, '__exit__', exit_fn_inst)
 
-		tmp = PyObjectLL(None)
+		tmp = PyObjectLL(None, self)
 		tmp.declare(self.scope.context)
 
 		# call enter
-		args = PyTupleLL(None)
+		args = PyTupleLL(None, self)
 		args.declare(self.scope.context)
 		args.pack(self.context)
-		ent.call(self.context, args, None, tmp)
+		enter_fn_inst.call(self.context, args, None, tmp)
 
 		# if we provide the result in the namespace, set it
 		if node.optional_vars:
@@ -1475,21 +1689,14 @@ class Py2C(ASTVisitor):
 		# mark exit as a finally target
 		self.context.add(c.Label(exit_label))
 
-		#TODO: Check for exception
-		#FIXME: this needs to not be finally, but something else because exit does want to partially run in the
-		#		context of our current exception state
-
-		#if an exception was raised:
-		#	exc = copy of (exception, instance, traceback)
-		#else:
-		#	exc = (None, None, None)
-		#exit(*exc)
-		args = PyTupleLL(None)
-		args.declare(self.scope.context)
-		args.pack(self.context, None, None, None)
-		out_var = PyObjectLL(None)
-		out_var.declare(self.scope.context)
-		ext.call(self.context, args, None, out_var)
+		# query for a possibly set exception
+		with self.maybe_save_exception_normalized() as argvec:
+			# return value
+			out_var = PyObjectLL(None, self)
+			out_var.declare(self.scope.context)
+			# do the __exit__ call
+			exit_fn_inst.call(self.context, argvec, None, out_var)
+			argvec.delete(self.context)
 
 		# if the top-level needs control back to complete, it will set __jmp_ctx__
 		self.context.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
@@ -1498,7 +1705,7 @@ class Py2C(ASTVisitor):
 	def visit_UnaryOp(self, node):
 		o = self.visit(node.operand)
 
-		inst = PyObjectLL(None)
+		inst = PyObjectLL(None, self)
 		inst.declare(self.scope.context)
 
 		if node.op == py.Invert:
@@ -1516,6 +1723,16 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Yield(self, node):
+		# get the returned instance
 		rv_inst = self.visit(node.value)
-		self.context.add(c.FuncCall(c.ID('co_set_data'), c.ExprList(c.FuncCall(c.ID('co_current'), c.ExprList()), c.ID(rv_inst.name))))
-		self.context.add(c.FuncCall(c.ID('co_resume'), c.ExprList()))
+
+		# assign to our yielded slot slot
+		self.context.add(c.Assignment('=', c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 1)), c.ID(rv_inst.name)))
+		rv_inst.incref(self.context)
+
+		# transfer control back to originator
+		self.context.add(c.FuncCall(c.ID('coro_transfer'), c.ExprList(
+																	c.FuncCall(c.ID('MelanoGen_GetContext'), c.ExprList(c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 0)))),
+																	c.FuncCall(c.ID('MelanoGen_GetSourceContext'), c.ExprList(c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 0))))
+																	)))
+		self.context.add(c.Assignment('=', c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 1)), c.ID('NULL')))

@@ -1,8 +1,8 @@
 try:
 	with open('/dev/null', 'rb') as fp:
 		print(fp.closed)
-		raise NotImplementedError
-except NotImplementedError:
+		1 // 0
+except ZeroDivisionError:
 	print(fp.closed)
 
 #out: False

@@ -562,6 +562,11 @@ class Starred(expr):
 		super().__init__(*args, **kwargs)
 		self.value = value
 		self.ctx = ctx
+		self.set_context(ctx)
+
+	def set_context(self, ctx):
+		super().set_context(ctx)
+		self.value.set_context(ctx)
 
 #| Str(string s) -- need to specify raw, unicode, etc?
 class Str(expr):
@@ -589,6 +594,14 @@ class Tuple(expr):
 		super().__init__(*args, **kwargs)
 		self.elts = elts
 		self.ctx = ctx
+		self.set_context(ctx)
+
+	def set_context(self, ctx):
+		super().set_context(ctx)
+		if self.elts:
+			for elt in self.elts:
+				try: elt.set_context(ctx)
+				except AttributeError: pass
 
 #| UnaryOp(unaryop op, expr operand)
 class UnaryOp(expr):

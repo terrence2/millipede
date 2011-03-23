@@ -46,7 +46,9 @@ def test_all(testfile, root):
 	if not expect['skip_io']:
 		assert filter_output(out[0]) == expect['stdout']
 		assert filter_output(out[1]) == expect['stderr']
-
+	if expect['no_external']:
+		with open('test.c', 'r') as fp:
+			assert len([ln for ln in fp if 'PyImport_ImportModule' in ln]) <= 1
 
 def filter_output(data:bytes) -> [str]:
 	out = data.strip().decode('UTF-8').split('\n') # turn into text lines
@@ -60,6 +62,7 @@ def load_expectations(testfile):
 		'returncode': 0,
 		'xfail': False,
 		'skip_io': False,
+		'no_external': False,
 	}
 	with open(testfile, 'r') as fp:
 		for ln in fp:
@@ -73,5 +76,7 @@ def load_expectations(testfile):
 				out['xfail'] = True
 			elif ln.startswith('#skip_io'):
 				out['skip_io'] = True
+			elif ln.startswith('#no_external'):
+				out['no_external'] = True
 	return out
 

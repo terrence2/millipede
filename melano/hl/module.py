@@ -79,7 +79,8 @@ class MelanoModule(Scope):
 		'''Return all of the names exposed by this scope.'''
 		#TODO: if we have a static __all__, obey it, rather than giving everything
 		#TODO: if __all__ is stored to with a non-const, we need to emit a warning or something
-		return list(self.symbols.values())
+		# Possible strategy: -- copy the file, add a print(__ALL__) to the end, then run it in a real python interpreter
+		return list(self.symbols.keys())
 
 
 	def show(self, level=0):

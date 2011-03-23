@@ -4,7 +4,9 @@ All rights reserved.
 '''
 from melano.hl.name import Name
 from melano.hl.scope import Scope
+from melano.hl.types.pyclosure import PyClosureType
 from melano.hl.types.pyfunction import PyFunctionType
+from melano.hl.types.pygenerator import PyGeneratorType
 import itertools
 import logging
 
@@ -16,14 +18,13 @@ class MelanoFunction(Scope):
 		super().__init__(*args, **kwargs)
 
 		# flags
-		self.is_generator = False # set by yield stmt when indexing
+		self.is_generator = False # set by presense of yield function when indexing
+		self.has_closure = False # set by presence of sub-functions when indexing
 
-		# the hl type definition
-		self.type = PyFunctionType(self)
 
-		# map locals names to an offset into the locals array
-		self.locals_map = {}
-		self.locals_count = itertools.count(0)
+	def set_needs_closure(self):
+		self.has_closure = True
+		super().set_needs_closure()
 
 
 	def get_locals_count(self):
@@ -35,14 +36,18 @@ class MelanoFunction(Scope):
 		super().show(level)
 
 
-	def add_symbol(self, name, init=None):
-		if name not in self.locals_map:
-			self.locals_map[name] = next(self.locals_count)
-		return super().add_symbol(name, init)
-
-
 	def lookup(self, name:str) -> Name:
 		try:
 			return self.symbols[name]
 		except KeyError:
-			return self.owner.parent.lookup(name)
+			return self.get_next_scope().lookup(name)
+
+
+	def get_type(self):
+		if self.has_closure:
+			return PyClosureType(self)
+		elif self.is_generator:
+			return PyGeneratorType(self)
+		else:
+			return PyFunctionType(self)
+

@@ -104,6 +104,7 @@ class Linker(ASTVisitor):
 		mod = self.module.refs.get(modname, None)
 		if not mod:
 			raise NotImplementedError('No ref to module {} when linking'.format(modname))
+		node.module.hl = mod
 
 		for alias in node.names:
 			assert not isinstance(alias.name, py.Attribute)
@@ -111,8 +112,8 @@ class Linker(ASTVisitor):
 				self.visit(alias.asname)
 			else:
 				if str(alias.name) == '*':
-					for n, ref in mod.lookup_star().items():
-						self.context.add_symbol(n)
+					for name in mod.lookup_star():
+						self.context.add_symbol(name)
 				else:
 					self.visit(alias.name)
 
@@ -136,3 +137,4 @@ class Linker(ASTVisitor):
 				assert handler is node.handlers[-1], "default 'except' must be last"
 			# NOTE: don't bother visiting the name, since we know it is a Store
 			self.visit_nodelist(handler.body)
+		self.visit_nodelist(node.orelse)

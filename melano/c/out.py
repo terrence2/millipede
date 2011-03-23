@@ -75,6 +75,8 @@ class COut(ASTVisitor):
 				# not all elements require a closing ; 
 				if not isinstance(item, (c.Comment, c.Compound, c.For, c.If, c.Label, c.Switch, c.While)):
 					self.fp.write(';')
+				if isinstance(item, c.Label) and item is node.block_items[-1]:
+					self.fp.write(';')
 				self.fp.write('\n')
 		self.fp.write(self.level * '\t' + '}')
 
@@ -210,6 +212,11 @@ class COut(ASTVisitor):
 				self.visit(n)
 				self.fp.write(';')
 			self.fp.write('}')
+
+	def visit_StructRef(self, node):
+		self.visit(node.name)
+		self.fp.write('->')
+		self.visit(node.field)
 
 	def visit_TranslationUnit(self, node):
 		for n in node.ext:

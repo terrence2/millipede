@@ -1,6 +1,7 @@
 #include <Python.h>
 #include <locale.h>
-
+#include <coro.h>
+#include "genobject.h"
 
 extern int __melano_main__(int argc, wchar_t **argv);
 extern wchar_t* _Py_char2wchar(const char* arg, size_t *size);
@@ -8,28 +9,28 @@ extern wchar_t* _Py_char2wchar(const char* arg, size_t *size);
 
 void __err_capture__(char *file, int lineno, int clineno, char *context,
 				char *srcline, int err_start, int err_end) {
-	PyObject *val, *src, *dict, *tb;
-	int rv;
+    PyObject *val, *src, *dict, *tb;
+    int rv;
 
-	// build current value
-	val = PyUnicode_FromFormat("  File \"%s\", line %d (%d), in %s\n", file, lineno, clineno, context);
-	if(!val)
+    // build current value
+    val = PyUnicode_FromFormat("  File \"%s\", line %d (%d), in %s\n", file, lineno, clineno, context);
+    if(!val)
 		Py_FatalError("Failed to format captured error");
-	src = PyUnicode_FromFormat("    %s\n", srcline);
-	if(!src)
+    src = PyUnicode_FromFormat("    %s\n", srcline);
+    if(!src)
 		Py_FatalError("Failed to format captured source line");
 
-	// get the thread state dict
-	dict = PyThreadState_GET()->dict;
-	if(!dict) {
-		dict = PyThreadState_GET()->dict = PyDict_New();
-		if(!dict)
+    // get the thread state dict
+    dict = PyThreadState_GET()->dict;
+    if(!dict) {
+	    dict = PyThreadState_GET()->dict = PyDict_New();
+	    if(!dict)
 			Py_FatalError("Could not create thread state dict");
-	}
+    }
 
-	// get the traceback list
-	tb = PyDict_GetItemString(dict, "__melano_traceback__");
-	if(!tb) {
+    // get the traceback list
+    tb = PyDict_GetItemString(dict, "__melano_traceback__");
+    if(!tb) {
 		tb = PyList_New(0);
 		if(!tb)
 			Py_FatalError("Could not create traceback list");
@@ -37,14 +38,14 @@ void __err_capture__(char *file, int lineno, int clineno, char *context,
 		rv = PyDict_SetItemString(dict, "__melano_traceback__", tb);
 		if(rv == -1)
 			Py_FatalError("Failed to insert traceback into thread state");
-	}
+    }
 
-	// add the value to the traceback list
-	rv = PyList_Append(tb, src);
-	if(rv == -1)
+    // add the value to the traceback list
+    rv = PyList_Append(tb, src);
+    if(rv == -1)
 		Py_FatalError("Failed to append to traceback");
-	rv = PyList_Append(tb, val);
-	if(rv == -1)
+    rv = PyList_Append(tb, val);
+    if(rv == -1)
 		Py_FatalError("Failed to append to traceback");
 }
 
@@ -75,6 +76,36 @@ void __err_show_traceback__() {
 	}
 }
 
+
+void __err_clear__() {
+    int rv;
+    PyObject *dict, *tb;
+
+    // reset the error indicator
+    PyErr_Clear();
+
+    dict = PyThreadState_GET()->dict;
+    if(!dict)
+		return;
+
+    // grab the traceback list
+    tb = PyDict_GetItemString(dict, "__melano_traceback__");
+    if(!tb)
+		return;
+
+    // clear the traceback list
+    rv = PyList_SetSlice(tb, 0, PyList_Size(tb), NULL);
+    if(rv)
+		Py_FatalError("Error clearing traceback list when clearing error.");
+}
+
+
+void
+__init__(int argc, wchar_t **argv) {
+    Py_Initialize();
+    PySys_SetArgv(argc, argv);
+    MelanoGen_Initialize();
+}
 
 /*
 This is borrowed directly from python's sources.

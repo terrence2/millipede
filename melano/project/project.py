@@ -10,7 +10,6 @@ from melano.hl.builtins import Builtins
 from melano.hl.module import MelanoModule
 from melano.hl.name import Name
 from melano.hl.scope import Scope
-from melano.project.analysis.coder import Coder
 from melano.project.analysis.find_links import FindLinks
 from melano.project.analysis.indexer import Indexer
 from melano.project.analysis.linker import Linker
@@ -186,40 +185,15 @@ class MelanoProject:
 		visitor = Py2C()
 		for mod in self.modules.values():
 			if self.is_local(mod):
+				logging.info("Preparing: {}".format(mod.filename))
+				visitor.preallocate(mod.ast)
+		for mod in self.modules.values():
+			if self.is_local(mod):
 				logging.info("Emitting: {}".format(mod.filename))
 				visitor.visit(mod.ast)
 		visitor.close()
 
 		return visitor.tu
-
-
-
-
-	def emit_code(self):
-		'''Look up-reference and thru-call to find the types of all names.'''
-		m = Makefile(self.build_dir, self.roots)
-		for fn in self.order:
-			mod = self.modules[fn]
-			if self.is_local(mod):
-				logging.info("Emit: {}".format(mod.filename))
-				if mod.names['__name__'] != '__main__':
-					tgt = m.add_source(mod.filename)
-					v = Coder(self, mod, tgt)
-					v.visit(mod.ast)
-					tgt.emit()
-					tgt.close()
-
-		for program in self.programs:
-			mod = self.programs[program]
-			tgt = m.add_program(program, mod.filename)
-			v = Coder(self, mod, tgt)
-			v.visit(mod.ast)
-			tgt.set_entry(v.context.name)
-			tgt.emit()
-			tgt.close()
-
-		m.write()
-
 
 
 	def show(self):

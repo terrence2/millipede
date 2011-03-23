@@ -19,17 +19,16 @@ class PyModuleLL(PyObjectLL):
 		self.ll_dict = None
 
 		# the ll name and instance representing the function that builds the module
-		self.c_builder_name = None
+		self.c_builder_name = self.visitor.tu.reserve_name(self.hlnode.name + '_builder')
 		self.c_builder_func = None
 
 
 	def declare(self, tu):
 		# create the namespace dict
-		self.ll_dict = PyDictLL(self.hlnode)
+		self.ll_dict = PyDictLL(self.hlnode, self.visitor)
 		self.ll_dict.declare(tu, ['static'], name=self.hlnode.name + '_dict')
 
 		# create the module creation function
-		self.c_builder_name = tu.reserve_name(self.hlnode.name + '_builder')
 		self.c_builder_func = c.FuncDef(
 			c.Decl(self.c_builder_name,
 				c.FuncDecl(
@@ -41,7 +40,7 @@ class PyModuleLL(PyObjectLL):
 		tu.add(self.c_builder_func)
 
 		# declare the module
-		self.ll_mod = PyObjectLL(self.hlnode)
+		self.ll_mod = PyObjectLL(self.hlnode, self.visitor)
 		self.ll_mod.declare(tu, ['static'])
 
 
@@ -62,11 +61,11 @@ class PyModuleLL(PyObjectLL):
 
 	def set_initial_string_attribute(self, ctx, name:str, s:str):
 		if s is not None:
-			ps = PyStringLL(None)
+			ps = PyStringLL(None, self.visitor)
 			ps.declare(ctx)
 			ps.new(ctx, PyStringLL.str2c(s))
 		else:
-			ps = PyObjectLL(None)
+			ps = PyObjectLL(None, self.visitor)
 			ps.declare(ctx)
 			ps.assign_none(ctx)
 		self.ll_dict.set_item_string(ctx, name, ps)
@@ -97,14 +96,15 @@ class PyModuleLL(PyObjectLL):
 
 		# access globals first, fall back to builtins -- remember to ref the global if we get it, since dict get item borrows
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(self.ll_dict.name), c.Constant('string', attrname)))))
-		ctx.add(c.If(c.FuncCall(c.ID(mode), c.ExprList(c.UnaryOp('!', c.ID(out.name)))),
+		frombuiltins = c.If(c.FuncCall(c.ID(mode), c.ExprList(c.UnaryOp('!', c.ID(out.name)))),
 				c.Compound(
 					c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetAttrString'),
 														c.ExprList(c.ID('builtins'), c.Constant('string', attrname)))),
-					c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(out.name)))), c.Compound(c.Goto('end')), None)
 				),
 				c.Compound(
 					c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(out.name)))
-				)))
-		out.fail_if_null(ctx, out.name)
+				))
+		ctx.add(frombuiltins)
+		frombuiltins.iftrue.visitor = ctx.visitor
+		self.fail_if_null(frombuiltins.iftrue, out.name)
 

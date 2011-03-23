@@ -7,6 +7,17 @@
 extern "C" {
 #endif
 
+typedef struct {
+    Py_ssize_t refcnt;
+    PyObject **locals;
+} MelanoLocals;
+
+MelanoLocals * MelanoLocals_Create(Py_ssize_t cnt);
+MelanoLocals ** MelanoStack_Create(Py_ssize_t cnt);
+void MelanoStack_SetLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *locals);
+void MelanoStack_Destroy(MelanoLocals **stack, Py_ssize_t cnt);
+
+
 /* This is about the type 'builtin_function_or_method',
    not Python methods in user-defined classes.  See classobject.h
    for the latter. */
@@ -16,11 +27,13 @@ PyAPI_DATA(PyTypeObject) PyMelanoFunction_Type;
 #define PyMelanoFunction_Check(op) (Py_TYPE(op) == &PyMelanoFunction_Type)
 
 /* takes arguments: args, kwargs */
-typedef PyObject *(*PyMelanoFunction)(PyObject *, PyObject *);
+typedef PyObject *(*PyMelanoFunction)(PyObject *, PyObject *, PyObject *);
 
 PyAPI_FUNC(PyMelanoFunction) PyMelanoFunction_GetFunction(PyObject *);
 PyAPI_FUNC(PyObject *) PyMelanoFunction_GetSelf(PyObject *);
-PyAPI_FUNC(int) PyMelanoFunction_GetFlags(PyObject *);
+
+PyAPI_FUNC(MelanoLocals **) PyMelanoFunction_GetLocals(PyObject *);
+PyAPI_FUNC(void) PyMelanoFunction_SetLocals(PyObject *, MelanoLocals **, Py_ssize_t);
 
 /* Macros for direct access to these values. Type checks are *not*
    done, so use with care. */
@@ -31,14 +44,25 @@ PyAPI_FUNC(int) PyMelanoFunction_GetFlags(PyObject *);
 PyAPI_FUNC(PyObject *) PyMelanoFunction_Call(PyObject *, PyObject *, PyObject *);
 
 
-PyAPI_FUNC(PyObject *) PyMelanoFunction_New(const char *name, \
-                                PyMelanoFunction func, const char *doc);
+PyAPI_FUNC(PyObject *) PyMelanoFunction_New(
+                                const char *name,
+                                PyMelanoFunction func,
+                                const char *doc
+                                );
+
+
 
 typedef struct {
     PyObject_HEAD
+    // the name of the function
     const char *m_name;
+    // the low-level function
     PyMelanoFunction m_func;
+    // the docstring, or null
     const char *m_doc;
+    // the (default NULL) locals array (only used by closures)
+    MelanoLocals **m_locals;
+    Py_ssize_t m_nlocals;
 } PyMelanoFunctionObject;
 
 PyAPI_FUNC(int) PyMelanoFunction_ClearFreeList(void);

@@ -1,12 +1,22 @@
 /* A generator is the type returned by a generator function or comprehension
 	to provide values. */
-#include "melanogenobject.h"
+#include "genobject.h"
+
+// Initialized with MelanoGen_Initialize and used for returing from a coroutine
+//	to the main thread.
+static coro_context __main_coroutine__;
+
 
 static void
 gen_del(PyObject *self) {
 	MelanoGenObject *gen = (MelanoGenObject *)self;
-	co_delete(gen->coro);
-	gen->coro = NULL;
+	coro_destroy(&gen->coro);
+	free(gen->stack);
+	gen->stack = NULL;
+	if(gen->name) {
+		free(gen->name);
+		gen->name = NULL;
+	}
 	if(gen->data) {
 		free(gen->data);
 		gen->data = NULL;
@@ -16,22 +26,26 @@ gen_del(PyObject *self) {
 static void
 gen_dealloc(MelanoGenObject *gen)
 {
-	assert(gen->coro == NULL);
 	PyObject_Del(gen);
 }
 
 static PyObject *
-gen_iternext(MelanoGenObject *gen) {
-	PyObject *out;
-	co_call(gen->coro);
-	out = (PyObject *)co_get_data(gen->coro);
-	return out;
+gen_iternext(MelanoGenObject *gen)
+{
+	PyObject *rv;
+	coro_transfer(gen->coro_source, &gen->coro);
+	rv = ((PyObject **)(gen->data))[1];
+	if(!rv) {
+		PyErr_SetNone(PyExc_StopIteration);
+		return NULL;
+	}
+	return rv;
 }
 
 static PyObject *
 gen_repr(MelanoGenObject *gen)
 {
-	return PyUnicode_FromFormat("<generator object %S at %p>", gen->name, gen);
+	return PyUnicode_FromFormat("<generator object %s at %p>", gen->name, gen);
 }
 
 static PyObject *
@@ -104,7 +118,13 @@ PyTypeObject MelanoGen_Type = {
 };
 
 PyObject *
-MelanoGen_New(char *name, void *func, void *data, int stacksize) {
+MelanoGen_New(char *name, coro_func func, void *data, int stacksize, coro_context *source)
+{
+	if(!name) {
+		PyErr_BadArgument();
+		return NULL;
+	}
+
 	MelanoGenObject *gen = PyObject_New(MelanoGenObject, &MelanoGen_Type);
 	if(!gen) {
 		return NULL;
@@ -112,11 +132,37 @@ MelanoGen_New(char *name, void *func, void *data, int stacksize) {
 
 	gen->name = name;
 	gen->data = data;
-
-	gen->coro = co_create(func, data, NULL, stacksize);
-	if(!gen->coro) {
-		return NULL;
+	gen->coro_source = source;
+	if(!source) {
+		gen->coro_source = &__main_coroutine__;
 	}
 
+	gen->stacksize = stacksize;
+	gen->stack = calloc(1, stacksize);
+	if(!gen->stack) {
+		return PyErr_NoMemory();
+	}
+
+	// NOTE: not reentrant -- this depends on the GIL currently
+	coro_create(&gen->coro, func, data, gen->stack, gen->stacksize);
+
 	return (PyObject *)gen;
+}
+
+coro_context *
+MelanoGen_GetContext(PyObject *self) {
+	MelanoGenObject *gen = (MelanoGenObject *)self;
+	return &gen->coro;
+}
+
+coro_context *
+MelanoGen_GetSourceContext(PyObject *self) {
+	MelanoGenObject *gen = (MelanoGenObject *)self;
+	return gen->coro_source;
+}
+
+void
+MelanoGen_Initialize()
+{
+	coro_create(&__main_coroutine__, 0, 0, 0, 0);
 }

@@ -71,6 +71,15 @@ class Indexer(ASTVisitor):
 		self.context = prior
 
 
+	def find_nearest_function(self, base):
+		cur = base
+		while cur:
+			if isinstance(cur, MelanoFunction):
+				return cur
+			cur = cur.owner.parent
+		return None
+
+
 	def visit_Bytes(self, node):
 		node.s = node.s.strip('"').strip("'")
 		node.hl = Constant(PyBytesType())
@@ -85,6 +94,7 @@ class Indexer(ASTVisitor):
 		with self.scope(node, scope_ty=MelanoClass):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
+		node.hl.is_building = False
 
 
 	def visit_Dict(self, node):
@@ -103,29 +113,34 @@ class Indexer(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
+		# name
 		self.visit(node.name)
-		self.visit(node.returns) # return annotation
+		# annotations
+		self.visit(node.returns)
 		self.visit_nodelist_field(node.args.args, 'annotation') # position arg annotations
 		self.visit(node.args.varargannotation) # *args annotation
 		self.visit_nodelist_field(node.args.kwonlyargs, 'annotation') # kwargs annotation
 		self.visit(node.args.kwargannotation) # **args annotation
+		# defaults
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
 		with self.scope(node, scope_ty=MelanoFunction):
-			# arg name defs are inside the func
+			if self.find_nearest_function(self.context.owner.parent):
+				self.context.set_needs_closure()
+
+			# args
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)
 			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
 			self.visit(node.args.kwarg)
-
+			# body
 			self.visit_nodelist(node.body)
 
-		# insert the assumed return None if we fall off the end without a return
-		#if not isinstance(node.body[-1], py.Return):
-		#	node.body.append(py.Return(None, None))
-
+		# decorators
 		self.visit_nodelist(node.decorator_list)
+
+
 
 
 	def visit_GeneratorExp(self, node):
@@ -141,7 +156,7 @@ class Indexer(ASTVisitor):
 			if name not in self.module.symbols:
 				self.module.add_symbol(name)
 			sym = self.module.lookup(name)
-			ref = self.context.add_reference(sym)
+			ref = self.context.set_reference(sym)
 			ref.is_global = True
 
 
@@ -237,14 +252,16 @@ class Indexer(ASTVisitor):
 
 
 	def visit_Nonlocal(self, node):
+		assert self.context.has_closure
+
 		for name in node.names:
 			try:
 				# look up-scope for the name
-				sym = self.context.owner.parent.lookup(name)
+				sym = self.context.get_next_scope().lookup(name)
 			except KeyError:
 				self.missing.add(name)
 				return
-			ref = self.context.add_reference(sym)
+			ref = self.context.set_reference(sym)
 			ref.is_nonlocal = True
 
 
@@ -286,6 +303,7 @@ class Indexer(ASTVisitor):
 					handler.name.hl = self.context.lookup(name)
 			#NOTE: don't bother visiting the exception type, because we know it is a Load
 			self.visit_nodelist(handler.body)
+		self.visit_nodelist(node.orelse)
 
 
 	def visit_Tuple(self, node):

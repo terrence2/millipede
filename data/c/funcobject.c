@@ -2,13 +2,50 @@
 /* Method object implementation */
 
 #include "Python.h"
-#include "melanofuncobject.h"
+#include "funcobject.h"
 #include "structmember.h"
 
 
+MelanoLocals *
+MelanoLocals_Create(Py_ssize_t cnt) {
+    MelanoLocals *locals;
+    locals = (MelanoLocals *)malloc(sizeof(MelanoLocals));
+    locals->refcnt = 0;
+    locals->locals = (PyObject **)calloc(cnt, sizeof(PyObject*));
+    return locals;
+}
+
+MelanoLocals **
+MelanoStack_Create(Py_ssize_t cnt) {
+    MelanoLocals** stack;
+    stack = calloc(cnt, sizeof(MelanoLocals*));
+    return stack;
+}
+
+void
+MelanoStack_SetLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *locals) {
+    stack[level] = locals;
+    locals->refcnt += 1;
+}
+
+void
+MelanoStack_Destroy(MelanoLocals **stack, Py_ssize_t cnt) {
+    Py_ssize_t i;
+    for(i = 0; i < cnt; i++ ) {
+        stack[i]->refcnt -= 1;
+        if(stack[i]->refcnt == 0) {
+            free(stack[i]->locals);
+            free(stack[i]);
+            stack[i] = NULL;
+        }
+    }
+    free(stack);
+}
+
 PyObject *
-PyMelanoFunction_New(const char *name, \
-                    PyMelanoFunction func, const char *doc)
+PyMelanoFunction_New(const char *name,
+                    PyMelanoFunction func,
+                    const char *doc)
 {
     PyMelanoFunctionObject *op;
     op = PyObject_GC_New(PyMelanoFunctionObject, &PyMelanoFunction_Type);
@@ -17,6 +54,8 @@ PyMelanoFunction_New(const char *name, \
     op->m_name = name;
     op->m_func = func;
     op->m_doc = doc;
+    op->m_locals = NULL;
+    op->m_nlocals = 0;
     _PyObject_GC_TRACK(op);
     return (PyObject *)op;
 }
@@ -32,12 +71,37 @@ PyMelanoFunction_GetFunction(PyObject *op)
 }
 
 
+MelanoLocals **
+PyMelanoFunction_GetLocals(PyObject *op)
+{
+    if (!PyMelanoFunction_Check(op)) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    PyMelanoFunctionObject *fn = (PyMelanoFunctionObject *)op;
+    return fn->m_locals;
+}
+
+
+void
+PyMelanoFunction_SetLocals(PyObject *op, MelanoLocals **locals, Py_ssize_t nlocals)
+{
+    if (!PyMelanoFunction_Check(op)) {
+        PyErr_BadInternalCall();
+        return;
+    }
+    PyMelanoFunctionObject *fn = (PyMelanoFunctionObject *)op;
+    fn->m_locals = locals;
+    fn->m_nlocals = nlocals;
+}
+
+
 PyObject *
 PyMelanoFunction_Call(PyObject *func, PyObject *arg, PyObject *kw)
 {
     PyMelanoFunctionObject* f = (PyMelanoFunctionObject*)func;
     PyMelanoFunction meth = PyMelanoFunction_GET_FUNCTION(f);
-    return (*meth)(arg, kw);
+    return (*meth)(func, arg, kw);
 }
 
 /* Methods (the standard built-in methods, that is) */
@@ -45,6 +109,10 @@ PyMelanoFunction_Call(PyObject *func, PyObject *arg, PyObject *kw)
 static void
 meth_dealloc(PyMelanoFunctionObject *m)
 {
+    if(m->m_locals) {
+        free(m->m_locals[m->m_nlocals - 1]);
+        free(m->m_locals);
+    }
     _PyObject_GC_UNTRACK(m);
     PyObject_GC_Del(m);
 }

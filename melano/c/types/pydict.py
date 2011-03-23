@@ -32,12 +32,12 @@ class PyDictLL(PyObjectLL):
 	def get_item_string(self, ctx, name:str, out:PyObjectLL):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(
 												c.ID(self.name), c.Constant('string', name)))))
-		self.fail_if_null(ctx, out.name)
-		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(out.name)))) # borrowed ref
+		self.except_if_null(ctx, out.name, 'PyExc_KeyError')
+		out.incref(ctx)
 
 
 	def get_item_string_nofail(self, ctx, name:str, out:PyObjectLL):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(
 												c.ID(self.name), c.Constant('string', name)))))
-		ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(out.name)))) # borrowed ref
+		out.xincref(ctx)
 

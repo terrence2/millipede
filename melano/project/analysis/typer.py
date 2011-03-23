@@ -29,6 +29,9 @@ class Typer(ASTVisitor):
 				logging.error("Skipping typing of subscript assignment")
 			elif isinstance(target, py.Name):
 				target.hl.add_type(node.value.hl.get_type())
+			elif isinstance(target, py.Tuple):
+				for elt in target.elts:
+					logging.error("Skipping typing of destructuring assignment to {}".format(str(elt)))
 			else:
 				raise NotImplementedError("Assignment to unknown node class in typer")
 		#node.hl = Coerce(Coerce.OVERRIDE, *([t.hl for t in node.targets] + [node.value]))

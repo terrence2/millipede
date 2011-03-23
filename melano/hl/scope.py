@@ -34,6 +34,18 @@ class Scope:
 		raise NotImplementedError("Every Scope type needs its own lookup routines.")
 
 
+	def get_next_scope(self):
+		'''
+		Return the next highest scope to look in for names.
+		Note: use this instead of owner.parent to skip class scopes.
+		'''
+		cur = self.owner.parent
+		from melano.hl.class_ import MelanoClass
+		while isinstance(cur, MelanoClass):
+			cur = cur.owner.parent
+		return cur
+
+
 	def has_name(self, name:str) -> bool:
 		return name in self.symbols
 
@@ -42,11 +54,9 @@ class Scope:
 		return name in self.ownership
 
 
-	def has_closure(self) -> bool:
-		for sym in self.symbols.values():
-			if sym.scope:
-				return True
-		return False
+	def set_needs_closure(self):
+		if self.owner.parent:
+			self.owner.parent.set_needs_closure()
 
 
 	def get_label(self, prefix):
@@ -63,11 +73,24 @@ class Scope:
 
 
 	def add_reference(self, sym:Name):
+		'''Add a reference to an existing name.  If we already have reffed, or otherwise own
+			the name, skip this and return the already set name.'''
 		if sym.name in self.symbols:
-			# already reffed, or we own the name
 			return self.symbols[sym.name]
 		self.symbols[sym.name] = NameRef(sym)
 		return self.symbols[sym.name]
+
+
+	def set_reference(self, sym:Name):
+		'''Add a reference to an existing name.  Like add reference, except that this ensures
+			that the captured name _is_ a reference.  We use this when we know we are not
+			the owner, but may be marked as the owner.  E.g. non-local definition before the
+			symbol was created, etc.'''
+		if sym.name in self.symbols and isinstance(self.symbols[sym.name], NameRef):
+			return self.symbols[sym.name]
+		self.symbols[sym.name] = NameRef(sym)
+		return self.symbols[sym.name]
+
 
 
 	def show(self, level=0):
