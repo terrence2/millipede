@@ -7,6 +7,7 @@ from melano.hl.scope import Scope
 from melano.hl.types.pyclosure import PyClosureType
 from melano.hl.types.pyfunction import PyFunctionType
 from melano.hl.types.pygenerator import PyGeneratorType
+from melano.hl.types.pygeneratorclosure import PyGeneratorClosureType
 import itertools
 import logging
 
@@ -20,6 +21,9 @@ class MelanoFunction(Scope):
 		# flags
 		self.is_generator = False # set by presense of yield function when indexing
 		self.has_closure = False # set by presence of sub-functions when indexing
+
+		# store the type asside so that we can store stuff in it, after we create it
+		self.type = None
 
 
 	def set_needs_closure(self):
@@ -44,10 +48,18 @@ class MelanoFunction(Scope):
 
 
 	def get_type(self):
+		if self.type:
+			return self.type
+
 		if self.has_closure:
-			return PyClosureType(self)
+			if self.is_generator:
+				self.type = PyGeneratorClosureType(self)
+			else:
+				self.type = PyClosureType(self)
 		elif self.is_generator:
-			return PyGeneratorType(self)
+			self.type = PyGeneratorType(self)
 		else:
-			return PyFunctionType(self)
+			self.type = PyFunctionType(self)
+
+		return self.type
 

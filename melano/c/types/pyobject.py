@@ -46,7 +46,7 @@ class PyObjectLL(LLType):
 
 
 	def assign_none(self, ctx):
-		ctx.add(c.Assignment('=', c.ID(self.name), c.ID('None')))
+		ctx.add(c.Assignment('=', c.ID(self.name), c.ID(self.visitor.none.name)))
 
 
 	def assign_name(self, ctx, from_var):
@@ -156,7 +156,7 @@ class PyObjectLL(LLType):
 
 
 	def power(self, ctx, rhs, out):
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Power'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID('None')))))
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Power'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID(self.visitor.none.name)))))
 		self.fail_if_null(ctx, out.name)
 	## END Binary Ops ##
 
@@ -207,7 +207,7 @@ class PyObjectLL(LLType):
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_power(self, ctx, rhs, out):
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlacePower'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID('None')))))
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlacePower'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID(self.visitor.none.name)))))
 		self.fail_if_null(ctx, out.name)
 ## END Inplace Binary Ops ##
 

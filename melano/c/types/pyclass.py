@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from contextlib import contextmanager
 from melano.c import ast as c
 from melano.c.types.pyobject import PyObjectLL
 from melano.c.types.pystring import PyStringLL
@@ -58,7 +59,6 @@ class PyClassLL(PyObjectLL):
 	def declare_pyclass(self, tu):
 		self.c_obj = PyObjectLL(self.hlnode, self.visitor)
 		self.c_obj.declare(tu, quals=['static'], name=self.hlnode.owner.name)
-		self.name = self.c_obj.name
 		return self.c_obj
 
 
@@ -87,11 +87,16 @@ class PyClassLL(PyObjectLL):
 
 
 	def outro(self, ctx):
-		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
+		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.visitor.none.name)))
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):
 			ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
 		ctx.add(c.Return(c.ID('__return_value__')))
+
+
+	@contextmanager
+	def maybe_recursive_call(self, ctx):
+		yield
 
 
 	def set_attr_string(self, ctx, attrname, attrval):

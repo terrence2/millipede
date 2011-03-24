@@ -11,8 +11,23 @@ MelanoLocals_Create(Py_ssize_t cnt) {
     MelanoLocals *locals;
     locals = (MelanoLocals *)malloc(sizeof(MelanoLocals));
     locals->refcnt = 0;
-    locals->locals = (PyObject **)calloc(cnt, sizeof(PyObject*));
+    if(cnt > 0) {
+        locals->locals = (PyObject **)calloc(cnt, sizeof(PyObject*));
+    } else {
+        locals->locals = NULL;
+    }
     return locals;
+}
+
+void
+MelanoLocals_Destroy(MelanoLocals **stack, Py_ssize_t level) {
+    stack[level]->refcnt -= 1;
+    if(stack[level]->refcnt == 0) {
+        if(stack[level]->locals)
+            free(stack[level]->locals);
+        free(stack[level]);
+        stack[level] = NULL;
+    }
 }
 
 MelanoLocals **
@@ -28,16 +43,21 @@ MelanoStack_SetLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *loca
     locals->refcnt += 1;
 }
 
+MelanoLocals *
+MelanoStack_FetchLocals(MelanoLocals **stack, Py_ssize_t level) {
+    return stack[level];
+}
+
+void
+MelanoStack_RestoreLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *locals) {
+    stack[level] = locals;
+}
+
 void
 MelanoStack_Destroy(MelanoLocals **stack, Py_ssize_t cnt) {
     Py_ssize_t i;
     for(i = 0; i < cnt; i++ ) {
-        stack[i]->refcnt -= 1;
-        if(stack[i]->refcnt == 0) {
-            free(stack[i]->locals);
-            free(stack[i]);
-            stack[i] = NULL;
-        }
+        MelanoLocals_Destroy(stack, i);
     }
     free(stack);
 }
@@ -54,8 +74,8 @@ PyMelanoFunction_New(const char *name,
     op->m_name = name;
     op->m_func = func;
     op->m_doc = doc;
-    op->m_locals = NULL;
-    op->m_nlocals = 0;
+    op->m_stack = NULL;
+    op->m_stacksize = 0;
     _PyObject_GC_TRACK(op);
     return (PyObject *)op;
 }
@@ -72,27 +92,27 @@ PyMelanoFunction_GetFunction(PyObject *op)
 
 
 MelanoLocals **
-PyMelanoFunction_GetLocals(PyObject *op)
+PyMelanoFunction_GetStack(PyObject *op)
 {
     if (!PyMelanoFunction_Check(op)) {
         PyErr_BadInternalCall();
         return NULL;
     }
     PyMelanoFunctionObject *fn = (PyMelanoFunctionObject *)op;
-    return fn->m_locals;
+    return fn->m_stack;
 }
 
 
 void
-PyMelanoFunction_SetLocals(PyObject *op, MelanoLocals **locals, Py_ssize_t nlocals)
+PyMelanoFunction_SetStack(PyObject *op, MelanoLocals **stack, Py_ssize_t stacksize)
 {
     if (!PyMelanoFunction_Check(op)) {
         PyErr_BadInternalCall();
         return;
     }
     PyMelanoFunctionObject *fn = (PyMelanoFunctionObject *)op;
-    fn->m_locals = locals;
-    fn->m_nlocals = nlocals;
+    fn->m_stack = stack;
+    fn->m_stacksize = stacksize;
 }
 
 
@@ -109,9 +129,8 @@ PyMelanoFunction_Call(PyObject *func, PyObject *arg, PyObject *kw)
 static void
 meth_dealloc(PyMelanoFunctionObject *m)
 {
-    if(m->m_locals) {
-        free(m->m_locals[m->m_nlocals - 1]);
-        free(m->m_locals);
+    if(m->m_stack) {
+        MelanoStack_Destroy(m->m_stack, m->m_stacksize);
     }
     _PyObject_GC_UNTRACK(m);
     PyObject_GC_Del(m);

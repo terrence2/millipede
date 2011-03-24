@@ -108,6 +108,7 @@ class Compound(AST):
 			nm = name + '_' + str(cnt)
 			cnt += 1
 		self.names.add(nm)
+		tu.mask.add(nm)
 		return nm
 
 	def has_name(self, name):
@@ -341,14 +342,19 @@ class TranslationUnit(AST):
 		self._fwddecl_pos = 0
 		# map from ll variable names to hl symbols (and existence markers)
 		self.names = set()
+		# mask names defined at a higher level so that we don't override something defined earlier in a different scope
+		self.mask = set()
 
 		# note: need to allow declare to check ourself as well
 		self.tu = self
 
 	def reserve_name(self, name):
 		cnt = 0
-		nm = name
-		while nm in self.names or nm in C_KEYWORDS:
+		if name.startswith('__'):
+			nm = '__mg' + name[2:]
+		else:
+			nm = 'mg' + name
+		while nm in self.names or nm in self.mask or nm in C_KEYWORDS:
 			nm = name + '_' + str(cnt)
 			cnt += 1
 		self.names.add(nm)

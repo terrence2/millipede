@@ -24,7 +24,7 @@ class PyTupleLL(PyObjectLL):
 			elif isinstance(inst, c.AST):
 				ids_to_pack.append(inst)
 			elif inst is None:
-				ids_to_pack.append(c.ID('None'))
+				ids_to_pack.append(c.ID(self.visitor.none.name))
 			else:
 				raise ValueError('unrecognized type to pack in PyTupleLL.pack: {}'.format(inst))
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyTuple_Pack'), c.ExprList(

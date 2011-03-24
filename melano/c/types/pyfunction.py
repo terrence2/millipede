@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from contextlib import contextmanager
 from melano.c import ast as c
 from melano.c.types.integer import CIntegerLL
 from melano.c.types.pydict import PyDictLL
@@ -18,6 +19,7 @@ class PyFunctionLL(PyObjectLL):
 
 		# map python names to c level names for locals
 		self.locals_map = {} # {str: str}
+		self.args_pos_map = [] # map position to c level names
 
 		# the c instantce representing the defaults, for fast access (and since we can't store them on __defaults__ in a PyCFunction)
 		self.c_defaults_array = None
@@ -241,18 +243,30 @@ class PyFunctionLL(PyObjectLL):
 		tu.add_fwddecl(self.c_runner_func.decl)
 		tu.add(self.c_runner_func)
 
+
 	def runner_load_args(self, ctx, args, vararg, kwonlyargs, kwarg):
 		# load args from parameter list into the locals array
 		for arg in args:
 			arg_inst = self.visitor.create_ll_instance(arg.arg.hl)
 			arg_inst.name = str(arg.arg)
 			self.locals_map[str(arg.arg)] = str(arg.arg)
-			#self.set_attr_string(ctx, str(arg.arg), arg_inst)
+			self.args_pos_map.append(str(arg.arg))
+		if vararg:
+			import pdb; pdb.set_trace()
+			# is vararg a string or a name?
+			self.locals_map[str(arg.arg)] = str(arg.arg)
+			self.args_pos_map.append(str(arg.arg))
 		for arg in kwonlyargs:
 			arg_inst = self.visitor.create_ll_instance(arg.arg.hl)
 			arg_inst.name = str(arg.arg)
 			self.locals_map[str(arg.arg)] = str(arg.arg)
-			#self.set_attr_string(ctx, str(arg.arg), arg_inst)
+			self.args_pos_map.append(str(arg.arg))
+		if kwarg:
+			import pdb; pdb.set_trace()
+			# is vararg a string or a name?
+			self.locals_map[str(arg.arg)] = str(arg.arg)
+			self.args_pos_map.append(str(arg.arg))
+
 
 	def runner_load_locals(self, ctx):
 		for name, sym in self.hlnode.symbols.items():
@@ -261,12 +275,19 @@ class PyFunctionLL(PyObjectLL):
 				arg_inst.declare(self.visitor.scope.context)
 				self.locals_map[name] = arg_inst.name
 
+
+	def get_self_accessor(self):
+		'''For use by "super" so we can find ourself automaticlaly when called without args'''
+		return c.ID(self.args_pos_map[0])
+
+
 	def runner_intro(self, ctx):
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 		ctx.add_variable(c.Decl('__jmp_ctx__', c.PtrDecl(c.TypeDecl('__jmp_ctx__', c.IdentifierType('void'))), init=c.ID('NULL')), False)
 
+
 	def runner_outro(self, ctx):
-		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
+		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.visitor.none.name)))
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):
 			ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
@@ -284,3 +305,6 @@ class PyFunctionLL(PyObjectLL):
 		outvar.incref(ctx)
 
 
+	@contextmanager
+	def maybe_recursive_call(self, ctx):
+		yield

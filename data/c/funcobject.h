@@ -13,6 +13,11 @@ typedef struct {
 } MelanoLocals;
 
 MelanoLocals * MelanoLocals_Create(Py_ssize_t cnt);
+void MelanoLocals_Destroy(MelanoLocals **stack, Py_ssize_t level);
+
+MelanoLocals * MelanoStack_FetchLocals(MelanoLocals **stack, Py_ssize_t level);
+void MelanoStack_RestoreLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *locals);
+
 MelanoLocals ** MelanoStack_Create(Py_ssize_t cnt);
 void MelanoStack_SetLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *locals);
 void MelanoStack_Destroy(MelanoLocals **stack, Py_ssize_t cnt);
@@ -32,8 +37,8 @@ typedef PyObject *(*PyMelanoFunction)(PyObject *, PyObject *, PyObject *);
 PyAPI_FUNC(PyMelanoFunction) PyMelanoFunction_GetFunction(PyObject *);
 PyAPI_FUNC(PyObject *) PyMelanoFunction_GetSelf(PyObject *);
 
-PyAPI_FUNC(MelanoLocals **) PyMelanoFunction_GetLocals(PyObject *);
-PyAPI_FUNC(void) PyMelanoFunction_SetLocals(PyObject *, MelanoLocals **, Py_ssize_t);
+PyAPI_FUNC(MelanoLocals **) PyMelanoFunction_GetStack(PyObject *);
+PyAPI_FUNC(void) PyMelanoFunction_SetStack(PyObject *, MelanoLocals **, Py_ssize_t);
 
 /* Macros for direct access to these values. Type checks are *not*
    done, so use with care. */
@@ -60,9 +65,9 @@ typedef struct {
     PyMelanoFunction m_func;
     // the docstring, or null
     const char *m_doc;
-    // the (default NULL) locals array (only used by closures)
-    MelanoLocals **m_locals;
-    Py_ssize_t m_nlocals;
+    // the (default NULL) stack array (only used by closures)
+    MelanoLocals **m_stack;
+    Py_ssize_t m_stacksize;
 } PyMelanoFunctionObject;
 
 PyAPI_FUNC(int) PyMelanoFunction_ClearFreeList(void);

@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from contextlib import contextmanager
 from melano.c import ast as c
 from melano.c.types.integer import CIntegerLL
 from melano.c.types.pydict import PyDictLL
@@ -26,12 +27,17 @@ class PyClosureLL(PyFunctionLL):
 		- create a MelanoLocals* for this run of the function, set on __locals__ at position n
 		- put all args into the new MelanoLocals array, no further decl required for locals
 		- modified get/set attribute to assign into the locals according to the locals_map
+		- on exit, free __locals__[n]
+	Call Time:
+		- before: nothing
+		- after: restore __locals__[n], they may have been overridden by a recursive call 
 	'''
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
 		# the c instance representing the array of local variables
+		self.stack_name = None
 		self.locals_name = None
 
 		# build the "locals" map:
@@ -47,15 +53,15 @@ class PyClosureLL(PyFunctionLL):
 				sym = scope.symbols[name]
 				if not isinstance(sym, NameRef):
 					self.locals_map[name] = (i, j)
+		self.own_scope_offset = len(list(self.each_func_scope())) - 1
 
 
 	@staticmethod
-	def locals_typedecl(name=None):
-		#return c.PtrDecl(c.PtrDecl(c.PtrDecl(c.TypeDecl(name, c.IdentifierType('PyObject')))))
+	def stack_typedecl(name=None):
 		return c.PtrDecl(c.PtrDecl(c.TypeDecl(name, c.IdentifierType('MelanoLocals'))))
 
 	@staticmethod
-	def local_array_typedecl(name=None):
+	def locals_typedecl(name=None):
 		return c.PtrDecl(c.TypeDecl(name, c.IdentifierType('MelanoLocals')))
 
 
@@ -71,86 +77,76 @@ class PyClosureLL(PyFunctionLL):
 		# create in context with PyMelanoFunction_New
 		super().create_funcdef(ctx, tu, docstring)
 
-		fn_scopes = list(self.each_func_scope())
-
 		# create a new stack (MelanoLocals **) of len(list(self.each_func_scope()))
-		# e.g. foo_locals = MelanoLocals_Create( len(list(fn_scopes)) )
-		locals_name = self.visitor.scope.context.reserve_name(self.hlnode.owner.name + '_locals')
-		ctx.add_variable(c.Decl(locals_name, self.locals_typedecl(locals_name)), False)
-		ctx.add(c.Assignment('=', c.ID(locals_name), c.FuncCall(c.ID('MelanoStack_Create'), c.ExprList(
-																									c.Constant('integer', len(fn_scopes))))))
-		self.fail_if_null(ctx, locals_name)
+		# e.g. foo_locals = MelanoLocals_Create( len(fn_scopes) )
+		stack_name = self.visitor.scope.context.reserve_name(self.hlnode.owner.name + '_locals')
+		ctx.add_variable(c.Decl(stack_name, self.stack_typedecl(stack_name)), False)
+		ctx.add(c.Assignment('=', c.ID(stack_name), c.FuncCall(c.ID('MelanoStack_Create'), c.ExprList(
+																									c.Constant('integer', self.own_scope_offset + 1)))))
+		self.fail_if_null(ctx, stack_name)
 
-		# copy from __locals__ of creator (should be local) to new array in positions 0 -> n - 1
-		# e.g. MelanoStack_SetLocals(locals_name, lvl, __locals__[lvl]) 
-		for i in range(len(fn_scopes[:-1])):
+		# copy low levels of our __stack__ from our nearest parent ==> positions 0 -> n - 1
+		# NOTE: if __stack__ is local, we are defined directly in our parent's scope, otherwise we need
+		#		to lookup our parent's stack from the pycobject defined at the toplevel.
+		if self.own_scope_offset > 0 and '__stack__' not in ctx.names:
+			# declare a tmp for the parent's stack
+			parent_stack = self.visitor.scope.context.tmpname()
+			ctx.add_variable(c.Decl(parent_stack, self.stack_typedecl(parent_stack)), False)
+			# lookup the next stack
+			parent_scope = self.hlnode.get_next_scope()
+			ctx.add(c.Assignment('=', c.ID(parent_stack), c.FuncCall(c.ID('PyMelanoFunction_GetStack'), c.ExprList(c.ID(parent_scope.ll.c_obj.name)))))
+			c_parent_stack = c.ID(parent_stack)
+		else:
+			c_parent_stack = c.ID('__stack__')
+
+		for i in range(self.own_scope_offset):
 			ctx.add(c.FuncCall(c.ID('MelanoStack_SetLocals'), c.ExprList(
-																		c.ID(locals_name),
+																		c.ID(stack_name),
 																		c.Constant('integer', i),
-																		c.ArrayRef(c.ID('__locals__'), c.Constant('integer', i)))))
+																		c.ArrayRef(c_parent_stack, c.Constant('integer', i)))))
 
 		# set the locals on the new function object
-		ctx.add(c.FuncCall(c.ID('PyMelanoFunction_SetLocals'), c.ExprList(
+		ctx.add(c.FuncCall(c.ID('PyMelanoFunction_SetStack'), c.ExprList(
 																		c.ID(self.c_obj.name),
-																		c.ID(locals_name),
-																		c.Constant('integer', len(fn_scopes)))))
-
-		'''
-		# malloc an array of PyObject** of len(list(self.each_func_scope()))
-		locals_name = self.visitor.scope.context.reserve_name(self.hlnode.owner.name + '_locals')
-		ctx.add_variable(c.Decl(locals_name, self.locals_typedecl(locals_name)), False)
-		ctx.add(c.Assignment('=', c.ID(locals_name),
-							c.Cast(self.locals_typedecl(),
-									c.FuncCall(c.ID('calloc'), c.ExprList(c.Constant('integer', len(fn_scopes)),
-											c.FuncCall(c.ID('sizeof'), c.ExprList(self.local_array_typedecl())))))))
-		self.except_if_null(ctx, locals_name, 'PyExc_MemoryError')
-
-		# copy from __locals__ of creator (should be local) to new array in positions 0->n-1
-		for i in range(len(fn_scopes[:-1])):
-			# locals_name[i] = __locals__[i]
-			ctx.add(c.Assignment('=',
-								c.ArrayRef(c.ID(locals_name), c.Constant('integer', i)),
-								c.ArrayRef(c.ID('__locals__'), c.Constant('integer', i))))
-
-		# malloc an array of PyObject* for our locals and fill it with NULL, assign to prior array at n
-		local_name = self.visitor.scope.context.reserve_name(self.hlnode.owner.name + '_local')
-		ctx.add_variable(c.Decl(local_name, self.local_array_typedecl(local_name)), False)
-		ctx.add(c.Assignment('=', c.ID(local_name),
-							c.Cast(self.local_array_typedecl(local_name),
-								c.FuncCall(c.ID('calloc'), c.ExprList(c.Constant('integer', len(local_syms)),
-														c.FuncCall(c.ID('sizeof'), c.ExprList(PyObjectLL.typedecl())))))))
-		self.except_if_null(ctx, local_name, 'PyExc_MemoryError')
-		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(locals_name), c.Constant('integer', len(fn_scopes) - 1)), c.ID(local_name)))
-
-		# set the locals on the new function object
-		ctx.add(c.FuncCall(c.ID('PyMelanoFunction_SetLocals'), c.ExprList(c.ID(self.c_obj.name), c.ID(locals_name), c.Constant('integer', len(fn_scopes)))))
-		'''
+																		c.ID(stack_name),
+																		c.Constant('integer', self.own_scope_offset + 1))))
 
 		return self.c_obj
 
 
-	def runner_load_args(self, ctx, args, vararg, kwonlyargs, kwarg):
-		fn_scopes = list(self.each_func_scope())
-		local_syms = [(b, name) for name, (a, b) in self.locals_map.items() if a == len(fn_scopes) - 1]
+	@contextmanager
+	def maybe_recursive_call(self, ctx):
+		yield
+		ctx.add(c.FuncCall(c.ID('MelanoStack_RestoreLocals'), c.ExprList(
+																c.ID(self.stack_name),
+																c.Constant('integer', self.own_scope_offset),
+																c.ID(self.locals_name))))
+
+	def runner_intro(self, ctx):
+		super().runner_intro(ctx)
+
+		local_syms = [(b, name) for name, (a, b) in self.locals_map.items() if a == self.own_scope_offset]
 		local_syms.sort()
 
-		# on entry, grab the "locals" out of __self__ and put into local __locals__
-		self.locals_name = self.visitor.scope.context.reserve_name('__locals__')
-		ctx.add_variable(c.Decl(self.locals_name, self.locals_typedecl(self.locals_name)), False)
-		ctx.add(c.Assignment('=', c.ID(self.locals_name),
-							c.FuncCall(c.ID('PyMelanoFunction_GetLocals'), c.ExprList(c.ID('__self__')))))
-		self.fail_if_null(ctx, self.locals_name)
+		# on entry, grab the "stack" out of __self__ and put into local __stack__
+		self.stack_name = self.visitor.scope.context.reserve_name('__stack__')
+		ctx.add_variable(c.Decl(self.stack_name, self.stack_typedecl(self.stack_name)), False)
+		ctx.add(c.Assignment('=', c.ID(self.stack_name),
+							c.FuncCall(c.ID('PyMelanoFunction_GetStack'), c.ExprList(c.ID('__self__')))))
+		self.fail_if_null(ctx, self.stack_name)
 
 		# create a MelanoLocals* for this run of the function, set on __locals__ at position n
-		tmp_name = self.visitor.scope.context.reserve_name(self.hlnode.owner.name + '_ltmp')
-		ctx.add_variable(c.Decl(tmp_name, self.local_array_typedecl(tmp_name)), False)
-		ctx.add(c.Assignment('=', c.ID(tmp_name), c.FuncCall(c.ID('MelanoLocals_Create'), c.ExprList(c.Constant('integer', len(local_syms))))))
-		self.fail_if_null(ctx, tmp_name)
+		self.locals_name = self.visitor.scope.context.reserve_name('__locals__')
+		ctx.add_variable(c.Decl(self.locals_name, self.locals_typedecl(self.locals_name)), False)
+		ctx.add(c.Assignment('=', c.ID(self.locals_name), c.FuncCall(c.ID('MelanoLocals_Create'), c.ExprList(c.Constant('integer', len(local_syms))))))
+		self.fail_if_null(ctx, self.locals_name)
 		ctx.add(c.FuncCall(c.ID('MelanoStack_SetLocals'), c.ExprList(
-															c.ID(self.locals_name),
-															c.Constant('integer', len(fn_scopes) - 1),
-															c.ID(tmp_name))))
+															c.ID(self.stack_name),
+															c.Constant('integer', self.own_scope_offset),
+															c.ID(self.locals_name))))
 
+
+	def runner_load_args(self, ctx, args, vararg, kwonlyargs, kwarg):
 		# put all args into the new MelanoLocals array, no further decl required for locals
 		args = self._buildargs(args, vararg, kwonlyargs, kwarg)
 		for i, arg in enumerate(args):
@@ -159,21 +155,27 @@ class PyClosureLL(PyFunctionLL):
 			inst.name = str(arg.arg)
 			self.set_attr_string(ctx, str(arg.arg), inst)
 
-			#ctx.add(c.Assignment('=', c.ID(s), c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', i + 2))))
-
 
 	def runner_load_locals(self, ctx):
 		return
 
 
+	def runner_outro(self, ctx):
+		rv = super().runner_outro(ctx)
+		fn_scopes = list(self.each_func_scope())
+		ctx.block_items.insert(-1, c.FuncCall(c.ID('MelanoLocals_Destroy'), c.ExprList(
+																					c.ID(self.stack_name), c.Constant('integer', len(fn_scopes) - 1))))
+		return rv
+
+
 	def set_attr_string(self, ctx, attrname, val):
 		i, j = self.locals_map[attrname]
-		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.locals_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
+		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
 		ctx.add(c.Assignment('=', ref, c.ID(val.name)))
 
-		#ref = c.ArrayRef(c.ArrayRef(c.ID(self.locals_name), c.Constant('integer', i)), c.Constant('integer', j))
+		#ref = c.ArrayRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), c.Constant('integer', j))
 		#ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
 		#ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
 		#ctx.add(c.Assignment('=', ref, c.ID(val.name)))
@@ -182,14 +184,14 @@ class PyClosureLL(PyFunctionLL):
 
 	def get_attr_string(self, ctx, attrname, outvar):
 		i, j = self.locals_map[attrname]
-		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.locals_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
+		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.Assignment('=', c.ID(outvar.name), ref))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(outvar.name))))
 
 		#i, j = self.locals_map[attrname]
 		#ctx.add(c.Assignment('=', c.ID(outvar.name),
 		#					c.ArrayRef(
-		#							c.ArrayRef(c.ID(self.locals_name), c.Constant('integer', i)),
+		#							c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)),
 		#							c.Constant('integer', j))))
 		#ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(outvar.name))))
 		pass

@@ -6,6 +6,8 @@
 //	to the main thread.
 static coro_context __main_coroutine__;
 
+#define GEN_CAPSULE_NAME "coroutine context"
+#define RETURN_INDEX 2
 
 static void
 gen_del(PyObject *self) {
@@ -30,11 +32,39 @@ gen_dealloc(MelanoGenObject *gen)
 }
 
 static PyObject *
+gen_iter(PyObject *obj)
+{
+	MelanoGenObject *gen = (MelanoGenObject *)obj;
+	PyObject *dict, *stack, *cap;
+
+    // get the thread state dict
+    dict = PyThreadState_GET()->dict;
+    if(!dict)
+		Py_FatalError("No threadstate dict set");
+
+	// get the generator context stack
+	stack = PyDict_GetItemString(dict, "__generator_stack__");
+	if(!stack)
+		Py_FatalError("No generator stack in thread.");
+
+	// get the topmost coroutine (in a capsule)
+	cap = PyList_GetItem(stack, PyList_Size(stack) - 1);
+	if(!cap)
+		return NULL;
+
+	// set from the top coroutine
+	gen->coro_source = PyCapsule_GetPointer(cap, GEN_CAPSULE_NAME);
+
+    Py_INCREF(obj);
+    return obj;
+}
+
+static PyObject *
 gen_iternext(MelanoGenObject *gen)
 {
 	PyObject *rv;
 	coro_transfer(gen->coro_source, &gen->coro);
-	rv = ((PyObject **)(gen->data))[1];
+	rv = ((PyObject **)(gen->data))[RETURN_INDEX];
 	if(!rv) {
 		PyErr_SetNone(PyExc_StopIteration);
 		return NULL;
@@ -89,11 +119,11 @@ PyTypeObject MelanoGen_Type = {
 	0,                                          /* tp_as_buffer */
 	Py_TPFLAGS_DEFAULT,                         /* tp_flags */
 	0,                                          /* tp_doc */
-	0, //(traverseproc)gen_traverse,                 /* tp_traverse */
+	0, //(traverseproc)gen_traverse,            /* tp_traverse */
 	0,                                          /* tp_clear */
 	0,                                          /* tp_richcompare */
-	0, //offsetof(PyGenObject, gi_weakreflist),      /* tp_weaklistoffset */
-	PyObject_SelfIter,                          /* tp_iter */
+	0, //offsetof(PyGenObject, gi_weakreflist), /* tp_weaklistoffset */
+	gen_iter,                                   /* tp_iter */
 	(iternextfunc)gen_iternext,                 /* tp_iternext */
 	0, //(WE MAY NEED THIS)gen_methods,                                /* tp_methods */
 	0, //gen_memberlist,                             /* tp_members */
@@ -118,7 +148,7 @@ PyTypeObject MelanoGen_Type = {
 };
 
 PyObject *
-MelanoGen_New(char *name, coro_func func, void *data, int stacksize, coro_context *source)
+MelanoGen_New(char *name, coro_func func, void *data, int stacksize)
 {
 	if(!name) {
 		PyErr_BadArgument();
@@ -132,10 +162,7 @@ MelanoGen_New(char *name, coro_func func, void *data, int stacksize, coro_contex
 
 	gen->name = name;
 	gen->data = data;
-	gen->coro_source = source;
-	if(!source) {
-		gen->coro_source = &__main_coroutine__;
-	}
+	gen->coro_source = NULL;
 
 	gen->stacksize = stacksize;
 	gen->stack = calloc(1, stacksize);
@@ -161,8 +188,81 @@ MelanoGen_GetSourceContext(PyObject *self) {
 	return gen->coro_source;
 }
 
+int
+MelanoGen_EnterContext(PyObject *obj) {
+	MelanoGenObject *gen = (MelanoGenObject *)obj;
+	PyObject *dict, *stack, *cap;
+	int rv;
+
+    // get the thread state dict
+    dict = PyThreadState_GET()->dict;
+    if(!dict)
+		Py_FatalError("No threadstate dict set");
+
+	// get the generator context stack
+	stack = PyDict_GetItemString(dict, "__generator_stack__");
+	if(!stack)
+		Py_FatalError("No generator stack in thread.");
+
+	// build a new capsule for this context
+	cap = PyCapsule_New(&gen->coro, GEN_CAPSULE_NAME, NULL);
+	if(!cap)
+		return -1;
+
+	// append our capsule
+	rv = PyList_Append(stack, cap);
+	if(rv)
+		return -1;
+
+	return 0;
+}
+
+int
+MelanoGen_LeaveContext(PyObject *obj) {
+	PyObject *dict, *stack;
+	int rv;
+
+    // get the thread state dict
+    dict = PyThreadState_GET()->dict;
+    if(!dict)
+		Py_FatalError("No threadstate dict set");
+
+	// get the generator context stack
+	stack = PyDict_GetItemString(dict, "__generator_stack__");
+	if(!stack)
+		Py_FatalError("No generator stack in thread.");
+
+	// pop the top element
+	rv = PyList_SetSlice(stack, PyList_GET_SIZE(stack) - 1, PyList_GET_SIZE(stack), NULL);
+	if(rv)
+		return -1;
+
+	return 0;
+}
+
 void
 MelanoGen_Initialize()
 {
+	PyObject *dict, *stack, *cap;
+
 	coro_create(&__main_coroutine__, 0, 0, 0, 0);
+
+    // get the thread state dict
+    dict = PyThreadState_GET()->dict;
+    if(!dict) {
+	    dict = PyThreadState_GET()->dict = PyDict_New();
+	    if(!dict)
+			Py_FatalError("Could not create thread state dict");
+    }
+
+	cap = PyCapsule_New(&__main_coroutine__, GEN_CAPSULE_NAME, NULL);
+	if(!cap)
+		Py_FatalError("could not create main coroutine capsule");
+
+	stack = PyList_New(1);
+	if(!stack)
+		Py_FatalError("could not create generator stack");
+	PyList_SET_ITEM(stack, 0, cap);
+
+	PyDict_SetItemString(dict, "__generator_stack__", stack);
 }

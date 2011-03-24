@@ -15,6 +15,7 @@ from melano.c.types.pydict import PyDictLL
 from melano.c.types.pyfloat import PyFloatLL
 from melano.c.types.pyfunction import PyFunctionLL
 from melano.c.types.pygenerator import PyGeneratorLL
+from melano.c.types.pygeneratorclosure import PyGeneratorClosureLL
 from melano.c.types.pyinteger import PyIntegerLL
 from melano.c.types.pylist import PyListLL
 from melano.c.types.pymodule import PyModuleLL
@@ -36,6 +37,7 @@ from melano.hl.types.pydict import PyDictType
 from melano.hl.types.pyfloat import PyFloatType
 from melano.hl.types.pyfunction import PyFunctionType
 from melano.hl.types.pygenerator import PyGeneratorType
+from melano.hl.types.pygeneratorclosure import PyGeneratorClosureType
 from melano.hl.types.pyinteger import PyIntegerType
 from melano.hl.types.pylist import PyListType
 from melano.hl.types.pymodule import PyModuleType
@@ -107,6 +109,7 @@ class Py2C(ASTVisitor):
 		PyFunctionType: PyFunctionLL,
 		PyGeneratorType: PyGeneratorLL,
 		PyClosureType: PyClosureLL,
+		PyGeneratorClosureType: PyGeneratorClosureLL,
 		PyClassType: PyClassLL,
 		PyBoolType: PyBoolLL,
 		PyBytesType: PyBytesLL,
@@ -175,8 +178,8 @@ class Py2C(ASTVisitor):
 					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('Py_UNICODE'))), c.Constant('integer', 4)))),
 					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('wchar_t'))), c.Constant('integer', 4)))),
 					c.FuncCall(c.ID('__init__'), c.ExprList(c.ID('argc'), c.ID('argv'))),
-					c.Assignment('=', c.ID('builtins'), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(c.Constant('string', 'builtins')))),
-					c.Assignment('=', c.ID('None'), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID('builtins'), c.Constant('string', 'None')))),
+					c.Assignment('=', c.ID(self.builtins.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(c.Constant('string', 'builtins')))),
+					c.Assignment('=', c.ID(self.none.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.builtins.name), c.Constant('string', 'None')))),
 			)
 		)
 		self.tu.add_fwddecl(self.main.decl)
@@ -752,7 +755,7 @@ class Py2C(ASTVisitor):
 
 			args = PyTupleLL(None, self)
 			args.declare(self.scope.context, name='__auto_super_call_args')
-			args.pack(self.context, cls.ll.c_obj, c.ArrayRef(c.ID(fn.ll.c_locals_name), c.Constant('integer', 0)))
+			args.pack(self.context, cls.ll.c_obj, fn.ll.get_self_accessor())
 
 			# do the actual call
 			rv = PyObjectLL(None, self)
@@ -824,12 +827,15 @@ class Py2C(ASTVisitor):
 		# prepare the func name node
 		funcinst = self.visit(node.func)
 
-		# if we are defined locally, we can know the expected calling proc and reorganize our args to it
+		# TODO: if we are defined locally, we can know the expected calling proc and reorganize our args to it
 		#if node.func.hl and node.func.hl.scope:
 		#	return _call_local(self, node, funcinst)
 		#else:
 		#	return _call_remote(self, node, funcinst)
-		return _call_remote(self, node, funcinst)
+		with self.scope.ll.maybe_recursive_call(self.context):
+			rv = _call_remote(self, node, funcinst)
+
+		return rv
 
 
 	def visit_ClassDef(self, node):
@@ -873,32 +879,28 @@ class Py2C(ASTVisitor):
 				deco_fn_insts.append(decoinst)
 
 		# load the build_class method from builtins
-		with self.module_scope():
-			self.comment("Build class {}".format(str(node.name)))
+		self.comment("Build class {}".format(str(node.name)))
 
-			# TODO: i don't think we need to run the store code for this?
-			#name_inst = self.visit(node.name)
+		# create the name ref string
+		c_name_str = PyStringLL(None, self)
+		c_name_str.declare(self.scope.context, name=str(node.name) + '_name')
+		c_name_str.new(self.context, str(node.name))
 
-			# create the name ref string
-			c_name_str = PyStringLL(None, self)
-			c_name_str.declare(self.scope.context, name=str(node.name) + '_name')
-			c_name_str.new(self.context, str(node.name))
+		pyfunc = inst.create_builder_funcdef(self.context, self.tu)
 
-			pyfunc = inst.create_builder_funcdef(self.context, self.tu)
+		build_class_inst = PyObjectLL(None, self)
+		build_class_inst.declare(self.scope.context)
+		self.builtins.get_attr_string(self.context, '__build_class__', build_class_inst)
 
-			build_class_inst = PyObjectLL(None, self)
-			build_class_inst.declare(self.scope.context)
-			self.builtins.get_attr_string(self.context, '__build_class__', build_class_inst)
+		base_insts = []
+		if node.bases:
+			for b in node.bases:
+				base_insts.append(self.visit(b))
 
-			base_insts = []
-			if node.bases:
-				for b in node.bases:
-					base_insts.append(self.visit(b))
-
-			args = PyTupleLL(None, self)
-			args.declare(self.scope.context)
-			args.pack(self.context, pyfunc, c_name_str, *base_insts)
-			build_class_inst.call(self.context, args, node.kwargs, pyclass_inst)
+		args = PyTupleLL(None, self)
+		args.declare(self.scope.context)
+		args.pack(self.context, pyfunc, c_name_str, *base_insts)
+		build_class_inst.call(self.context, args, node.kwargs, pyclass_inst)
 
 		# apply decorators to the class
 		for decoinst in deco_fn_insts:
@@ -908,6 +910,7 @@ class Py2C(ASTVisitor):
 			decoinst.call(self.context, decoargs, None, pyclass_inst)
 
 		# store the name in the scope where we are "created"
+		#FIXME: this is declared in the function scope as well as tu... wtf?
 		self._store(node.name, pyclass_inst)
 
 
@@ -1129,9 +1132,9 @@ class Py2C(ASTVisitor):
 
 		# build the actual runner function
 		with self.new_scope(node.hl, inst.c_runner_func.body):
+			inst.runner_intro(self.context)
 			inst.runner_load_args(self.context, *full_args)
 			inst.runner_load_locals(self.context)
-			inst.runner_intro(self.context)
 			self.comment('body')
 			self.visit_nodelist(node.body)
 			inst.runner_outro(self.context)
@@ -1441,7 +1444,7 @@ class Py2C(ASTVisitor):
 			inst = self.visit(node.value)
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
 		else:
-			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID('None')))
+			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.none.name)))
 		self.context.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID('__return_value__'))))
 
 		# do exit flowcontrol to handle finally blocks
@@ -1725,14 +1728,5 @@ class Py2C(ASTVisitor):
 	def visit_Yield(self, node):
 		# get the returned instance
 		rv_inst = self.visit(node.value)
+		self.scope.ll.do_yield(self.context, rv_inst)
 
-		# assign to our yielded slot slot
-		self.context.add(c.Assignment('=', c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 1)), c.ID(rv_inst.name)))
-		rv_inst.incref(self.context)
-
-		# transfer control back to originator
-		self.context.add(c.FuncCall(c.ID('coro_transfer'), c.ExprList(
-																	c.FuncCall(c.ID('MelanoGen_GetContext'), c.ExprList(c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 0)))),
-																	c.FuncCall(c.ID('MelanoGen_GetSourceContext'), c.ExprList(c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 0))))
-																	)))
-		self.context.add(c.Assignment('=', c.ArrayRef(c.ID('py_gen_args'), c.Constant('integer', 1)), c.ID('NULL')))

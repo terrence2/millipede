@@ -110,3 +110,4 @@ class Scope:
 		Instance the type with a name.  Sets the new instance on the 'inst' variable.
 		'''
 		self.inst = self.get_type()(name)
+

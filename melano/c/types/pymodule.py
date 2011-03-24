@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from contextlib import contextmanager
 from melano.c import ast as c
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.c.types.lltype import LLType
@@ -84,6 +85,11 @@ class PyModuleLL(PyObjectLL):
 		ctx.add(c.Return(c.ID('__return_value__')))
 
 
+	@contextmanager
+	def maybe_recursive_call(self, ctx):
+		yield
+
+
 	def set_attr_string(self, ctx, name:str, val:LLType):
 		return self.ll_dict.set_item_string(ctx, name, val)
 
@@ -99,7 +105,7 @@ class PyModuleLL(PyObjectLL):
 		frombuiltins = c.If(c.FuncCall(c.ID(mode), c.ExprList(c.UnaryOp('!', c.ID(out.name)))),
 				c.Compound(
 					c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetAttrString'),
-														c.ExprList(c.ID('builtins'), c.Constant('string', attrname)))),
+														c.ExprList(c.ID(self.visitor.builtins.name), c.Constant('string', attrname)))),
 				),
 				c.Compound(
 					c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(out.name)))

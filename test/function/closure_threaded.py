@@ -1,4 +1,4 @@
-#fail
+
 def foo(a, b, c):
 	def _runner():
 		print(a)
