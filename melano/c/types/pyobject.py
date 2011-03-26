@@ -62,7 +62,7 @@ class PyObjectLL(LLType):
 
 	def set_attr_string(self, ctx, attrname, attrval):
 		tmp = CIntegerLL(None, self.visitor)
-		tmp.declare(ctx.visitor.scope.context, init= -1, name="setattr_rv")
+		tmp.declare(self.visitor.scope.context, init= -1, name="setattr_rv")
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
@@ -70,8 +70,8 @@ class PyObjectLL(LLType):
 
 	def set_attr(self, ctx, attr, val):
 		tmp = CIntegerLL(None, self.visitor)
-		tmp.declare(ctx.visitor.scope.context, init= -1)
-		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObjectSetAttr'), c.ExprList(
+		tmp.declare(self.visitor.scope.context, init= -1)
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttr'), c.ExprList(
 															c.ID(self.name), c.ID(attr.name), c.ID(val.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
 
@@ -83,12 +83,12 @@ class PyObjectLL(LLType):
 
 
 	def set_item(self, ctx, key, val):
-		tmp = CIntegerLL(None, self.visitor)
-		tmp.declare(ctx.visitor.scope.context, init= -1)
-		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetItem'), c.ExprList(
+		out = CIntegerLL(None, self.visitor)
+		out.declare(self.visitor.scope.context, init= -1)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_SetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
-		self.fail_if_nonzero(ctx, tmp.name)
-		return tmp
+		self.fail_if_nonzero(ctx, out.name)
+		return out
 
 
 	def call(self, ctx, posargs, kwargs, out_var):
@@ -209,7 +209,7 @@ class PyObjectLL(LLType):
 	def inplace_power(self, ctx, rhs, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlacePower'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID(self.visitor.none.name)))))
 		self.fail_if_null(ctx, out.name)
-## END Inplace Binary Ops ##
+	## END Inplace Binary Ops ##
 
 
 	## Unary Ops ##
@@ -234,16 +234,18 @@ class PyObjectLL(LLType):
 	## END Unary Ops ##
 
 
-	def is_true(self, ctx):
-		out = CIntegerLL(None, self.visitor)
-		out.declare(ctx.visitor.scope.context)
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_IsTrue'), c.ExprList(c.ID(self.name)))))
-		return out
+	def is_true(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = CIntegerLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context)
+		assert isinstance(out_inst, CIntegerLL)
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_IsTrue'), c.ExprList(c.ID(self.name)))))
+		return out_inst
 
 
 	def rich_compare_bool(self, ctx, rhs, opid):
 		out = CIntegerLL(None, self.visitor)
-		out.declare(ctx.visitor.scope.context)
+		out.declare(self.visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_RichCompareBool'), c.ExprList(
 																				c.ID(self.name), c.ID(rhs.name), c.ID(opid)))))
 		self.fail_if_negative(ctx, out.name)
@@ -252,7 +254,7 @@ class PyObjectLL(LLType):
 
 	def sequence_contains(self, ctx, item):
 		out = CIntegerLL(None, self.visitor)
-		out.declare(ctx.visitor.scope.context)
+		out.declare(self.visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_Contains'), c.ExprList(
 																				c.ID(self.name), c.ID(item.name)))))
 		self.fail_if_negative(ctx, out.name)
@@ -261,7 +263,7 @@ class PyObjectLL(LLType):
 
 	def is_(self, ctx, other):
 		out = CIntegerLL(None, self.visitor)
-		out.declare(ctx.visitor.scope.context)
+		out.declare(self.visitor.scope.context)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.BinaryOp('==', c.ID(self.name), c.ID(other.name))))
 		return out
 
@@ -275,6 +277,15 @@ class PyObjectLL(LLType):
 		assert isinstance(out, PyTypeLL)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Type'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
+
+
+	def as_ssize(self, ctx, out=None):
+		if not out:
+			out = CIntegerLL(None, self.visitor)
+			out.declare(self.visitor.scope.context)
+		assert isinstance(out, CIntegerLL)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_AsSsize_t'), c.ExprList(c.ID(self.name), c.ID('PyExc_OverflowError')))))
+		return out
 
 
 	def is_instance(self, ctx, type_type):

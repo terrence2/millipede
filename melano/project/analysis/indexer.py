@@ -4,6 +4,7 @@ All rights reserved.
 '''
 from contextlib import contextmanager
 from melano.hl.class_ import MelanoClass
+from melano.hl.comprehension import MelanoComprehension
 from melano.hl.constant import Constant
 from melano.hl.function import MelanoFunction
 from melano.hl.name import Name
@@ -106,7 +107,7 @@ class Indexer(ASTVisitor):
 
 
 	def visit_DictComp(self, node):
-		with self.scope(node):
+		with self.scope(node, scope_ty=MelanoComprehension):
 			self.visit(node.key)
 			self.visit(node.value)
 			self.visit_nodelist(node.generators)
@@ -227,7 +228,7 @@ class Indexer(ASTVisitor):
 
 
 	def visit_ListComp(self, node):
-		with self.scope(node):
+		with self.scope(node, scope_ty=MelanoComprehension):
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 
@@ -279,7 +280,7 @@ class Indexer(ASTVisitor):
 
 
 	def visit_SetComp(self, node):
-		with self.scope(node):
+		with self.scope(node, scope_ty=MelanoComprehension):
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 

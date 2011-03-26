@@ -112,12 +112,12 @@ class PythonASTBuilder:
 
 	def set_context(self, expr, ctx):
 		"""Set the context of an expression to Store or Del if possible."""
-		try:
-			expr.set_context(ctx)
-		except ast.UnacceptableExpressionContext as e:
-			self.error_ast(e.msg, e.node)
-		except misc.ForbiddenNameAssignment as e:
-			self.error_ast("assignment to %s" % (e.name,), e.node)
+		#try:
+		expr.set_context(ctx)
+		#except ast.UnacceptableExpressionContext as e:
+		#	self.error_ast(e.msg, e.node)
+		#except misc.ForbiddenNameAssignment as e:
+		#	self.error_ast("assignment to %s" % (e.name,), e.node)
 
 
 	def handle_del_stmt(self, del_node):
@@ -441,11 +441,8 @@ class PythonASTBuilder:
 	def handle_for_stmt(self, for_node):
 		children = self.children(for_node)
 		target_node = children[1]
-		target_as_exprlist = self.handle_exprlist(target_node, ast.Store)
-		if len(target_node.children) == 1:
-			target = target_as_exprlist[0]
-		else:
-			target = ast.Tuple(target_as_exprlist, ast.Store, target_node)
+		target = self.handle_exprlist(target_node, ast.Store)
+		target.set_context(ast.Store)
 		expr = self.handle_testlist(children[3])
 		body = self.handle_suite(children[5])
 		if len(children) == 9:
@@ -1133,6 +1130,7 @@ class PythonASTBuilder:
 			if len(children) == 2 and children[1].type == self.syms.comp_for:
 				elt = self.handle_testlist(children[0])
 				comps = self.handle_comp_for(children[1])
+				elt.set_context(ast.Load)
 				return ast.SetComp(elt, comps, atom_node)
 			# Normal Set
 			else:
@@ -1148,6 +1146,8 @@ class PythonASTBuilder:
 				key = self.handle_testlist(children[0])
 				value = self.handle_testlist(children[2])
 				generators = self.handle_comp_for(children[3])
+				key.set_context(ast.Store)
+				value.set_context(ast.Store)
 				return ast.DictComp(key, value, generators, atom_node)
 			# Normal Dict
 			else:
@@ -1236,10 +1236,10 @@ class PythonASTBuilder:
 			iter_node = first_child.children[2]
 
 
-	#@specialize.arg(5)
 	def comprehension_helper(self, comp_node, for_type, if_type, iter_type,
 							 handle_source_expression):
 		elt = self.handle_expr(comp_node.children[0])
+		elt.set_context(ast.Load)
 		fors_count = self.count_comp_fors(comp_node, for_type, if_type)
 		comps = []
 		comp_for = self.children(comp_node)[1]
@@ -1249,10 +1249,9 @@ class PythonASTBuilder:
 			expr = handle_source_expression(self.children(comp_for)[3])
 			assert isinstance(expr, ast.expr)
 			if len(self.children(for_node)) == 1:
-				comp = ast.comprehension(for_targets[0], expr, None, comp_for)
+				comp = ast.comprehension(for_targets, expr, None, comp_for)
 			else:
-				target = ast.Tuple(for_targets, ast.Store, comp_for)
-				comp = ast.comprehension(target, expr, None, comp_node)
+				comp = ast.comprehension(for_targets, expr, None, comp_node)
 			if len(self.children(comp_for)) == 5:
 				comp_for = comp_iter = self.children(comp_for)[4]
 				assert comp_iter.type == iter_type
@@ -1294,6 +1293,8 @@ class PythonASTBuilder:
 			expr = self.handle_expr(child)
 			self.set_context(expr, context)
 			exprs.append(expr)
-		return exprs
+		if len(exprs) == 1:
+			return exprs[0]
+		return ast.Tuple(exprs, context, exprlist)
 
 

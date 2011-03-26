@@ -37,13 +37,35 @@ class Linker(ASTVisitor):
 		#		attribute value updates in linking
 		self.visit(node.value)
 
-		# note that the attribute almost certainly has not hl value here here -- we will eventually propagate
+		# note that the attribute almost certainly has no hl value here now -- we will eventually propagate
 		#		correct type info into the attribute at, e.g. assignment, because we assign this attribute node
 		#		as a ref into the name we create here on the actual attribute.
 		assert node.attr.hl is None
 		node.attr.hl = Name(str(node.attr), node.value.hl)
 		node.hl = NameRef(node.attr.hl)
 		node.value.hl.add_attribute(str(node.attr), node.attr.hl)
+
+
+	def visit_Subscript(self, node):
+		# Note: references through the lhs of an attribute are always a ref, not a name, so we need to do
+		#		attribute value updates in linking
+		self.visit(node.value)
+		self.visit(node.slice)
+
+		# note that the indexed  almost certainly has no hl value here now -- we will eventually propagate
+		#		correct type info into the index at, e.g. assignment, because we assign this index node
+		#		as a ref into the name we create here on the actual index
+		assert node.slice.hl is None
+		node.slice.hl = Name(str(node.slice), node.value.hl)
+		node.hl = NameRef(node.slice.hl)
+		node.value.hl.add_subscript(node.slice, node.slice.hl)
+
+
+	def visit_DictComp(self, node):
+		with self.scope(node.hl):
+			self.visit_nodelist(node.generators)
+			self.visit(node.key)
+			self.visit(node.value)
 
 
 	def visit_Call(self, node):
@@ -118,11 +140,23 @@ class Linker(ASTVisitor):
 					self.visit(alias.name)
 
 
+	def visit_ListComp(self, node):
+		with self.scope(node.hl):
+			self.visit_nodelist(node.generators)
+			self.visit(node.elt)
+
+
 	def visit_Name(self, node):
 		if node.ctx == py.Load:
 			sym = self.context.lookup(str(node))
 			ref = self.context.add_reference(sym)
 			node.hl = ref
+
+
+	def visit_SetComp(self, node):
+		with self.scope(node.hl):
+			self.visit_nodelist(node.generators)
+			self.visit(node.elt)
 
 
 	def visit_TryExcept(self, node):

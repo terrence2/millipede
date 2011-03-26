@@ -30,7 +30,7 @@ class CIntegerLL(LLType):
 			return out
 		else:
 			out = PyIntegerLL(None, self.visitor)
-			out.declare(ctx)
+			out.declare(self.visitor.scope.context)
 			out._new_from_long(ctx, c.ID(self.name))
 			return out
 
@@ -42,7 +42,9 @@ class CIntegerLL(LLType):
 		return out
 
 
-	def is_true(self, ctx):
+	def is_true(self, ctx, out_inst=None):
+		if out_inst:
+			ctx.add(c.Assignment('=', c.ID(out_inst.name), c.ID(self.name)))
 		return self
 
 

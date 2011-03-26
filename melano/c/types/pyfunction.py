@@ -107,7 +107,7 @@ class PyFunctionLL(PyObjectLL):
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
 	def stub_load_args(self, ctx, args, defaults, vararg, kwonlyargs, kw_defaults, kwarg):
-		#TODO: this is really ugly -- makes extensive use of ctx.visitor; we really need a better way to expose
+		#TODO: this is really ugly -- makes extensive use of self.visitor; we really need a better way to expose
 		#		py2c functionality here without just passing a reference to every user
 
 		# get args ref
@@ -122,14 +122,14 @@ class PyFunctionLL(PyObjectLL):
 		# load positional and normal keyword args
 		if args:
 			c_args_size = CIntegerLL(None, self.visitor)
-			c_args_size.declare(ctx.visitor.scope.context, name='args_size')
+			c_args_size.declare(self.visitor.scope.context, name='args_size')
 			args_tuple.get_size_unchecked(ctx, c_args_size)
 
 			arg_insts = [None] * len(args)
 			for i, arg in enumerate(args):
 				# declare local variable for arg ref
-				arg_insts[i] = ctx.visitor.create_ll_instance(arg.arg.hl)
-				arg_insts[i].declare(ctx.visitor.scope.context)
+				arg_insts[i] = self.visitor.create_ll_instance(arg.arg.hl)
+				arg_insts[i].declare(self.visitor.scope.context)
 
 				# query if in positional args
 				ctx.add(c.Comment("Grab arg {}".format(str(arg.arg))))
@@ -167,8 +167,8 @@ class PyFunctionLL(PyObjectLL):
 		if kwonlyargs:
 			kwarg_insts = [None] * len(kwonlyargs)
 			for i, arg in enumerate(kwonlyargs):
-				kwarg_insts[i] = ctx.visitor.create_ll_instance(arg.arg.hl)
-				kwarg_insts[i].declare(ctx.visitor.scope.context)
+				kwarg_insts[i] = self.visitor.create_ll_instance(arg.arg.hl)
+				kwarg_insts[i].declare(self.visitor.scope.context)
 
 			# ensure we have kwargs at all
 			have_kwarg = c.If(c.ID('kwargs'), c.Compound(), c.Compound())
@@ -283,7 +283,6 @@ class PyFunctionLL(PyObjectLL):
 
 	def runner_intro(self, ctx):
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
-		ctx.add_variable(c.Decl('__jmp_ctx__', c.PtrDecl(c.TypeDecl('__jmp_ctx__', c.IdentifierType('void'))), init=c.ID('NULL')), False)
 
 
 	def runner_outro(self, ctx):

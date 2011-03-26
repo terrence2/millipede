@@ -3,6 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from melano.c import ast as c
+from melano.c.types.integer import CIntegerLL
 from melano.c.types.pyobject import PyObjectLL
 
 
@@ -13,20 +14,22 @@ class PyDictLL(PyObjectLL):
 
 
 	def set_item_string(self, ctx, name:str, var:PyObjectLL):
-		tmp = ctx.reserve_name('set_item_rv')
-		ctx.add_variable(c.Decl(tmp, c.TypeDecl(tmp, c.IdentifierType('int'))), False)
-		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_SetItemString'), c.ExprList(
-											c.ID(self.name), c.Constant('string', name), c.ID(var.name)))))
-		self.fail_if_nonzero(ctx, tmp)
+		tmp = CIntegerLL(None, self.visitor)
+		tmp.declare(self.visitor.scope.context, name='_set_rv')
 		var.incref(ctx)
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyDict_SetItemString'), c.ExprList(
+											c.ID(self.name), c.Constant('string', name), c.ID(var.name)))))
+		self.fail_if_nonzero(ctx, tmp.name)
 
 
 	def set_item(self, ctx, key:PyObjectLL, val:PyObjectLL):
-		tmp = ctx.reserve_name('set_item_rv')
-		ctx.add_variable(c.Decl(tmp, c.TypeDecl(tmp, c.IdentifierType('int'))), False)
-		ctx.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID('PyDict_SetItem'), c.ExprList(
+		tmp = CIntegerLL(None, self.visitor)
+		tmp.declare(self.visitor.scope.context, name='_set_rv')
+		key.incref(ctx)
+		val.incref(ctx)
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyDict_SetItem'), c.ExprList(
 											c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
-		self.fail_if_nonzero(ctx, tmp)
+		self.fail_if_nonzero(ctx, tmp.name)
 
 
 	def get_item_string(self, ctx, name:str, out:PyObjectLL):

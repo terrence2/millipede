@@ -537,6 +537,9 @@ class Num(expr):
 		super().__init__(*args, **kwargs)
 		self.n = n
 
+	def __str__(self):
+		return str(self.n)
+
 #| Set(expr* elts)
 class Set(expr):
 	_fields = ('elts',)
@@ -649,4 +652,6 @@ class Index(slice_):
 		super().__init__(*args, **kwargs)
 		self.value = value
 
+	def __str__(self):
+		return str(self.value)
 

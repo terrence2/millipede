@@ -125,6 +125,7 @@ class Compound(AST):
 
 	def add(self, node):
 		self.block_items.append(node)
+		return node
 
 
 class CompoundLiteral(AST):
@@ -377,6 +378,7 @@ class TranslationUnit(AST):
 
 	def add(self, node):
 		self.ext.append(node)
+		return node
 
 
 class TypeDecl(AST):

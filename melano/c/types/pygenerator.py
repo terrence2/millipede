@@ -37,9 +37,9 @@ class PyGeneratorLL(PyFunctionLL):
 		#1: set to the generator object itself
 		#2: used as a slot to communicate a yielded value
 		#3+: args in canonical order
-		argsname = ctx.visitor.scope.context.reserve_name('gen_argslist')
+		argsname = self.visitor.scope.context.reserve_name('gen_argslist')
 		decl = c.Decl(argsname, c.PtrDecl(PyObjectLL.typedecl()), init=c.ID('NULL'))
-		ctx.visitor.scope.context.add_variable(decl, False)
+		self.visitor.scope.context.add_variable(decl, False)
 		ctx.add(c.Assignment('=', c.ID(argsname), c.FuncCall(c.ID('calloc'), c.ExprList(c.Constant('integer', len(args) + 3),
 																					c.FuncCall(c.ID('sizeof'), c.ExprList(PyObjectLL.typedecl()))))))
 		self.fail_if_null(ctx, argsname)
@@ -67,7 +67,7 @@ class PyGeneratorLL(PyFunctionLL):
 		for offset, arg in enumerate(arg_list, self.ARGS_INDEX):
 			ctx.add(c.Comment("set arg '{}'".format(str(arg.arg))))
 			inst = PyObjectLL(arg.arg.hl, self.visitor)
-			inst.declare(ctx.visitor.scope.context)
+			inst.declare(self.visitor.scope.context)
 			ctx.add(c.Assignment('=', c.ID(inst.name), c.ArrayRef(c.ID(self.args_name), c.Constant('integer', offset))))
 			inst.incref(ctx)
 			self.locals_map[str(arg.arg)] = str(arg.arg)

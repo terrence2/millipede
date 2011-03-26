@@ -58,6 +58,8 @@ class NameRef:
 	def add_attribute(self, attrname, attrtype):
 		return self.ref.add_attribute(attrname, attrtype)
 
+	def add_subscript(self, slice, reftype):
+		return self.ref.add_subscript(slice, reftype)
 
 	def show(self, level):
 		logging.info('{}Ref: {}'.format('\t' * level, self.ref.name))

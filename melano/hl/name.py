@@ -25,8 +25,11 @@ class Name:
 		# the types that we have proven this name can take
 		self.types = []
 
-		# The attribute map -- we record all potentially attribute usage in the name
+		# The attribute map -- we record all potential attribute usage in the name
 		self.attributes = {} # {str: HLType}
+
+		# The subscript map -- we record all potential indexing of this name here
+		self.subscripts = {} # {slice: HLType}
 
 		# the ll instance
 		self.ll = None
@@ -37,6 +40,13 @@ class Name:
 			self.attributes[attrname] = []
 		if hltype:
 			self.attributes[attrname].append(hltype)
+
+
+	def add_subscript(self, slice, hltype):
+		if slice not in self.subscripts:
+			self.subscripts[slice] = []
+		if hltype:
+			self.subscripts[slice].append(hltype)
 
 
 	def lookup_attribute(self, attrname):

@@ -7,7 +7,7 @@ from melano.c.types.pyobject import PyObjectLL
 
 
 class PySetLL(PyObjectLL):
-	def new(self, ctx, iterable):
+	def new(self, ctx, iterable=None):
 		iterable_name = iterable.name if iterable else 'NULL'
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PySet_New'), c.ExprList(c.ID(iterable_name)))))
 		self.fail_if_null(ctx, self.name)

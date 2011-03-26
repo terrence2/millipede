@@ -63,6 +63,14 @@ static PyObject *
 gen_iternext(MelanoGenObject *gen)
 {
 	PyObject *rv;
+
+	// If the runtime did not call __iter__ to get an iterator first, we need
+	// to call it manually to set ourself up for usage.
+	if(!gen->coro_source) {
+		PyObject *obj = gen_iter((PyObject *)gen);
+		Py_DECREF(obj);
+	}
+
 	coro_transfer(gen->coro_source, &gen->coro);
 	rv = ((PyObject **)(gen->data))[RETURN_INDEX];
 	if(!rv) {

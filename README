@@ -53,9 +53,9 @@ No matter what platform we decide to target, Melano's boat will rise with the ti
 
 Current Status
 --------------
-Working:  Python-to-C compilation of the harder elements -- classes, functions, with statements, exceptions, nonlocal/global, and so on, (generator functions are the current top to-do), as well as a number of the easier elements.
+Working:  Python-to-C compilation of the harder elements -- classes, functions, importing, names, flow control, and so on, as well as most of the easier elements.
 
-Todo: The rest of the missing easy stuff -- AugAssign, While, comprehensions, lambda, continue and some others.  Static and type analysis is still incredibly basic, but we need to know that fully general python translation works before we can start safely eliding bits of it.  
+Todo: Bytes, Delete, Ellipsis, ExtSlice, GeneratorExp, IfExp, Lambda, Slice, Starred.  Static and type analysis is still incredibly basic, but we need to know that fully general python translation works before we can start safely eliding bits of it.
 
 Halfway: The GUI elements exist (built on PyQt4) although the highlighting engine is still mostly pointing at a prior experiment and are, thus, mainly broken at the moment.
 

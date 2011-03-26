@@ -63,18 +63,17 @@ class PyModuleLL(PyObjectLL):
 	def set_initial_string_attribute(self, ctx, name:str, s:str):
 		if s is not None:
 			ps = PyStringLL(None, self.visitor)
-			ps.declare(ctx)
+			ps.declare(self.visitor.scope.context)
 			ps.new(ctx, PyStringLL.str2c(s))
 		else:
 			ps = PyObjectLL(None, self.visitor)
-			ps.declare(ctx)
+			ps.declare(self.visitor.scope.context)
 			ps.assign_none(ctx)
 		self.ll_dict.set_item_string(ctx, name, ps)
 
 
 	def intro(self, ctx):
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
-		ctx.add_variable(c.Decl('__jmp_ctx__', c.PtrDecl(c.TypeDecl('__jmp_ctx__', c.IdentifierType('void'))), init=c.ID('NULL')), False)
 
 
 	def outro(self, ctx):
@@ -111,6 +110,5 @@ class PyModuleLL(PyObjectLL):
 					c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(out.name)))
 				))
 		ctx.add(frombuiltins)
-		frombuiltins.iftrue.visitor = ctx.visitor
 		self.fail_if_null(frombuiltins.iftrue, out.name)
 
