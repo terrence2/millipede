@@ -493,11 +493,12 @@ class IfExp(expr):
 #| Lambda(arguments args, expr body)
 class Lambda(expr):
 	_fields = ('args', 'body')
-	__slots__ = ('args', 'body')
+	__slots__ = ('args', 'body', 'name')
 	def __init__(self, _args, body, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.args = _args
 		self.body = body
+		self.name = None
 
 #| List(expr* elts, expr_context ctx) 
 class List(expr):

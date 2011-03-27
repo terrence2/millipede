@@ -68,6 +68,10 @@ typedef struct {
     // the (default NULL) stack array (only used by closures)
     MelanoLocals **m_stack;
     Py_ssize_t m_stacksize;
+    // the annotations, defaults, and kwdefaults
+    PyObject *m_annotations;
+    PyObject *m_defaults;
+    PyObject *m_kwdefaults;
 } PyMelanoFunctionObject;
 
 PyAPI_FUNC(int) PyMelanoFunction_ClearFreeList(void);

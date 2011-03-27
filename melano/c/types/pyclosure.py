@@ -40,21 +40,6 @@ class PyClosureLL(PyFunctionLL):
 		self.stack_name = None
 		self.locals_name = None
 
-		# build the "locals" map:
-		# The locals pointer contains all of the names accessible from the current function, not just the really locals.
-		# The top level of indirection points to a set of PyObject*[] containing the locals for ourself and for all lower
-		#	frames, in order.  Some variable names will mask others below them.  Since we can know this pattern
-		#	of masking, inheritance, etc statically, we discover this here and encode the info into variable accesses
-		#	that are made in this scope.
-		self.locals_map = {} # {str: (int, int)}
-		for i, scope in enumerate(reversed(list(self.each_func_scope()))):
-			names = list(scope.symbols.keys())
-			for j, name in enumerate(names):
-				sym = scope.symbols[name]
-				if not isinstance(sym, NameRef):
-					self.locals_map[name] = (i, j)
-		self.own_scope_offset = len(list(self.each_func_scope())) - 1
-
 
 	@staticmethod
 	def stack_typedecl(name=None):
@@ -71,6 +56,23 @@ class PyClosureLL(PyFunctionLL):
 			if isinstance(cur, MelanoFunction):
 				yield cur
 			cur = cur.owner.parent
+
+
+	def prepare(self):
+		# build the "locals" map:
+		# The locals pointer contains all of the names accessible from the current function, not just the really locals.
+		# The top level of indirection points to a set of PyObject*[] containing the locals for ourself and for all lower
+		#	frames, in order.  Some variable names will mask others below them.  Since we can know this pattern
+		#	of masking, inheritance, etc statically, we discover this here and encode the info into variable accesses
+		#	that are made in this scope.
+		self.locals_map = {} # {str: (int, int)}
+		for i, scope in enumerate(reversed(list(self.each_func_scope()))):
+			names = list(scope.symbols.keys())
+			for j, name in enumerate(names):
+				sym = scope.symbols[name]
+				if not isinstance(sym, NameRef):
+					self.locals_map[name] = (i, j)
+		self.own_scope_offset = len(list(self.each_func_scope())) - 1
 
 
 	def create_funcdef(self, ctx, tu, docstring):
@@ -175,23 +177,9 @@ class PyClosureLL(PyFunctionLL):
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
 		ctx.add(c.Assignment('=', ref, c.ID(val.name)))
 
-		#ref = c.ArrayRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), c.Constant('integer', j))
-		#ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
-		#ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
-		#ctx.add(c.Assignment('=', ref, c.ID(val.name)))
-		pass
-
 
 	def get_attr_string(self, ctx, attrname, outvar):
 		i, j = self.locals_map[attrname]
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.Assignment('=', c.ID(outvar.name), ref))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(outvar.name))))
-
-		#i, j = self.locals_map[attrname]
-		#ctx.add(c.Assignment('=', c.ID(outvar.name),
-		#					c.ArrayRef(
-		#							c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)),
-		#							c.Constant('integer', j))))
-		#ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(outvar.name))))
-		pass

@@ -76,10 +76,10 @@ class PyGeneratorLL(PyFunctionLL):
 
 	def runner_intro(self, ctx):
 		'''Set the generator context on the TLS so that we can get to it from generators we call into.'''
-		ctx.add(c.Comment('cast args to PyObject*'))
+		ctx.add(c.Comment('cast args to PyObject**'))
 		self.args_name = ctx.reserve_name('__args__')
 		ctx.add_variable(c.Decl(self.args_name, c.PtrDecl(c.PtrDecl(c.TypeDecl(self.args_name, c.IdentifierType('PyObject')))), init=c.ID('NULL')), False)
-		ctx.add(c.Assignment('=', c.ID(self.args_name), c.Cast(PyObjectLL.typedecl(), c.ID('gen_args'))))
+		ctx.add(c.Assignment('=', c.ID(self.args_name), c.Cast(c.PtrDecl(PyObjectLL.typedecl()), c.ID('gen_args'))))
 		self.fail_if_null(ctx, self.args_name)
 
 		ctx.add(c.Comment('get function instance'))

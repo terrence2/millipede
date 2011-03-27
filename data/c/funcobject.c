@@ -76,6 +76,9 @@ PyMelanoFunction_New(const char *name,
     op->m_doc = doc;
     op->m_stack = NULL;
     op->m_stacksize = 0;
+    op->m_annotations = NULL;
+    op->m_defaults = NULL;
+    op->m_kwdefaults = NULL;
     _PyObject_GC_TRACK(op);
     return (PyObject *)op;
 }
@@ -152,6 +155,94 @@ meth_get__name__(PyMelanoFunctionObject *m, void *closure)
     return PyUnicode_FromString(m->m_name);
 }
 
+static PyObject *
+meth_get__annotations__(PyMelanoFunctionObject *m, void *closure)
+{
+    PyObject *out;
+    if(!m->m_annotations)
+        out = Py_None;
+    else
+        out = m->m_annotations;
+    Py_INCREF(out);
+    return out;
+}
+
+static int
+meth_set__annotations__(PyMelanoFunctionObject *m, PyObject *value)
+{
+    PyObject *tmp;
+
+    if(value == NULL || !PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                    "__annotations__ must be set to a dict object");
+        return -1;
+    }
+    tmp = m->m_annotations;
+    Py_INCREF(value);
+    m->m_annotations = value;
+    Py_XDECREF(tmp);
+    return 0;
+}
+
+
+static PyObject *
+meth_get__defaults__(PyMelanoFunctionObject *m, void *closure)
+{
+    PyObject *out;
+    if(!m->m_defaults)
+        out = Py_None;
+    else
+        out = m->m_defaults;
+    Py_INCREF(out);
+    return out;
+}
+
+static int
+meth_set__defaults__(PyMelanoFunctionObject *m, PyObject *value)
+{
+    PyObject *tmp;
+
+    if(value == NULL || !PyTuple_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                    "__defaults__ must be set to a tuple object");
+        return -1;
+    }
+    tmp = m->m_defaults;
+    Py_INCREF(value);
+    m->m_defaults = value;
+    Py_XDECREF(tmp);
+    return 0;
+}
+
+
+static PyObject *
+meth_get__kwdefaults__(PyMelanoFunctionObject *m, void *closure)
+{
+    if(!m->m_kwdefaults) {
+        Py_RETURN_NONE;
+    }
+    Py_INCREF(m->m_kwdefaults);
+    return m->m_kwdefaults;
+}
+
+static int
+meth_set__kwdefaults__(PyMelanoFunctionObject *m, PyObject *value)
+{
+    PyObject *tmp;
+
+    if(value == NULL || !PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                    "__kwdefaults__ must be set to a dict object");
+        return -1;
+    }
+    tmp = m->m_kwdefaults;
+    Py_INCREF(value);
+    m->m_kwdefaults = value;
+    Py_XDECREF(tmp);
+    return 0;
+}
+
+
 static int
 meth_traverse(PyMelanoFunctionObject *m, visitproc visit, void *arg)
 {
@@ -161,6 +252,9 @@ meth_traverse(PyMelanoFunctionObject *m, visitproc visit, void *arg)
 static PyGetSetDef meth_getsets [] = {
     {"__doc__",  (getter)meth_get__doc__,  NULL, NULL},
     {"__name__", (getter)meth_get__name__, NULL, NULL},
+    {"__annotations__", (getter)meth_get__annotations__, (setter)meth_set__annotations__, NULL},
+    {"__defaults__", (getter)meth_get__defaults__, (setter)meth_set__defaults__, NULL},
+    {"__kwdefaults__", (getter)meth_get__kwdefaults__, (setter)meth_set__kwdefaults__, NULL},
     {0}
 };
 

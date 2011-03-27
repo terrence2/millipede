@@ -716,14 +716,23 @@ class PythonASTBuilder:
 					vararg_name = vararg.arg
 					vararg_annotation = vararg.annotation
 					i += 3
+				elif len(children) >= i and children[i + 1].type == self.syms.vfpdef:
+					vararg = self.handle_vfpdef(children[i + 1])
+					vararg_name = vararg.arg
+					i += 3
 				else:
 					i += 2
 				have_args = True
 			elif arg_type == self.tokens.DOUBLESTAR:
-				kwarg = self.handle_tfpdef(children[i + 1])
-				kwarg_name = kwarg.arg
-				kwarg_annotation = kwarg.annotation
-				i += 3
+				if len(children) >= i and children[i + 1].type == self.syms.tfpdef:
+					kwarg = self.handle_tfpdef(children[i + 1])
+					kwarg_name = kwarg.arg
+					kwarg_annotation = kwarg.annotation
+					i += 3
+				elif len(children) >= i and children[i + 1].type == self.syms.vfpdef:
+					kwarg = self.handle_vfpdef(children[i + 1])
+					kwarg_name = kwarg.arg
+					i += 3
 			else:
 				raise NotImplementedError("In argslist type: {}".format(self.type_name(arg_type)))
 		return ast.arguments(
@@ -746,6 +755,13 @@ class PythonASTBuilder:
 		return ast.arg(name, annotation, tfpdef_node)
 
 
+	def handle_vfpdef(self, vfpdef_node):
+		'''tfpdef: NAME'''
+		assert vfpdef_node.type == self.syms.vfpdef
+		children = self.children(vfpdef_node)
+		assert children[0].type == self.tokens.NAME
+		name = ast.Name(children[0].value, ast.Param, children[0])
+		return ast.arg(name, None, vfpdef_node)
 
 
 	def handle_expr_stmt(self, stmt):
@@ -879,12 +895,14 @@ class PythonASTBuilder:
 
 	def handle_lambdef(self, lambdef_node):
 		children = self.children(lambdef_node)
+		assert children[0].type == self.tokens.NAME and children[0].value == 'lambda'
 		expr = self.handle_expr(children[-1])
 		if len(children) == 3:
+			assert children[1].type == self.tokens.COLON and children[1].value == ':'
 			args = ast.arguments(None, None, None, None, None, None, None, None, lambdef_node)
 		else:
 			args = self.handle_varargslist(children[1])
-		return ast.Lambda(args, expr, lambdef_node)
+		return ast.Lambda(args, [ast.Return(expr, children[-1])], lambdef_node)
 
 
 	def handle_varargslist(self, varargslist_node):

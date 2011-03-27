@@ -46,21 +46,6 @@ class Linker(ASTVisitor):
 		node.value.hl.add_attribute(str(node.attr), node.attr.hl)
 
 
-	def visit_Subscript(self, node):
-		# Note: references through the lhs of an attribute are always a ref, not a name, so we need to do
-		#		attribute value updates in linking
-		self.visit(node.value)
-		self.visit(node.slice)
-
-		# note that the indexed  almost certainly has no hl value here now -- we will eventually propagate
-		#		correct type info into the index at, e.g. assignment, because we assign this index node
-		#		as a ref into the name we create here on the actual index
-		assert node.slice.hl is None
-		node.slice.hl = Name(str(node.slice), node.value.hl)
-		node.hl = NameRef(node.slice.hl)
-		node.value.hl.add_subscript(node.slice, node.slice.hl)
-
-
 	def visit_DictComp(self, node):
 		with self.scope(node.hl):
 			self.visit_nodelist(node.generators)
@@ -107,6 +92,17 @@ class Linker(ASTVisitor):
 			self.visit_nodelist(node.body)
 
 		self.visit_nodelist(node.decorator_list)
+
+
+	def visit_Lambda(self, node):
+		self.visit_nodelist(node.args.defaults) # positional arg default values
+		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
+		with self.scope(node.hl):
+			self.visit_nodelist_field(node.args.args, 'arg')
+			self.visit(node.args.vararg)
+			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
+			self.visit(node.args.kwarg)
+			self.visit_nodelist(node.body)
 
 
 	def visit_Import(self, node):
@@ -157,6 +153,21 @@ class Linker(ASTVisitor):
 		with self.scope(node.hl):
 			self.visit_nodelist(node.generators)
 			self.visit(node.elt)
+
+
+	def visit_Subscript(self, node):
+		# Note: references through the lhs of an attribute are always a ref, not a name, so we need to do
+		#		attribute value updates in linking
+		self.visit(node.value)
+		self.visit(node.slice)
+
+		# note that the indexed  almost certainly has no hl value here now -- we will eventually propagate
+		#		correct type info into the index at, e.g. assignment, because we assign this index node
+		#		as a ref into the name we create here on the actual index
+		assert node.slice.hl is None
+		node.slice.hl = Name(str(node.slice), node.value.hl)
+		node.hl = NameRef(node.slice.hl)
+		node.value.hl.add_subscript(node.slice, node.slice.hl)
 
 
 	def visit_TryExcept(self, node):

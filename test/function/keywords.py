@@ -8,7 +8,7 @@ foo('a', 'b', 'c')
 #out: a b c
 
 #PyCFunction doesn't allow us to set defaults, kwdefaults, or annotations
-#print(foo.__defaults__)
-#-out: ([], {})
-#print(foo.__kwdefaults__)
-#-out: None
+print(foo.__defaults__)
+#out: ([], {})
+print(foo.__kwdefaults__)
+#out: None

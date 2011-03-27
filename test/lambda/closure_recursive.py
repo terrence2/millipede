@@ -1,8 +1,7 @@
 def foo(a):
 	if a == 0:
 		return None
-	def _inner():
-		print(a)
+	_inner = lambda: print(a)
 	fn = foo(a - 1)
 	if fn:
 		fn()

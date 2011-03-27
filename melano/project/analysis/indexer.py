@@ -53,10 +53,7 @@ class Indexer(ASTVisitor):
 			self.context = prior
 			return
 
-		try:
-			name = str(node.name)
-		except AttributeError: # unnamed nodes
-			name = 'anon_scope_' + str(next(self.anon_count))
+		name = str(node.name)
 
 		# insert node into parent scope
 		sym = self.context.add_symbol(name)
@@ -142,8 +139,6 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
-
-
 	def visit_GeneratorExp(self, node):
 		with self.scope(node):
 			self.visit(node.elt)
@@ -214,12 +209,23 @@ class Indexer(ASTVisitor):
 
 
 	def visit_Lambda(self, node):
-		with self.scope(node):
+		#defaults
+		self.visit_nodelist(node.args.defaults) # positional arg default values
+		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
+		#name
+		name = 'anon_scope_' + str(next(self.anon_count))
+		node.name = py.Name(name, py.Store, None)
+		self.visit(node.name)
+		with self.scope(node, scope_ty=MelanoFunction):
+			if self.find_nearest_function(self.context.owner.parent):
+				self.context.set_needs_closure()
+			# args
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)
 			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
 			self.visit(node.args.kwarg)
-			self.visit(node.body)
+			#body
+			self.visit_nodelist(node.body)
 
 
 	def visit_List(self, node):

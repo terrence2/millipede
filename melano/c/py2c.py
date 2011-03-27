@@ -64,11 +64,16 @@ class Py2C(ASTVisitor):
 	
 	Options:
 	(All options default to false and must be turned on by setting them to true as a kwarg.)
-
 		elide_docstrings		If set, all __doc__ nodes will be set None, even if the docstring is present 
 		static_globals			Assume that module global names are not imported or modified outside of
 										the files we are processing.  If set, we can use c-level vars for globals, 
 										instead of the globals dict.
+		static_builtins			Assume that builtin names are not modified outside
+		static_defaults		Assume that function __defaults__ and __kwdefaults__ are not modified outside 
+	
+	Meta Options:
+	(Meta options turn on several underlying options all at once in a package.)
+		no_external_code	Sets all options that disable optimizations based on possible actions of not-present code.
 	'''
 	# map from ast comparison types to rich comparator values
 	COMPARATORS_RICH = {
@@ -139,6 +144,8 @@ class Py2C(ASTVisitor):
 		# options
 		self.opt_elide_docstrings = kwargs.get('elide_docstrings', False)
 		self.opt_static_globals = kwargs.get('static_globals', False)
+		self.opt_static_builtins = kwargs.get('static_builtins', False)
+		self.opt_static_defaults = kwargs.get('static_defaults', False)
 
 		# the python hl walker context
 		self.globals = None
@@ -272,6 +279,7 @@ class Py2C(ASTVisitor):
 
 	def split_docstring(self, nodes:[py.AST]) -> (Nonable(str), [py.AST]):
 		'''Given the body, will pull off the docstring node and return it and the rest of the body.'''
+		#if not isinstance(nodes, list): return None, [nodes]
 		if nodes and isinstance(nodes[0], py.Expr) and isinstance(nodes[0].value, py.Str):
 			if self.opt_elide_docstrings:
 				return None, nodes[1:]
@@ -356,7 +364,7 @@ class Py2C(ASTVisitor):
 
 	@contextmanager
 	def save_exception(self):
-		'''Stores asside the exception with fetch/store for the yielded block'''
+		'''Stores aside the exception with fetch/store for the yielded block'''
 		exc_cookie = self.fetch_exception()
 		yield exc_cookie
 		self.restore_exception(exc_cookie)
@@ -1094,23 +1102,16 @@ class Py2C(ASTVisitor):
 
 
 	def visit_FunctionDef(self, node):
-		'''
-		Notes:
-			- Decorators run in the definition scope, not the module scope (unless defined at module scope, obviously)
-		'''
-		#FIXME: make MelanoCFunction take an attr for __defaults__, __kwdefaults__, and __annotations__
-
 		# for use everywhere else in this function when we need to pass our entire args descriptor down to the implementor
 		full_args = (node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
 
 		# prepare the lowlevel
 		docstring, body = self.split_docstring(node.body)
 		inst = self.create_ll_instance(node.hl)
+		inst.prepare()
 
 		# declare and create non-dependent stuff
-		#inst.create_locals(self.tu)
-		inst.create_defaults(self.tu, node.args.defaults, node.args.kw_defaults)
-		#inst.create_annotations(self.tu)
+		#inst.create_defaults(self.tu, node.args.defaults, node.args.kw_defaults)
 		inst.create_pystubfunc(self.tu)
 		inst.create_runnerfunc(self.tu, *full_args)
 
@@ -1121,6 +1122,7 @@ class Py2C(ASTVisitor):
 		# NOTE: For functions that are defined nested, such that they need to keep a closure, we have to create them in 
 		#		their runtime context so that we can build and attach the current values of all names so that when they are
 		#		called later, they will have access to the correct values (e.g. with recursive use of a returned inner function).
+		"""
 		if not node.hl.is_generator and not node.hl.has_closure:
 			with self.module_scope():
 				self.comment("Build function {}".format(str(node.name)))
@@ -1130,32 +1132,34 @@ class Py2C(ASTVisitor):
 									[self.visit(default) for default in (node.args.defaults or [])],
 							 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
 				# attach annotations to the pycfunction instance
-				#inst.attach_annotations(self.context, ...)
+				inst.attach_annotations(self.context, self.visit(node.returns),
+									[(str(a.arg), self.visit(a.annotation)) for a in node.args.args] if node.args.args else [],
+									node.args.varargannotation, self.visit(node.args.varargannotation),
+									[(str(a.arg), self.visit(a.annotation)) for a in node.args.kwonlyargs] if node.args.kwonlyargs else [],
+									node.args.kwargannotation, self.visit(node.args.kwargannotation))
 		else:
+		"""
+		if True:
 			self.comment("Build function {}".format(str(node.name)))
 			pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
 			# enumerate and attach defaults and keyword defaults
 			inst.attach_defaults(self.context,
 								[self.visit(default) for default in (node.args.defaults or [])],
-						 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
+						 		[(str(arg.arg), self.visit(kwdefault)) for arg, kwdefault in \
+										(zip(node.args.kwonlyargs, node.args.kw_defaults))] \
+										if node.args.kw_defaults else [])
 			# attach annotations to the pycfunction instance
-			#inst.attach_annotations(self.context, ...)
+			inst.attach_annotations(self.context, self.visit(node.returns) if hasattr(node, 'returns') else None,
+								[(str(a.arg), self.visit(a.annotation)) for a in node.args.args] if node.args.args else [],
+								str(node.args.vararg), self.visit(node.args.varargannotation),
+								[(str(a.arg), self.visit(a.annotation)) for a in node.args.kwonlyargs] if node.args.kwonlyargs else [],
+								str(node.args.kwarg), self.visit(node.args.kwargannotation))
 
 		# visit any decorators (e.g. run decorators with args to get real decorators _before_ defining the function)
-		deco_fn_insts = [self.visit(dn) for dn in reversed(node.decorator_list or [])]
+		deco_fn_insts = [self.visit(dn) for dn in reversed(node.decorator_list or [])] if hasattr(node, 'decorator_list') else []
 
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
-			self.context.reserve_name('self')
-			self_inst = PyObjectLL(None, self)
-			self_inst.name = 'self'
-			self.context.reserve_name('args')
-			args_tuple = PyTupleLL(None, self)
-			args_tuple.name = 'args'
-			self.context.reserve_name('kwargs')
-			kwargs_dict = PyDictLL(None, self)
-			kwargs_dict.name = 'kwargs'
-
 			self.comment('Python interface stub function "{}"'.format(str(node.name)))
 			inst.stub_intro(self.context)
 
@@ -1180,7 +1184,7 @@ class Py2C(ASTVisitor):
 			inst.runner_load_args(self.context, *full_args)
 			inst.runner_load_locals(self.context)
 			self.comment('body')
-			self.visit_nodelist(node.body)
+			self.visit_nodelist(body)
 			inst.runner_outro(self.context)
 
 		# apply any decorators
@@ -1195,9 +1199,88 @@ class Py2C(ASTVisitor):
 		# store the resulting function into the scope where it's defined
 		self.comment('store function name into scope')
 		self._store_name(node.name, pycfunc)
+		inst.name = inst.c_obj.name
 
 		return inst
 
+	visit_Lambda = visit_FunctionDef
+	"""
+	def visit_Lambda(self, node):
+		name = self.tu.reserve_name('_lambda_')
+
+		# for use everywhere else in this function when we need to pass our entire args descriptor down to the implementor
+		full_args = (node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
+
+		# prepare the lowlevel
+		inst = self.create_ll_instance(node.hl)
+
+		# declare and create non-dependent stuff
+		inst.create_defaults(self.tu, node.args.defaults, node.args.kw_defaults)
+		inst.create_pystubfunc(self.tu)
+		inst.create_runnerfunc(self.tu, *full_args)
+
+		# NOTE: we create all "normal" functions (e.g. methods and non nested funcs) at the module scope (and funcs 
+		#		_at_ the module scope) so that class instanciation does not have to re-declare the function object constantly.
+		# NOTE: For generator functions, we need to create the function in the containing context so that we have access 
+		#		to the parent's coroutine context at runtime.
+		# NOTE: For functions that are defined nested, such that they need to keep a closure, we have to create them in 
+		#		their runtime context so that we can build and attach the current values of all names so that when they are
+		#		called later, they will have access to the correct values (e.g. with recursive use of a returned inner function).
+		if not node.hl.is_generator and not node.hl.has_closure:
+			with self.module_scope():
+				self.comment("Build function {}".format(str(name)))
+				pycfunc = inst.create_funcdef(self.context, self.tu, None)
+				# enumerate and attach defaults and keyword defaults
+				inst.attach_defaults(self.context,
+									[self.visit(default) for default in (node.args.defaults or [])],
+							 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
+				# attach annotations to the pycfunction instance
+				#inst.attach_annotations(self.context, ...)
+		else:
+			self.comment("Build function {}".format(str(name)))
+			pycfunc = inst.create_funcdef(self.context, self.tu, None)
+			# enumerate and attach defaults and keyword defaults
+			inst.attach_defaults(self.context,
+								[self.visit(default) for default in (node.args.defaults or [])],
+						 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
+			# attach annotations to the pycfunction instance
+			#inst.attach_annotations(self.context, ...)
+
+		# Build the python stub function
+		with self.new_scope(node.hl, inst.c_pystub_func.body):
+			self.comment('Python interface stub function "{}"'.format(str(name)))
+			inst.stub_intro(self.context)
+
+			# Attach all parameters and names into the local namespace
+			# We can't know the convention the caller used, so we need to handle all 
+			#  possiblities -- local callers do their own setup and just call the runner.
+			inst.stub_load_args(self.context,
+										node.args.args or [], node.args.defaults or [],
+										node.args.vararg,
+										node.args.kwonlyargs or [], node.args.kw_defaults or [],
+										node.args.kwarg)
+
+			# call the low-level runner function from the stub
+			inst.transfer_to_runnerfunc(self.context, *full_args)
+
+			# emit cleanup and return code
+			inst.stub_outro(self.context)
+
+		# build the actual runner function
+		with self.new_scope(node.hl, inst.c_runner_func.body):
+			inst.runner_intro(self.context)
+			inst.runner_load_args(self.context, *full_args)
+			inst.runner_load_locals(self.context)
+			self.comment('body')
+			self.visit(node.body)
+			inst.runner_outro(self.context)
+
+		# store the resulting function into the scope where it's defined
+		self.comment('store function name into scope')
+		self._store_name(name, pycfunc)
+
+		return inst
+	"""
 
 	def visit_GeneratorExp(self, node):
 		raise NotImplementedError
@@ -1338,8 +1421,8 @@ class Py2C(ASTVisitor):
 		return node.hl.ll
 
 
-	def visit_Lambda(self, node):
-		raise NotImplementedError
+	#def visit_Lambda(self, node):
+	#	raise NotImplementedError
 
 
 	#def visit_List(self, node):
