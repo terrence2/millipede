@@ -352,9 +352,9 @@ class TranslationUnit(AST):
 	def reserve_name(self, name):
 		cnt = 0
 		if name.startswith('__'):
-			nm = '__mg' + name[2:]
+			nm = '__mg_' + name[2:]
 		else:
-			nm = 'mg' + name
+			nm = 'mg_' + name
 		while nm in self.names or nm in self.mask or nm in C_KEYWORDS:
 			nm = name + '_' + str(cnt)
 			cnt += 1
