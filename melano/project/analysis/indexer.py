@@ -43,7 +43,7 @@ class Indexer(ASTVisitor):
 		self.missing = set()
 
 	@contextmanager
-	def scope(self, node, scope_ty=Scope):
+	def scope(self, node, scope_ty=Scope, name=None):
 		# NOTE: since we can repeatedly visit index to find names defined later, we need
 		#		to not overwrite existing symbols dicts
 		if node.hl:
@@ -53,7 +53,8 @@ class Indexer(ASTVisitor):
 			self.context = prior
 			return
 
-		name = str(node.name)
+		if name is None:
+			name = str(node.name)
 
 		# insert node into parent scope
 		sym = self.context.add_symbol(name)
@@ -104,7 +105,8 @@ class Indexer(ASTVisitor):
 
 
 	def visit_DictComp(self, node):
-		with self.scope(node, scope_ty=MelanoComprehension):
+		name = 'dictcomp_scope_' + str(next(self.anon_count))
+		with self.scope(node, scope_ty=MelanoComprehension, name=name):
 			self.visit(node.key)
 			self.visit(node.value)
 			self.visit_nodelist(node.generators)
@@ -140,7 +142,8 @@ class Indexer(ASTVisitor):
 
 
 	def visit_GeneratorExp(self, node):
-		with self.scope(node):
+		name = 'listcomp_scope_' + str(next(self.anon_count))
+		with self.scope(node, scope_ty=MelanoFunction, name=name):
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 
@@ -186,12 +189,15 @@ class Indexer(ASTVisitor):
 	def visit_ImportFrom(self, node):
 		modname = '.' * node.level + str(node.module)
 		#FIXME: we need to ask self.project to find the real module name if we are a relative module
-		try:
-			mod = self.module.refs[modname]
-		except KeyError:
-			logging.info("Skipping missing: {}".format(modname))
-			self.missing.add(modname)
-			return
+		if modname.startswith('.'):
+			mod = self.project.find_relative_module(modname, self.module)
+		else:
+			try:
+				mod = self.module.refs[modname]
+			except KeyError:
+				logging.info("Skipping missing: {}".format(modname))
+				self.missing.add(modname)
+				return
 		if mod is None:
 			logging.info("Skipping missing: {}".format(modname))
 			self.missing.add(modname)
@@ -234,7 +240,8 @@ class Indexer(ASTVisitor):
 
 
 	def visit_ListComp(self, node):
-		with self.scope(node, scope_ty=MelanoComprehension):
+		name = 'listcomp_scope_' + str(next(self.anon_count))
+		with self.scope(node, scope_ty=MelanoComprehension, name=name):
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 
@@ -286,7 +293,8 @@ class Indexer(ASTVisitor):
 
 
 	def visit_SetComp(self, node):
-		with self.scope(node, scope_ty=MelanoComprehension):
+		name = 'setcomp_scope_' + str(next(self.anon_count))
+		with self.scope(node, scope_ty=MelanoComprehension, name=name):
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 

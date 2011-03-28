@@ -62,7 +62,7 @@ class mod(AST):
 
 
 class expr(AST):
-	__slots__ = ()
+	__slots__ = ('ctx',)
 
 	def set_context(self, ctx):
 		self.ctx = ctx

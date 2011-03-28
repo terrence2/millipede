@@ -840,6 +840,7 @@ class Py2C(ASTVisitor):
 					#FIXME: make it possible for a failure in the tuple packing to free these refs?  Or is this a bad idea
 					#		because a failure halfway through would end up with us double-freeing half of our refs?
 					idinst.incref(self.context)
+
 			# Note: we always need to pass a tuple as args, even if there is nothing in it
 			args1 = PyTupleLL(None, self)
 			args1.declare(self.scope.context)
@@ -1115,45 +1116,20 @@ class Py2C(ASTVisitor):
 		inst.create_pystubfunc(self.tu)
 		inst.create_runnerfunc(self.tu, *full_args)
 
-		# NOTE: we create all "normal" functions (e.g. methods and non nested funcs) at the module scope (and funcs 
-		#		_at_ the module scope) so that class instanciation does not have to re-declare the function object constantly.
-		# NOTE: For generator functions, we need to create the function in the containing context so that we have access 
-		#		to the parent's coroutine context at runtime.
-		# NOTE: For functions that are defined nested, such that they need to keep a closure, we have to create them in 
-		#		their runtime context so that we can build and attach the current values of all names so that when they are
-		#		called later, they will have access to the correct values (e.g. with recursive use of a returned inner function).
-		"""
-		if not node.hl.is_generator and not node.hl.has_closure:
-			with self.module_scope():
-				self.comment("Build function {}".format(str(node.name)))
-				pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
-				# enumerate and attach defaults and keyword defaults
-				inst.attach_defaults(self.context,
-									[self.visit(default) for default in (node.args.defaults or [])],
-							 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
-				# attach annotations to the pycfunction instance
-				inst.attach_annotations(self.context, self.visit(node.returns),
-									[(str(a.arg), self.visit(a.annotation)) for a in node.args.args] if node.args.args else [],
-									node.args.varargannotation, self.visit(node.args.varargannotation),
-									[(str(a.arg), self.visit(a.annotation)) for a in node.args.kwonlyargs] if node.args.kwonlyargs else [],
-									node.args.kwargannotation, self.visit(node.args.kwargannotation))
-		else:
-		"""
-		if True:
-			self.comment("Build function {}".format(str(node.name)))
-			pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
-			# enumerate and attach defaults and keyword defaults
-			inst.attach_defaults(self.context,
-								[self.visit(default) for default in (node.args.defaults or [])],
-						 		[(str(arg.arg), self.visit(kwdefault)) for arg, kwdefault in \
-										(zip(node.args.kwonlyargs, node.args.kw_defaults))] \
-										if node.args.kw_defaults else [])
-			# attach annotations to the pycfunction instance
-			inst.attach_annotations(self.context, self.visit(node.returns) if hasattr(node, 'returns') else None,
-								[(str(a.arg), self.visit(a.annotation)) for a in node.args.args] if node.args.args else [],
-								str(node.args.vararg), self.visit(node.args.varargannotation),
-								[(str(a.arg), self.visit(a.annotation)) for a in node.args.kwonlyargs] if node.args.kwonlyargs else [],
-								str(node.args.kwarg), self.visit(node.args.kwargannotation))
+		self.comment("Build function {}".format(str(node.name)))
+		pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
+		# enumerate and attach defaults and keyword defaults
+		inst.attach_defaults(self.context,
+							[self.visit(default) for default in (node.args.defaults or [])],
+					 		[(str(arg.arg), self.visit(kwdefault)) for arg, kwdefault in \
+									(zip(node.args.kwonlyargs, node.args.kw_defaults))] \
+									if node.args.kw_defaults else [])
+		# attach annotations to the pycfunction instance
+		inst.attach_annotations(self.context, self.visit(node.returns) if hasattr(node, 'returns') else None,
+							[(str(a.arg), self.visit(a.annotation)) for a in node.args.args] if node.args.args else [],
+							str(node.args.vararg), self.visit(node.args.varargannotation),
+							[(str(a.arg), self.visit(a.annotation)) for a in node.args.kwonlyargs] if node.args.kwonlyargs else [],
+							str(node.args.kwarg), self.visit(node.args.kwargannotation))
 
 		# visit any decorators (e.g. run decorators with args to get real decorators _before_ defining the function)
 		deco_fn_insts = [self.visit(dn) for dn in reversed(node.decorator_list or [])] if hasattr(node, 'decorator_list') else []

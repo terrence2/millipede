@@ -57,8 +57,8 @@ class Linker(ASTVisitor):
 		self.visit(node.func)
 		self.visit_nodelist(node.args)
 		self.visit_nodelist(node.keywords)
-		self.visit_nodelist(node.starargs)
-		self.visit_nodelist(node.kwargs)
+		self.visit(node.starargs)
+		self.visit(node.kwargs)
 		node.hl = node.func.hl
 
 

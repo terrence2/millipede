@@ -134,6 +134,7 @@ class MelanoProject:
 	def index_names(self):
 		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
 		missing = {}
+		records = {}
 		def _index(self):
 			for fn in self.order:
 				if fn not in missing or missing[fn] > 0:
@@ -146,6 +147,7 @@ class MelanoProject:
 					indexer.visit(mod.ast)
 					if self.is_local(mod):
 						missing[fn] = len(indexer.missing)
+						records[fn] = indexer.missing
 
 		logging.info("Indexing: Phase 1, {} files".format(len(self.order)))
 		_index(self)
@@ -156,7 +158,7 @@ class MelanoProject:
 			_index(self)
 			cur = sum(list(missing.values()))
 			if cur == prior:
-				raise MissingSymbolsError
+				raise MissingSymbolsError({fn: sym for fn, sym in records.items() if len(sym) > 0})
 
 
 
@@ -205,9 +207,20 @@ class MelanoProject:
 				mod.show()
 
 
-
 	def find_module(self, dottedname, module):
 		return self.modules[self.name_to_path[dottedname]]
+
+
+	def find_relative_module(self, dottedname, module):
+		#. is own module
+		parts = module.name.split('.')
+
+		# split off end components for each other .
+		while dottedname.startswith('.'):
+			dottedname = dottedname[1:]
+			parts = parts[:-1]
+
+		return self.modules[self.name_to_path['.'.join(parts)]]
 
 
 	def is_local(self, mod:ast.Module) -> bool:
