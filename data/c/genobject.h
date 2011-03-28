@@ -26,6 +26,9 @@ typedef struct {
 
 	// the coroutine context representing the called function.
 	coro_context coro;
+
+	// set to 1 after we have reached the end of generation for the first time
+	int exhausted;
 } MelanoGenObject;
 
 PyObject * MelanoGen_New(char *name, coro_func func, void *data, int stacksize);

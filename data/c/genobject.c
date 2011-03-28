@@ -64,6 +64,12 @@ gen_iternext(MelanoGenObject *gen)
 {
 	PyObject *rv;
 
+	// once we have reached the end, we cannot run again
+	if(gen->exhausted) {
+		PyErr_SetNone(PyExc_StopIteration);
+		return NULL;
+	}
+
 	// If the runtime did not call __iter__ to get an iterator first, we need
 	// to call it manually to set ourself up for usage.
 	if(!gen->coro_source) {
@@ -74,6 +80,7 @@ gen_iternext(MelanoGenObject *gen)
 	coro_transfer(gen->coro_source, &gen->coro);
 	rv = ((PyObject **)(gen->data))[RETURN_INDEX];
 	if(!rv) {
+		gen->exhausted = 1;
 		PyErr_SetNone(PyExc_StopIteration);
 		return NULL;
 	}
@@ -171,6 +178,7 @@ MelanoGen_New(char *name, coro_func func, void *data, int stacksize)
 	gen->name = name;
 	gen->data = data;
 	gen->coro_source = NULL;
+	gen->exhausted = 0;
 
 	gen->stacksize = stacksize;
 	gen->stack = calloc(1, stacksize);
