@@ -1,5 +1,5 @@
-from os import getcwd, getpid
-print(getcwd.__name__)
-print(getpid.__name__)
-#out: getcwd
-#out: getpid
+from _tgt1 import bar, BAR
+bar()
+print(BAR)
+#out: bar
+#out: 0
