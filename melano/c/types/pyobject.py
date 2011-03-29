@@ -21,7 +21,7 @@ class PyObjectLL(LLType):
 		ctx.add_variable(c.Decl(self.name, c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('PyObject'))), quals=quals, init=c.ID('NULL')), True)
 
 
-	def delete(self, ctx):
+	def clear(self, ctx):
 		ctx.add(c.FuncCall(c.ID('Py_CLEAR'), c.ID(self.name)))
 
 
@@ -54,6 +54,15 @@ class PyObjectLL(LLType):
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(self.name))))
 
 
+	def get_length(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = CIntegerLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_len")
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_Length'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_negative(ctx, out_inst.name)
+		return out_inst
+
+
 	def get_attr_string(self, ctx, attrname, out_var):
 		ctx.add(c.Assignment('=', c.ID(out_var.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
 														c.ID(self.name), c.Constant('string', attrname)))))
@@ -74,6 +83,29 @@ class PyObjectLL(LLType):
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttr'), c.ExprList(
 															c.ID(self.name), c.ID(attr.name), c.ID(val.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
+
+
+	def sequence_get_item(self, ctx, key, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_GetItem'), c.ExprList(
+															c.ID(self.name), c.ID(key.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def sequence_inplace_concat(self, ctx, seq_inst, out_inst=None):
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context)
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_InPlaceConcat'), c.ExprList(c.ID(self.name), c.ID(seq_inst.name)))))
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst
+
+
+	def sequence_as_tuple(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = PyTupleLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context)
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_Tuple'), c.ExprList(c.ID(self.name)))))
+		return out_inst
 
 
 	def get_item(self, ctx, key, out):
@@ -297,5 +329,6 @@ class PyObjectLL(LLType):
 		return out
 
 
-from melano.c.types.pytype import PyTypeLL
 from melano.c.types.integer import CIntegerLL
+from melano.c.types.pytuple import PyTupleLL
+from melano.c.types.pytype import PyTypeLL

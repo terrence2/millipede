@@ -71,7 +71,6 @@ class PyFunctionLL(PyObjectLL):
 	"""
 
 	def attach_defaults(self, ctx, default_insts, kwdefault_insts):
-		#import pdb; pdb.set_trace()
 		if default_insts:
 			tmp = PyTupleLL(None, self.visitor)
 			tmp.declare(self.visitor.scope.context, name=self.hlnode.owner.name + "_defaults")
@@ -113,9 +112,7 @@ class PyFunctionLL(PyObjectLL):
 
 
 	### MelanoFunction
-	def create_funcdef(self, ctx, tu, docstring):
-		ctx.add(c.Comment('Declare Python stub function "{}"'.format(self.hlnode.owner.name)))
-
+	def declare_function_object(self, ctx, tu, docstring):
 		# create the function definition structure
 		c_name = c.Constant('string', PyStringLL.str2c(self.hlnode.owner.name))
 		c_docstring = c.Constant('string', PyStringLL.str2c(docstring)) if docstring else c.ID('NULL')

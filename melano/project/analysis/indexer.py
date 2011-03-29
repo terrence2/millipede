@@ -142,8 +142,13 @@ class Indexer(ASTVisitor):
 
 
 	def visit_GeneratorExp(self, node):
-		name = 'listcomp_scope_' + str(next(self.anon_count))
+		name = 'genexp_scope_' + str(next(self.anon_count))
+		node.name = py.Name(name, py.Store, None)
+		self.visit(node.name)
 		with self.scope(node, scope_ty=MelanoFunction, name=name):
+			self.context.is_generator = True
+			self.context.is_anonymous = True
+			self.context.set_needs_closure()
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 
@@ -188,16 +193,12 @@ class Indexer(ASTVisitor):
 
 	def visit_ImportFrom(self, node):
 		modname = '.' * node.level + str(node.module)
-		#FIXME: we need to ask self.project to find the real module name if we are a relative module
 		if modname.startswith('.'):
 			mod = self.project.find_relative_module(modname, self.module)
+			if mod:
+				self.module.refs[modname] = mod
 		else:
-			try:
-				mod = self.module.refs[modname]
-			except KeyError:
-				logging.info("Skipping missing: {}".format(modname))
-				self.missing.add(modname)
-				return
+			mod = self.module.refs.get(modname, None)
 		if mod is None:
 			logging.info("Skipping missing: {}".format(modname))
 			self.missing.add(modname)
@@ -219,12 +220,13 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 		#name
-		name = 'anon_scope_' + str(next(self.anon_count))
+		name = 'lambda_scope_' + str(next(self.anon_count))
 		node.name = py.Name(name, py.Store, None)
 		self.visit(node.name)
 		with self.scope(node, scope_ty=MelanoFunction):
 			if self.find_nearest_function(self.context.owner.parent):
 				self.context.set_needs_closure()
+			self.context.is_anonymous = True
 			# args
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)

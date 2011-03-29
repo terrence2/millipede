@@ -474,9 +474,10 @@ class Ellipsis(expr):
 #| GeneratorExp(expr elt, comprehension* generators)
 class GeneratorExp(expr):
 	_fields = ('elt', 'generators')
-	__slots__ = ('elt', 'generators')
+	__slots__ = ('name', 'elt', 'generators')
 	def __init__(self, elt, generators, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+		self.name = None
 		self.elt = elt
 		self.generators = generators
 

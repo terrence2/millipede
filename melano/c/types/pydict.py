@@ -44,3 +44,10 @@ class PyDictLL(PyObjectLL):
 												c.ID(self.name), c.Constant('string', name)))))
 		out.xincref(ctx)
 
+
+	def update(self, ctx, other:PyObjectLL):
+		tmp = CIntegerLL(None, self.visitor)
+		tmp.declare(self.visitor.scope.context, name='_update_rv')
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyDict_Update'), c.ExprList(c.ID(self.name), c.ID(other.name)))))
+		self.fail_if_nonzero(ctx, tmp.name)
+

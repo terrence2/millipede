@@ -94,6 +94,12 @@ class Linker(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
+	def visit_GeneratorExp(self, node):
+		with self.scope(node.hl):
+			self.visit_nodelist(node.generators)
+			self.visit(node.elt)
+
+
 	def visit_Lambda(self, node):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values

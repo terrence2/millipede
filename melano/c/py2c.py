@@ -842,24 +842,38 @@ class Py2C(ASTVisitor):
 					idinst.incref(self.context)
 
 			# Note: we always need to pass a tuple as args, even if there is nothing in it
-			args1 = PyTupleLL(None, self)
-			args1.declare(self.scope.context)
-			args1.pack(self.context, *args_insts)
+			if not node.starargs:
+				args1 = PyTupleLL(None, self)
+				args1.declare(self.scope.context)
+				args1.pack(self.context, *args_insts)
+			else:
+				args0 = PyListLL(None, self)
+				args0.declare(self.scope.context)
+				args0.pack(self.context, *args_insts)
+				va_inst = self.visit(node.starargs)
+				args0_0 = args0.sequence_inplace_concat(self.context, va_inst)
+				args0.clear(self.context)
+				args1 = args0_0.sequence_as_tuple(self.context)
+				args0_0.clear(self.context)
 
 			# build the keyword dict
 			args2 = None
 			kw_insts = []
-			if node.keywords:
+			if node.keywords or node.kwargs:
 				for kw in node.keywords:
 					valinst = self.visit(kw.value)
 					valinst = valinst.as_pyobject(self.context)
 					kw_insts.append((str(kw.keyword), valinst))
-				if kw_insts:
+				if kw_insts or node.kwargs:
 					args2 = PyDictLL(None, self)
 					args2.declare(self.scope.context)
 					args2.new(self.context)
-					for keyname, valinst in kw_insts:
-						args2.set_item_string(self.context, keyname, valinst)
+					if kw_insts:
+						for keyname, valinst in kw_insts:
+							args2.set_item_string(self.context, keyname, valinst)
+					if node.kwargs:
+						kwargs_inst = self.visit(node.kwargs)
+						args2.update(self.context, kwargs_inst)
 
 			# begin call output
 			self.comment('do call "{}"'.format(str(node.func)))
@@ -870,8 +884,8 @@ class Py2C(ASTVisitor):
 			funcinst.call(self.context, args1, args2, rv)
 
 			# cleanup the args
-			args1.delete(self.context)
-			if args2: args2.delete(self.context)
+			args1.clear(self.context)
+			if args2: args2.clear(self.context)
 
 			return rv
 
@@ -1110,14 +1124,12 @@ class Py2C(ASTVisitor):
 		docstring, body = self.split_docstring(node.body)
 		inst = self.create_ll_instance(node.hl)
 		inst.prepare()
-
-		# declare and create non-dependent stuff
-		#inst.create_defaults(self.tu, node.args.defaults, node.args.kw_defaults)
 		inst.create_pystubfunc(self.tu)
 		inst.create_runnerfunc(self.tu, *full_args)
 
 		self.comment("Build function {}".format(str(node.name)))
-		pycfunc = inst.create_funcdef(self.context, self.tu, docstring)
+		pycfunc = inst.declare_function_object(self.context, self.tu, docstring)
+
 		# enumerate and attach defaults and keyword defaults
 		inst.attach_defaults(self.context,
 							[self.visit(default) for default in (node.args.defaults or [])],
@@ -1164,82 +1176,52 @@ class Py2C(ASTVisitor):
 			inst.runner_outro(self.context)
 
 		# apply any decorators
+		tmp = pycfunc
 		if deco_fn_insts:
 			self.comment('decorate {}'.format(str(node.name)))
-		for decoinst in deco_fn_insts:
-			decoargs = PyTupleLL(None, self)
-			decoargs.declare(self.scope.context)
-			decoargs.pack(self.context, pycfunc)
-			decoinst.call(self.context, decoargs, None, pycfunc)
+			tmp = PyObjectLL(None, self)
+			tmp.declare(self.scope.context)
+			tmp.assign_name(self.context, pycfunc)
+			for decoinst in deco_fn_insts:
+				#NOTE: We need to use a tmp var for these so that the returned function does not overwrite the
+				#		global pycfunc pointer because, even if the @wraps is used, we lose the __defaults__ and __kwdefaults__
+				#		and cannot load them correctly later in the stub.
+				decoargs = PyTupleLL(None, self)
+				decoargs.declare(self.scope.context)
+				decoargs.pack(self.context, tmp)
+				decoinst.call(self.context, decoargs, None, tmp)
 
 		# store the resulting function into the scope where it's defined
-		self.comment('store function name into scope')
-		self._store_name(node.name, pycfunc)
+		if not node.hl.is_anonymous:
+			self.comment('store function name into scope')
+			self._store_name(node.name, tmp)
 		inst.name = inst.c_obj.name
 
 		return inst
 
 	visit_Lambda = visit_FunctionDef
-	"""
-	def visit_Lambda(self, node):
-		name = self.tu.reserve_name('_lambda_')
 
-		# for use everywhere else in this function when we need to pass our entire args descriptor down to the implementor
-		full_args = (node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
+
+	def visit_GeneratorExp(self, node):
+		full_args = ([], None, [], None)
+		docstring = None
 
 		# prepare the lowlevel
 		inst = self.create_ll_instance(node.hl)
-
-		# declare and create non-dependent stuff
-		inst.create_defaults(self.tu, node.args.defaults, node.args.kw_defaults)
+		inst.prepare()
 		inst.create_pystubfunc(self.tu)
 		inst.create_runnerfunc(self.tu, *full_args)
 
-		# NOTE: we create all "normal" functions (e.g. methods and non nested funcs) at the module scope (and funcs 
-		#		_at_ the module scope) so that class instanciation does not have to re-declare the function object constantly.
-		# NOTE: For generator functions, we need to create the function in the containing context so that we have access 
-		#		to the parent's coroutine context at runtime.
-		# NOTE: For functions that are defined nested, such that they need to keep a closure, we have to create them in 
-		#		their runtime context so that we can build and attach the current values of all names so that when they are
-		#		called later, they will have access to the correct values (e.g. with recursive use of a returned inner function).
-		if not node.hl.is_generator and not node.hl.has_closure:
-			with self.module_scope():
-				self.comment("Build function {}".format(str(name)))
-				pycfunc = inst.create_funcdef(self.context, self.tu, None)
-				# enumerate and attach defaults and keyword defaults
-				inst.attach_defaults(self.context,
-									[self.visit(default) for default in (node.args.defaults or [])],
-							 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
-				# attach annotations to the pycfunction instance
-				#inst.attach_annotations(self.context, ...)
-		else:
-			self.comment("Build function {}".format(str(name)))
-			pycfunc = inst.create_funcdef(self.context, self.tu, None)
-			# enumerate and attach defaults and keyword defaults
-			inst.attach_defaults(self.context,
-								[self.visit(default) for default in (node.args.defaults or [])],
-						 		[self.visit(kwdefault) for kwdefault in (node.args.kw_defaults or [])])
-			# attach annotations to the pycfunction instance
-			#inst.attach_annotations(self.context, ...)
+		self.comment("Build function {}".format(str(node.name)))
+		pycfunc = inst.declare_function_object(self.context, self.tu, docstring)
+		# NOTE: we don't really care about the generator _function_, we just want the underlying generator
+		pycfunc.call(self.context, None, None, pycfunc)
 
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
-			self.comment('Python interface stub function "{}"'.format(str(name)))
+			self.comment('Python interface stub function "{}"'.format(str(node.name)))
 			inst.stub_intro(self.context)
-
-			# Attach all parameters and names into the local namespace
-			# We can't know the convention the caller used, so we need to handle all 
-			#  possiblities -- local callers do their own setup and just call the runner.
-			inst.stub_load_args(self.context,
-										node.args.args or [], node.args.defaults or [],
-										node.args.vararg,
-										node.args.kwonlyargs or [], node.args.kw_defaults or [],
-										node.args.kwarg)
-
-			# call the low-level runner function from the stub
 			inst.transfer_to_runnerfunc(self.context, *full_args)
-
-			# emit cleanup and return code
 			inst.stub_outro(self.context)
 
 		# build the actual runner function
@@ -1248,18 +1230,19 @@ class Py2C(ASTVisitor):
 			inst.runner_load_args(self.context, *full_args)
 			inst.runner_load_locals(self.context)
 			self.comment('body')
-			self.visit(node.body)
+			def _set():
+				obj = self.visit(node.elt)
+				self.scope.ll.do_yield(self.context, obj)
+			self.visit_comp_generators(node.generators, _set)
 			inst.runner_outro(self.context)
 
 		# store the resulting function into the scope where it's defined
-		self.comment('store function name into scope')
-		self._store_name(name, pycfunc)
+		if not node.hl.is_anonymous:
+			self.comment('store function name into scope')
+			self._store_name(node.name, pycfunc)
+		inst.name = inst.c_obj.name
 
 		return inst
-	"""
-
-	def visit_GeneratorExp(self, node):
-		raise NotImplementedError
 
 
 	#def visit_Global(self, node):
@@ -1801,7 +1784,7 @@ class Py2C(ASTVisitor):
 		out_var = PyObjectLL(None, self)
 		out_var.declare(self.scope.context)
 		exit_fn_inst.call(self.context, argvec, None, out_var)
-		argvec.delete(self.context)
+		argvec.clear(self.context)
 
 		# raise the exception if the output is False, otherwise supress
 		suppress_inst = out_var.is_true(self.context)

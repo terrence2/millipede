@@ -25,3 +25,12 @@ class PyListLL(PyObjectLL):
 		self.fail_if_null(ctx, self.name)
 		for i, id in enumerate(ids_to_pack):
 			ctx.add(c.FuncCall(c.ID('PyList_SET_ITEM'), c.ExprList(c.ID(self.name), c.Constant('integer', i), id)))
+
+
+	def get_length(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = CIntegerLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_len")
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyList_Size'), c.ExprList(c.ID(self.name)))))
+		return out_inst
+

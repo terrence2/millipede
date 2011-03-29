@@ -21,6 +21,7 @@ class MelanoFunction(Scope):
 		# flags
 		self.is_generator = False # set by presense of yield function when indexing
 		self.has_closure = False # set by presence of sub-functions when indexing
+		self.is_anonymous = False # set by lambda, genexp which doesn't implicitly create a name
 
 		# store the type asside so that we can store stuff in it, after we create it
 		self.type = None

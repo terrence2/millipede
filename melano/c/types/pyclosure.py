@@ -75,9 +75,9 @@ class PyClosureLL(PyFunctionLL):
 		self.own_scope_offset = len(list(self.each_func_scope())) - 1
 
 
-	def create_funcdef(self, ctx, tu, docstring):
+	def declare_function_object(self, ctx, tu, docstring):
 		# create in context with PyMelanoFunction_New
-		super().create_funcdef(ctx, tu, docstring)
+		super().declare_function_object(ctx, tu, docstring)
 
 		# create a new stack (MelanoLocals **) of len(list(self.each_func_scope()))
 		# e.g. foo_locals = MelanoLocals_Create( len(fn_scopes) )
