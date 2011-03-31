@@ -314,7 +314,7 @@ meth_descr_get(PyObject *func, PyObject *obj, PyObject *type)
 
 PyTypeObject PyMelanoFunction_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "builtin_function_or_method",
+    "function",
     sizeof(PyMelanoFunctionObject),
     0,
     (destructor)meth_dealloc,                   /* tp_dealloc */
@@ -327,7 +327,7 @@ PyTypeObject PyMelanoFunction_Type = {
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     (hashfunc)meth_hash,                        /* tp_hash */
-    PyMelanoFunction_Call,                           /* tp_call */
+    PyMelanoFunction_Call,                      /* tp_call */
     0,                                          /* tp_str */
     PyObject_GenericGetAttr,                    /* tp_getattro */
     PyObject_GenericSetAttr,                    /* tp_setattro */
