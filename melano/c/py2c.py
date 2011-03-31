@@ -1622,14 +1622,30 @@ class Py2C(ASTVisitor):
 			## check the exception handles against the exception that occurred
 			parts = [] # [c.If]
 			for handler in node.handlers:
-				# check if this is the exception that matches
 				if handler.type:
-					class_inst = self.visit(handler.type)
-					test = c.If(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))), c.Compound(), None)
+					# build list of exceptions to check at this handler
+					matchers = []
+					if isinstance(handler.type, py.Tuple):
+						for name in handler.type.elts:
+							class_inst = self.visit(name)
+							matchers.append(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))))
+					elif isinstance(handler.type, py.Name):
+						class_inst = self.visit(handler.type)
+						matchers.append(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))))
+					else:
+						raise NotImplementedError("Unknown type of exception handler")
+
+					# build operation to check all of these at once, in order
+					binop = matchers[0]
+					for item in matchers[1:]:
+						binop = c.BinaryOp('||', binop, item)
+					test = c.If(binop, c.Compound(), None)
+
 				# if no handler type, this is the catchall
 				# Note: we use an ifelse for this, since else is our no-match case
 				else:
 					test = c.If(c.Constant('integer', 1), c.Compound(), None)
+
 				# implement the body of the matching handler
 				with self.new_context(test.iftrue):
 					# if we named the exception, fetch (or build it) from the cookie

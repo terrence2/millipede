@@ -3,6 +3,7 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
+from melano.hl.coerce import Coerce
 from melano.hl.module import MelanoModule
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
@@ -44,6 +45,19 @@ class Linker(ASTVisitor):
 		node.attr.hl = Name(str(node.attr), node.value.hl)
 		node.hl = NameRef(node.attr.hl)
 		node.value.hl.add_attribute(str(node.attr), node.attr.hl)
+
+
+	def visit_AugAssign(self, node):
+		self.visit(node.value)
+		self.visit(node.target)
+		node.target.hl.add_type(node.value.hl.get_type())
+		node.hl = Coerce(Coerce.INPLACE, node.target.hl, node.value.hl)
+
+
+	def visit_BinOp(self, node):
+		self.visit(node.left)
+		self.visit(node.right)
+		node.hl = Coerce(Coerce.GENERALIZE, node.left.hl, node.right.hl)
 
 
 	def visit_DictComp(self, node):
@@ -175,7 +189,12 @@ class Linker(ASTVisitor):
 		self.visit_nodelist(node.body)
 		# do lookup on exception type's here
 		for handler in node.handlers:
-			if handler.type:
+			if isinstance(handler.type, py.Tuple):
+				for name in handler.type.elts:
+					sym = self.context.lookup(str(name))
+					ref = self.context.add_reference(sym)
+					name.hl = ref
+			elif isinstance(handler.type, py.Name):
 				sym = self.context.lookup(str(handler.type))
 				ref = self.context.add_reference(sym)
 				handler.type.hl = ref

@@ -37,32 +37,6 @@ class Typer(ASTVisitor):
 		#node.hl = Coerce(Coerce.OVERRIDE, *([t.hl for t in node.targets] + [node.value]))
 
 
-	def visit_AugAssign(self, node):
-		self.visit(node.value)
-		self.visit(node.target)
-		node.target.hl.add_type(node.value.hl.get_type())
-		node.hl = Coerce(Coerce.INPLACE, node.target.hl, node.value.hl)
-
-	'''
-	def visit_Call(self, node):
-		#print(dir(node))
-		#import pdb; pdb.set_trace()
-		self.visit_nodelist(node.args)
-		self.visit_nodelist(node.keywords)
-		self.visit(node.starargs)
-		self.visit(node.kwargs)
-		self.visit(node.func)
-		# Check parameter types against annotation types.
-		# Annotate parameters (in callee) with type of args/annotations.
-		# Note type of annotated return as the type of the call.
-		node.hl = node.func.hl
-	'''
-
-
-	def visit_BinOp(self, node):
-		self.visit(node.left)
-		self.visit(node.right)
-		node.hl = Coerce(Coerce.GENERALIZE, node.left.hl, node.right.hl)
 
 
 
