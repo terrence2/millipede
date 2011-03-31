@@ -1275,7 +1275,20 @@ class Py2C(ASTVisitor):
 
 
 	def visit_IfExp(self, node):
-		raise NotImplementedError
+		out_inst = PyObjectLL(None, self)
+		out_inst.declare(self.scope.context, name="_ifexp_rv")
+
+		tst_inst = self.visit(node.test)
+		tst_is_true = tst_inst.is_true(self.context)
+		ifstmt = self.context.add(c.If(c.ID(tst_is_true.name), c.Compound(), c.Compound()))
+		with self.new_context(ifstmt.iftrue):
+			inst = self.visit(node.body)
+			out_inst.assign_name(self.context, inst)
+		with self.new_context(ifstmt.iffalse):
+			inst = self.visit(node.orelse)
+			out_inst.assign_name(self.context, inst)
+
+		return out_inst
 
 
 	def visit_Import(self, node):

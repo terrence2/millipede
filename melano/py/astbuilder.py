@@ -807,9 +807,15 @@ class PythonASTBuilder:
 
 
 	def handle_testlist(self, tests):
+		'''
+		test: or_test ['if' or_test 'else' test] | lambdef
+		test_nocond: or_test | lambdef_nocond
+		'''
 		children = self.children(tests)
 		if len(children) == 1:
 			return self.handle_expr(children[0])
+		elif children[1].type == self.tokens.NAME and children[1].value == 'if':
+			return self.handle_ifexp(tests)
 		else:
 			elts = self.get_expression_list(tests)
 			return ast.Tuple(elts, ast.Load, tests)
@@ -912,9 +918,10 @@ class PythonASTBuilder:
 
 
 	def handle_ifexp(self, if_expr_node):
-		body = self.handle_expr(if_expr_node.children[0])
-		expression = self.handle_expr(if_expr_node.children[2])
-		otherwise = self.handle_expr(if_expr_node.children[4])
+		children = self.children(if_expr_node)
+		body = self.handle_expr(children[0])
+		expression = self.handle_expr(children[2])
+		otherwise = self.handle_expr(children[4])
 		return ast.IfExp(expression, body, otherwise, if_expr_node)
 
 
