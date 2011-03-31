@@ -1288,15 +1288,9 @@ class Py2C(ASTVisitor):
 			tmp.incref(self.context)
 			self._store_name(asname, tmp)
 
-		def _import(self, node, name):
-			if isinstance(name, py.Name):
-				ref = name.hl.scope
-				tgt = self.visit(name)
-			else:
-				assert isinstance(name, py.Attribute)
-				ref = name.first().hl.scope
-				tgt = self.visit(name.first())
-
+		def _import_name(self, node, name):
+			ref = name.hl.scope
+			tgt = self.visit(name)
 			assert ref is not None
 
 			self.comment("Import module {}".format(str(name)))
@@ -1309,23 +1303,48 @@ class Py2C(ASTVisitor):
 																												c.Constant('string', str(name))))))
 			tmp.fail_if_null(self.context, tmp.name)
 			tmp.incref(self.context)
+			self._store_name(name, tmp)
 
-			#NOTE: if we are importing from an attribute, we also need to import the goal name, so it exists, _and_ we 
-			#		need to import the base name so that we can assign it to the target name
-			if isinstance(name, py.Attribute):
-				basename = str(name.first())
-				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																													c.Constant('string', str(basename))))))
+		def _import_attribute(self, node, attr):
+			parts = []
+
+			prior = None
+			for name in attr.get_names():
+				ref = name.hl.scope
+				tgt = self.visit(name)
+				assert ref is not None
+
+				parts.append(str(name))
+				fullname = '.'.join(parts)
+
+				# import the next part of the name
+				self.comment("Import module '{}'".format(fullname))
+				tmp = PyObjectLL(None, self)
+				tmp.declare(self.scope.context)
+				if ref.modtype == MelanoModule.PROJECT:
+					self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(ref.ll.c_builder_name), c.ExprList())))
+				else:
+					self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+																													c.Constant('string', fullname)))))
 				tmp.fail_if_null(self.context, tmp.name)
-				self._store_name(name.first(), tmp)
-			else:
-				self._store_name(name, tmp)
+				tmp.incref(self.context)
+
+				# subsequent sets are in the wrong dict... how does this decide where to set attrs?
+				if name is attr.first():
+					self._store_name(name, tmp)
+				else:
+					prior.set_attr_string(self.context, str(name), tmp)
+
+				prior = tmp
 
 		for alias in node.names:
 			if alias.asname:
 				_import_as_name(self, node, alias.name, alias.asname)
 			else:
-				_import(self, node, alias.name)
+				if isinstance(alias.name, py.Name):
+					_import_name(self, node, alias.name)
+				else:
+					_import_attribute(self, node, alias.name)
 
 
 	def visit_ImportFrom(self, node):

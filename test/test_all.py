@@ -32,7 +32,6 @@ def test_all(testfile, root):
 
 	fn = os.path.basename(testfile)
 	project = MelanoProject('test', programs=[fn[:-3]], roots=[root])
-	#project.configure(limit=testfile, verbose=False)
 	project.configure(limit='', verbose=False)
 	project.build('test.c')
 

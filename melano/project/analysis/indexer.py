@@ -176,29 +176,25 @@ class Indexer(ASTVisitor):
 					self.missing.add(str(alias.name))
 			else:
 				if isinstance(alias.name, py.Attribute):
-					# NOTE: this is the one funky instance where the lhs of an attribute is a Store, rather than a Load
-					#		so we just adjust it manually here
-					alias.name.first().set_context(py.Store)
-					self.visit(alias.name)
-					sym = alias.name.first().hl
+					assert alias.name.is_all_names()
+					parts = []
+					for name in alias.name.get_names():
+						# visit the name to build the hl node
+						# NOTE: override as Store before visiting, since this is our one exception to "all attribute lhs are Load"
+						name.set_context(py.Store)
+						self.visit(name)
+						# find the real name of this part of the module and create a ref to the underlying module
+						parts.append(str(name))
+						fullname = '.'.join(parts)
+						name.hl.scope = self.module.refs[fullname]
 				else:
 					self.visit(alias.name)
-					sym = alias.name.hl
-				try:
-					sym.scope = self.module.refs[str(alias.name)]
-				except KeyError:
-					logging.info("Skipping missing: {}".format(str(alias.name)))
-					self.missing.add(str(alias.name))
+					alias.name.hl.scope = self.module.refs[str(alias.name)]
 
 
 	def visit_ImportFrom(self, node):
 		modname = '.' * node.level + str(node.module)
-		if modname.startswith('.'):
-			mod = self.project.find_relative_module(modname, self.module)
-			if mod:
-				self.module.refs[modname] = mod
-		else:
-			mod = self.module.refs.get(modname, None)
+		mod = self.module.refs.get(modname, None)
 		if mod is None:
 			logging.info("Skipping missing: {}".format(modname))
 			self.missing.add(modname)

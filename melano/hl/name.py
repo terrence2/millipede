@@ -53,13 +53,6 @@ class Name:
 		return self.attributes[attrname]
 
 
-	@property
-	def global_name(self):
-		if self.parent and self.parent.owner:
-			return self.parent.owner.global_name + '.' + self.name
-		return self.name
-
-
 	def get_type(self) -> type:
 		'''
 		Query the type list to find the most appropriate type for this name.
@@ -99,6 +92,3 @@ class Name:
 			self.scope.show(level + 1)
 		else:
 			logging.info('{}Name: {}'.format('\t' * level, self.name))
-		#print('{}{:20}{:20}'.format('\t' * level, self.name, self.global_name))
-		#if self.scope:
-		#	self.scope.show(level + 1)

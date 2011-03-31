@@ -190,7 +190,7 @@ class PythonASTBuilder:
 			module = self.handle_dotted_name(children[at])
 			at += 1
 		else:
-			module = ''
+			module = ast.Name('', ast.Load, children[at])
 		assert children[at].value == 'import'
 		at += 1
 		if children[at].type == self.syms.import_as_names:

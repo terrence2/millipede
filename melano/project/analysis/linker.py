@@ -112,18 +112,13 @@ class Linker(ASTVisitor):
 
 
 	def visit_Import(self, node):
-		for alias in node.names:
-			if alias.asname:
-				self.visit(alias.asname)
-			else:
-				if isinstance(alias.name, py.Attribute):
-					self.visit(alias.name.first())
-				else:
-					self.visit(alias.name)
+		pass # all work is done for plain imports in indexer
+
 
 	def visit_ImportFrom(self, node):
 		'''Note: we need to already be indexed to provide names for * imports, so we _also_
 			do import_from in link.'''
+		#TODO: push this algorithm (and all other existing inline implementations of it) down into the ImportFrom node
 		modname = '.' * node.level + str(node.module)
 		mod = self.module.refs.get(modname, None)
 		if not mod:

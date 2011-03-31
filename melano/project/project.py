@@ -1,4 +1,7 @@
 '''
+Copyright (c) 2011, Terrence Cole.
+All rights reserved.
+
 Toplevel tool for analyzing a source base.
 '''
 from collections import OrderedDict
@@ -14,10 +17,13 @@ from melano.project.analysis.find_links import FindLinks
 from melano.project.analysis.indexer import Indexer
 from melano.project.analysis.linker import Linker
 from melano.project.analysis.typer import Typer
+from melano.project.importer import Importer
 from melano.py.driver import PythonParserDriver
+import hashlib
 import logging
 import melano.py.ast as ast
 import os
+import pdb
 import pickle
 import re
 
@@ -59,12 +65,13 @@ class MelanoProject:
 		self.limit = re.compile('.*')
 
 		# maps module paths to module definitions
-		self.modules = {} # {str: MelanoModule}
-		self.order = []
+		self.modules_by_path = {} # {str: MelanoModule}
+		self.modules_by_absname = {} # {str: MelanoModule}
+		self.order = [] # depth first traversal order
 
 		# map module names to their path and type, so we don't have to hit the fs repeatedly 
-		self.name_to_path = {} # {str: str}
-		self.name_to_type = {} # {str: int}
+		#self.name_to_path = {} # {str: str}
+		#self.name_to_type = {} # {str: int}
 
 		# the core parser infrastructure
 		self.parser_driver = PythonParserDriver('data/grammar/python-3.1')
@@ -111,6 +118,7 @@ class MelanoProject:
 
 	def build(self, target):
 		self.locate_modules()
+		self.show()
 		self.index_names()
 		self.show()
 		self.link_references()
@@ -126,9 +134,36 @@ class MelanoProject:
 
 	def locate_modules(self):
 		'''Perform static, module-level reachability analysis.'''
+		importer = Importer(self, self.roots, self.stdlib, self.extensions, self.builtins, self.override)
+
+		ref_paths_by_module = {}
+
+		# load all modules in depth-first order
 		for program in self.programs:
-			mod = self._locate_module(program, '', is_main=True)
-			self.programs[program] = mod
+			for modname, filename, modtype, ref_paths in importer.trace_import_tree(program):
+				if filename in self.modules_by_path:
+					continue
+				logging.info("mapping module: " + modname + ' -> ' + filename)
+				# create the module
+				mod = MelanoModule(modtype, filename, modname, self.builtins_scope)
+				# add to order, in depth first order
+				self.order.append(filename)
+				# map the module by filename
+				self.modules_by_path[filename] = mod
+				# load the (already cached) ast into the module struct and backref it
+				if filename.endswith('.py'):
+					self.__load_ast(mod)
+					mod.ast.hl = mod
+				# store aside the refmap for after we have loaded all modules
+				ref_paths_by_module[filename] = ref_paths
+			# NOTE: mark each program (last out in depth first order) as having real name __main__
+			self.modules_by_path[filename].set_as_main()
+
+		# after we have loaded all modules, fill in the refs in each module
+		for filename, mod in self.modules_by_path.items():
+			ref_paths = ref_paths_by_module[filename]
+			for local_modname, ref_filename in ref_paths.items():
+				mod.refs[local_modname] = self.modules_by_path[ref_filename]
 
 
 	def index_names(self):
@@ -138,7 +173,7 @@ class MelanoProject:
 		def _index(self):
 			for fn in self.order:
 				if fn not in missing or missing[fn] > 0:
-					mod = self.modules[fn]
+					mod = self.modules_by_path[fn]
 					if fn not in missing:
 						logging.info("Indexing: {}".format(mod.filename))
 					else:
@@ -166,7 +201,7 @@ class MelanoProject:
 		'''Look through our module's reachability and our names databases to find
 			the actual definition points for all referenced code.'''
 		for fn in self.order:
-			mod = self.modules[fn]
+			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
 				logging.info("Linking: {}".format(mod.filename))
 				linker = Linker(self, mod)
@@ -176,7 +211,7 @@ class MelanoProject:
 	def derive_types(self):
 		'''Look up-reference and thru-call to find the types of all names.'''
 		for fn in self.order:
-			mod = self.modules[fn]
+			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
 				logging.info("Typing: {}".format(mod.filename))
 				typer = Typer(self, mod)
@@ -185,11 +220,11 @@ class MelanoProject:
 
 	def transform_lowlevel_c(self):
 		visitor = Py2C()
-		for mod in self.modules.values():
+		for mod in self.modules_by_path.values():
 			if self.is_local(mod):
 				logging.info("Preparing: {}".format(mod.filename))
 				visitor.preallocate(mod.ast)
-		for mod in self.modules.values():
+		for mod in self.modules_by_path.values():
 			if self.is_local(mod):
 				logging.info("Emitting: {}".format(mod.filename))
 				visitor.visit(mod.ast)
@@ -202,25 +237,9 @@ class MelanoProject:
 		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
 		logging.info("Showing Project:")
 		for fn in self.order:
-			mod = self.modules[fn]
+			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
 				mod.show()
-
-
-	def find_module(self, dottedname, module):
-		return self.modules[self.name_to_path[dottedname]]
-
-
-	def find_relative_module(self, dottedname, module):
-		#. is own module
-		parts = module.name.split('.')
-
-		# split off end components for each other .
-		while dottedname.startswith('.'):
-			dottedname = dottedname[1:]
-			parts = parts[:-1]
-
-		return self.modules[self.name_to_path['.'.join(parts)]]
 
 
 	def is_local(self, mod:ast.Module) -> bool:
@@ -228,173 +247,27 @@ class MelanoProject:
 		return mod.modtype == MelanoModule.PROJECT and self.limit.match(mod.filename) is not None
 
 
-	def __name_for_module_path(self, path):
-		'''Map backwards from a path to a canonical name.  A module may be loaded under
-			many different paths and in many different ways, even through its import and
-			rename in another module.'''
-		paths = self.roots + self.stdlib + self.extensions + self.builtins + self.override
-		paths.sort(key=lambda p: len(p.split('/')))
-		for base in reversed(paths):
-			if path.startswith(base):
-				path = path[len(base) + 1:]
-				path = os.path.splitext(path)[0]
-				path = path.replace('/', '.')
-				return path
-
-
-	def _locate_module(self, dottedname, contextdir=None, level=0, is_main=False):
-		# QUIRK: filter out jython names from the stdlib
-		if dottedname.startswith('org.python'):
-			return None
-
-		# ensure that all sub-module paths in a dotted name are also loaded and available
-		parts = dottedname.split('.')
-		for i in range(len(parts)):
-			name = '.'.join(parts[0:i + 1])
-			mod = self._locate_module_inner(name, contextdir, level, is_main)
-		return mod
-
-
-	def _locate_module_inner(self, dottedname, contextdir=None, level=0, is_main=False):
-		# locate the module
-		logging.debug('locating:{}{}'.format('\t' * level, dottedname))
-		modtype, progpath = self.__find_module_file(dottedname, contextdir)
-
-		# if we found a module, but it is not one we need to parse, we are done
-		if progpath is None:
-			return None
-
-		# if we are already loaded, don't reload
-		if progpath in self.modules:
-			return self.modules[progpath]
-
-		# create the module
-		mod = MelanoModule(modtype, progpath, dottedname if not is_main else '__main__', self.builtins_scope)
-		mod.name = self.__name_for_module_path(progpath)
-		self.modules[progpath] = mod
-
-		# if we don't have source, make sure the reason is sane
-		if not mod.source:
-			assert not mod.filename.endswith('.py')
-			return mod
-
-		# load the ast
-		self.__load_ast(mod)
-		mod.ast.hl = mod
-
-		# recurse into used modules
-		if self.is_local(mod):
-			for dname, (_entry, _asname) in self.__find_outbound_links(mod):
-				contextdir = os.path.dirname(mod.filename)
-				submod = self._locate_module(dname, contextdir, level + 1)
-				mod.refs[dname] = submod
-
-		self.order.append(mod.filename)
-		return mod
-
-
-	def __find_module_file(self, dottedname, contextdir=None):
-		'''Given a dotted name, locate the file that should contain the module's 
-			code.  This will look relative to the roots, and contextdir, if set.'''
-		if not dottedname:
-			return None, None
-
-		if dottedname[0] != '.' and dottedname in self.name_to_path:
-			return self.name_to_type[dottedname], self.name_to_path[dottedname]
-
-		# get the base sub-file-name
-		fname = os.path.join(*dottedname.split('.'))
-
-		# mod the contextdir by the level
-		while dottedname.startswith('.'):
-			dottedname = dottedname[1:]
-			if dottedname.startswith('.'):
-				contextdir = '/'.join(contextdir.split('/')[:-1])
-		if not dottedname:
-			return None, None
-
-		# look in the project roots
-		modtype = MelanoModule.PROJECT
-		rec_modtype, path = self.__find_module_in_roots(self.roots, contextdir, dottedname, fname)
-		if not path:
-			# look in the extensions dir
-			modtype = MelanoModule.EXTENSION
-			rec_modtype, path = self.__find_module_in_roots(self.extensions, contextdir, dottedname, fname)
-			if not path:
-				# look in the stdlib
-				modtype = MelanoModule.STDLIB
-				rec_modtype, path = self.__find_module_in_roots(self.stdlib, contextdir, dottedname, fname)
-				if not path:
-					# look in the builtins
-					modtype = MelanoModule.BUILTIN
-					rec_modtype, path = self.__find_module_in_roots(self.builtins, contextdir, dottedname, fname)
-					if not path:
-						raise FileNotFoundException(dottedname)
-
-		# if we loaded recursively and got a modtype, set it, not the highlevel discovered type
-		if rec_modtype >= 0: modtype = rec_modtype
-
-		self.name_to_type[dottedname] = modtype
-		self.name_to_path[dottedname] = path
-		return modtype, path
-
-
-	def __find_module_in_roots(self, baseroots, contextdir, dottedname, filename):
-		roots = self.override + copy(baseroots)
-		if contextdir and contextdir not in roots:
-			roots += [contextdir]
-
-		# query possible filenames names
-		for root in roots:
-			path = self.__find_module_in_root(root, filename)
-			if path:
-				return - 1, path
-
-		# If we are a dotted name, we may be imported as a module inside the
-		# parent.  E.g. when os imports posixpath as path so we can import os.path.
-		if '.' in dottedname:
-			parts = dottedname.split('.')
-			parentname = '.'.join(parts[:-1])
-			modtype, modfile = self.__find_module_file(parentname, contextdir)
-			mod = MelanoModule(modtype, modfile, parentname, self.builtins_scope)
-			self.__load_ast(mod)
-			visitor = FindLinks()
-			visitor.visit(mod.ast)
-			for imp in visitor.imports:
-				for alias in imp.names:
-					if str(alias.asname) == parts[-1]:
-						modtype, path = self.__find_module_file(str(alias.name))
-						return modtype, path
-
-		return None, None
-
-
-	def __find_module_in_root(self, root, filename):
-		path = os.path.join(root, filename)
-
-		# try package module or normal module
-		if os.path.isdir(path):
-			tst = os.path.join(path, '__init__.py')
-			if os.path.isfile(tst):
-				return tst
+	def get_file_ast(self, filename):
+		source = MelanoModule._read_file(filename)
+		checksum = hashlib.sha1(source.encode('UTF-8')).hexdigest()
+		cachefile = os.path.join(self.cachedir, checksum)
+		if checksum in self.cached:
+			logging.debug("Cached: {}".format(filename))
+			with open(cachefile, 'rb') as fp:
+				ast = pickle.load(fp)
 		else:
-			tst = path + '.py'
-			if os.path.isfile(tst):
-				return tst
-
-		tst = path + '.so'
-		if os.path.isfile(tst):
-			logging.critical("Using SO: {}".format(tst))
-			return tst
-
-		return None
+			logging.info("Parsing: {}".format(filename))
+			ast = self.parser_driver.parse_string(source)
+			with open(cachefile, 'wb') as fp:
+				pickle.dump(ast, fp, pickle.HIGHEST_PROTOCOL)
+		return ast
 
 
 	def __load_ast(self, mod):
 		'''Find the ast for this module.'''
 		cachefile = os.path.join(self.cachedir, mod.checksum)
 		if mod.checksum in self.cached:
-			logging.info("Cached: {}".format(mod.filename))
+			logging.debug("Cached: {}".format(mod.filename))
 			with open(cachefile, 'rb') as fp:
 				mod.ast = pickle.load(fp)
 		else:
@@ -402,20 +275,3 @@ class MelanoProject:
 			mod.ast = self.parser_driver.parse_string(mod.source)
 			with open(cachefile, 'wb') as fp:
 				pickle.dump(mod.ast, fp, pickle.HIGHEST_PROTOCOL)
-
-
-	def __find_outbound_links(self, mod):
-		visitor = FindLinks()
-		visitor.visit(mod.ast)
-		for imp in visitor.imports:
-			for alias in imp.names:
-				modname = str(alias.name)
-				asname = str(alias.asname) if alias.asname else modname
-				yield modname, (None, asname)
-		for imp in visitor.importfroms:
-			module = '.' * imp.level + str(imp.module)
-			for alias in imp.names:
-				name = str(alias.name)
-				asname = str(alias.asname) if alias.asname else name
-				yield module, (name, asname)
-

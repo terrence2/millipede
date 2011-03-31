@@ -27,6 +27,7 @@ class MelanoModule(Scope):
 		this module can be found.
 		'''
 		super().__init__(Name(dottedname.replace('.', '_'), None))
+		self.python_name = dottedname
 
 		# the common builtins scope used by all modules for missing lookups
 		self.builtins_scope = builtins_scope
@@ -34,7 +35,7 @@ class MelanoModule(Scope):
 		self.modtype = modtype
 		self.filename = filename
 		if self.filename.endswith('.py'):
-			self.source = self.__read_file()
+			self.source = self._read_file(self.filename)
 			self.checksum = hashlib.sha1(self.source.encode('UTF-8')).hexdigest()
 			self.lines = self.source.split('\n')
 		elif self.filename.endswith('.so'):
@@ -44,6 +45,7 @@ class MelanoModule(Scope):
 
 		# the ast.Module for this module
 		self.ast = None
+		self.real_name = None
 
 		# add names common
 		self.add_symbol('__name__', Name(dottedname, self))
@@ -57,11 +59,24 @@ class MelanoModule(Scope):
 		self.type = PyModuleType(self)
 
 
-	def __read_file(self):
+	def set_as_main(self):
+		self.real_name = self.owner.name
+		self.owner.name = '__main__'
+
+
+	@property
+	def name(self):
+		if self.real_name:
+			return self.real_name
+		return self.owner.name
+
+
+	@staticmethod
+	def _read_file(filename):
 		# read the file contents, obeying the python encoding marker
-		with open(self.filename, 'rb') as fp:
+		with open(filename, 'rb') as fp:
 			encoding, _ = tokenize.detect_encoding(fp.readline)
-		with open(self.filename, 'rt', encoding=encoding) as fp:
+		with open(filename, 'rt', encoding=encoding) as fp:
 			content = fp.read()
 		content += '\n\n'
 		return content
@@ -84,7 +99,7 @@ class MelanoModule(Scope):
 
 
 	def show(self, level=0):
-		logging.info('Module: {} as {}'.format(self.name, self.owner.global_name))
+		logging.info('Module: {} as {}'.format(self.python_name, self.owner.name))
 		for name, val in self.symbols.items():
 			if isinstance(val.scope, MelanoModule):
 				logging.info('{}Name: {}'.format('\t' * (level + 1), name))

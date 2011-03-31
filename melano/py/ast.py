@@ -389,10 +389,33 @@ class Attribute(expr):
 			return self.value
 		return self.value.first()
 
+	def is_all_names(self):
+		'''Return true if all attribute parts are Names.  In most cases, an attribute can be composed of non-name
+			parts -- e.g. ','.join is a function; however, some places, e.g. import <attribute> must be composed of
+			only name elements.
+		'''
+		assert isinstance(self.attr, Name)
+		if isinstance(self.value, Name):
+			return True
+		elif isinstance(self.value, Attribute):
+			return self.value.is_all_names()
+		return False
+
+	def get_names(self):
+		'''Return each string component of the attribute in order.  E.g. if this attribute were foo.bar.baz, this would
+			return a sequence of (foo, bar, baz) as names.  The property is_all_names must be True.
+		'''
+		assert self.is_all_names()
+		if isinstance(self.value, Name):
+			yield self.value
+		elif isinstance(self.value, Attribute):
+			for val in self.value.get_names():
+				yield val
+		yield self.attr
+
 	def set_context(self, ctx):
 		self.ctx = ctx
-		#NOTE: the lhs of an attribute is _always_ context load
-		#self.value.set_context(ctx)
+		#NOTE: the lhs of an attribute is _always_ context load, except in the case of a import <attribute>: we adjust it manully
 
 	def __str__(self):
 		return str(self.value) + '.' + str(self.attr)
