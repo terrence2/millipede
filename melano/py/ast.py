@@ -655,6 +655,7 @@ class Yield(expr):
 #| Slice(expr? lower, expr? upper, expr? step) 
 class Slice(slice_):
 	__slots__ = ('lower', 'upper', 'step')
+	_fields = ('lower', 'upper', 'step')
 	def __init__(self, lower:expr, upper:expr, step:expr, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.lower = lower

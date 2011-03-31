@@ -124,8 +124,11 @@ class PyGeneratorLL(PyFunctionLL):
 
 	def do_yield(self, ctx, rv_inst):
 		# assign to our yielded slot slot
+		if not rv_inst:
+			rv_inst = self.visitor.none
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID(rv_inst.name)))
 		rv_inst.incref(ctx)
+
 
 		# transfer control back to originator
 		ctx.add(c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.self_inst.name))))

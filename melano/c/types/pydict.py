@@ -13,6 +13,13 @@ class PyDictLL(PyObjectLL):
 		self.fail_if_null(ctx, self.name)
 
 
+	def del_item_string(self, ctx, name:str):
+		tmp = CIntegerLL(None, self.visitor)
+		tmp.declare(self.visitor.scope.context, name='_del_rv')
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyDict_DelItemString'), c.ExprList(c.ID(self.name), c.Constant('string', name)))))
+		self.fail_if_nonzero(ctx, tmp.name)
+
+
 	def set_item_string(self, ctx, name:str, var:PyObjectLL):
 		tmp = CIntegerLL(None, self.visitor)
 		tmp.declare(self.visitor.scope.context, name='_set_rv')
@@ -32,10 +39,10 @@ class PyDictLL(PyObjectLL):
 		self.fail_if_nonzero(ctx, tmp.name)
 
 
-	def get_item_string(self, ctx, name:str, out:PyObjectLL):
+	def get_item_string(self, ctx, name:str, out:PyObjectLL, error_type='PyExc_KeyError', error_str=None):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(
 												c.ID(self.name), c.Constant('string', name)))))
-		self.except_if_null(ctx, out.name, 'PyExc_KeyError')
+		self.except_if_null(ctx, out.name, error_type, error_str)
 		out.incref(ctx)
 
 

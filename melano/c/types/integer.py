@@ -8,6 +8,8 @@ from melano.hl.types.hltype import HLType
 
 
 class CIntegerLL(LLType):
+	MAX = 2 ** 63 - 1
+
 	def __init__(self, hlnode, visitor, size=None, signed=None, is_a_bool=False):
 		super().__init__(hlnode, visitor)
 		self.size = self.hltype.size if self.hltype else size

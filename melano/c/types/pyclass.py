@@ -99,14 +99,13 @@ class PyClassLL(PyObjectLL):
 		yield
 
 
+	def del_attr_string(self, ctx, attrname):
+		return self.c_namespace_dict.del_item_string(ctx, attrname)
+
+
 	def set_attr_string(self, ctx, attrname, attrval):
-		'''Normally a function is transformed into a method by the function's descriptor being accessed by a class,
-			usually through the getattr that gets the method.  We can't really do that, since PyCFunction doesn't
-			have a descriptor.  Instead methods have to be statically marked as METH_CLASS or METH_STATIC and
-			have their self property set correctly.  We don't really attempt this -- instead we use PyMethod_New.
-		'''
 		return self.c_namespace_dict.set_item_string(ctx, attrname, attrval)
 
 
 	def get_attr_string(self, ctx, attrname, out):
-		self.c_namespace_dict.get_item_string(ctx, attrname, out)
+		self.c_namespace_dict.get_item_string(ctx, attrname, out, 'PyExc_NameError', "name '{}' is not defined".format(attrname))

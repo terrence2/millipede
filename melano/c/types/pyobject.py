@@ -85,28 +85,6 @@ class PyObjectLL(LLType):
 		self.fail_if_nonzero(ctx, tmp.name)
 
 
-	def sequence_get_item(self, ctx, key, out):
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_GetItem'), c.ExprList(
-															c.ID(self.name), c.ID(key.name)))))
-		self.fail_if_null(ctx, out.name)
-
-
-	def sequence_inplace_concat(self, ctx, seq_inst, out_inst=None):
-		if not out_inst:
-			out_inst = PyObjectLL(None, self.visitor)
-			out_inst.declare(self.visitor.scope.context)
-		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_InPlaceConcat'), c.ExprList(c.ID(self.name), c.ID(seq_inst.name)))))
-		self.fail_if_null(ctx, out_inst.name)
-		return out_inst
-
-
-	def sequence_as_tuple(self, ctx, out_inst=None):
-		if not out_inst:
-			out_inst = PyTupleLL(None, self.visitor)
-			out_inst.declare(self.visitor.scope.context)
-		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_Tuple'), c.ExprList(c.ID(self.name)))))
-		return out_inst
-
 
 	def get_item(self, ctx, key, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetItem'), c.ExprList(
@@ -284,6 +262,7 @@ class PyObjectLL(LLType):
 		return out
 
 
+	### Sequence
 	def sequence_contains(self, ctx, item):
 		out = CIntegerLL(None, self.visitor)
 		out.declare(self.visitor.scope.context)
@@ -291,6 +270,47 @@ class PyObjectLL(LLType):
 																				c.ID(self.name), c.ID(item.name)))))
 		self.fail_if_negative(ctx, out.name)
 		return out
+
+
+	def sequence_get_item(self, ctx, key, out):
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_GetItem'), c.ExprList(
+															c.ID(self.name), c.ID(key.name)))))
+		self.fail_if_null(ctx, out.name)
+
+
+	def sequence_inplace_concat(self, ctx, seq_inst, out_inst=None):
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context)
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_InPlaceConcat'), c.ExprList(c.ID(self.name), c.ID(seq_inst.name)))))
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst
+
+
+	def sequence_as_tuple(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = PyTupleLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context)
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_Tuple'), c.ExprList(c.ID(self.name)))))
+		return out_inst
+
+
+	def sequence_get_slice(self, ctx,
+						start:int or CIntegerLL,
+						end:int or CIntegerLL,
+						step:int or CIntegerLL,
+						out=None):
+		if not out:
+			out = PyObjectLL(None, self.visitor)
+			out.declare(self.visitor.scope.context)
+		_start = c.Constant('integer', start) if isinstance(start, int) else c.ID(start.name)
+		_end = c.Constant('integer', end) if isinstance(end, int) else c.ID(end.name)
+		if step != 1:
+			raise NotImplementedError("Slicing with a step size is not yet supported")
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_GetSlice'), c.ExprList(c.ID(self.name), _start, _end))))
+		self.fail_if_null(ctx, out.name)
+		return out
+	### End Sequence
 
 
 	def is_(self, ctx, other):

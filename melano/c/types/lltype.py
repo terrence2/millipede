@@ -41,11 +41,14 @@ class LLType:
 			self.visitor.exit_with_exception()
 
 
-	def except_if_null(self, ctx, name, exc_name):
+	def except_if_null(self, ctx, name, exc_name, exc_str=None):
 		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None)
 		ctx.add(check)
 		with self.visitor.new_context(check.iftrue):
-			self.visitor.context.add(c.FuncCall(c.ID('PyErr_SetNone'), c.ExprList(c.ID(exc_name))))
+			if exc_str:
+				self.visitor.context.add(c.FuncCall(c.ID('PyErr_SetString'), c.ExprList(c.ID(exc_name), c.Constant('string', exc_str))))
+			else:
+				self.visitor.context.add(c.FuncCall(c.ID('PyErr_SetNone'), c.ExprList(c.ID(exc_name))))
 			self.visitor.capture_error()
 			self.visitor.exit_with_exception()
 

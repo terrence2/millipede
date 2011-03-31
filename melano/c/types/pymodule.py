@@ -89,6 +89,10 @@ class PyModuleLL(PyObjectLL):
 		yield
 
 
+	def del_attr_string(self, ctx, name:str):
+		self.ll_dict.del_item_string(ctx, name)
+
+
 	def set_attr_string(self, ctx, name:str, val:LLType):
 		return self.ll_dict.set_item_string(ctx, name, val)
 
@@ -110,5 +114,5 @@ class PyModuleLL(PyObjectLL):
 					c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(out.name)))
 				))
 		ctx.add(frombuiltins)
-		self.fail_if_null(frombuiltins.iftrue, out.name)
+		self.except_if_null(frombuiltins.iftrue, out.name, 'PyExc_NameError', "name '{}' is not defined".format(attrname))
 

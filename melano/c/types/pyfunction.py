@@ -379,6 +379,11 @@ class PyFunctionLL(PyObjectLL):
 		ctx.add(c.Return(c.ID('__return_value__')))
 
 
+	def del_attr_string(self, ctx, attrname):
+		ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(self.locals_map[attrname]))))
+		ctx.add(c.Assignment('=', c.ID(self.locals_map[attrname]), c.ID('NULL')))
+
+
 	def set_attr_string(self, ctx, attrname, val):
 		ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(self.locals_map[attrname]))))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
@@ -387,6 +392,7 @@ class PyFunctionLL(PyObjectLL):
 
 	def get_attr_string(self, ctx, attrname, outvar):
 		ctx.add(c.Assignment('=', c.ID(outvar.name), c.ID(self.locals_map[attrname])))
+		self.except_if_null(ctx, outvar.name, 'PyExc_UnboundLocalError', "local variable '{}' referenced before assignment".format(attrname))
 		outvar.incref(ctx)
 
 

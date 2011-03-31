@@ -567,6 +567,12 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError("Don't know how to assign to type: {}".format(type(node)))
 
 
+	def _delete_name(self, target):
+		assert isinstance(target, py.Name)
+		scope = target.hl.parent
+		scope.ll.del_attr_string(self.context, str(target))
+
+
 	def _store_name(self, target, val):
 		'''
 		Common "normal" assignment handler.  Things like for-loop targets and with-stmt vars 
@@ -1057,7 +1063,8 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Delete(self, node):
-		raise NotImplementedError
+		for target in node.targets:
+			self._delete_name(target)
 
 
 	def visit_Dict(self, node):
@@ -1567,7 +1574,27 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Slice(self, node):
-		raise NotImplementedError
+		start = end = step = None
+
+		if node.lower:
+			start = self.visit(node.lower)
+			start = start.as_ssize(self.context)
+		else:
+			start = 0
+
+		if node.upper:
+			end = self.visit(node.upper)
+			end = end.as_ssize(self.context)
+		else:
+			end = CIntegerLL.MAX
+
+		if node.step:
+			step = self.visit(node.step)
+			step = step.as_ssize(self.context)
+		else:
+			step = 1
+
+		return start, end, step
 
 
 	def visit_Starred(self, node):
@@ -1585,12 +1612,17 @@ class Py2C(ASTVisitor):
 		if node.ctx == py.Store:
 			raise NotImplementedError("Subscript store needs special casing at assignment site")
 		elif node.ctx in [py.Load, py.Aug]:
-			kinst = self.visit(node.slice)
 			tgtinst = self.visit(node.value)
-			tmp = PyObjectLL(None, self)
-			tmp.declare(self.scope.context)
-			tgtinst.get_item(self.context, kinst, tmp)
-			return tmp
+			if isinstance(node.slice, py.Slice):
+				start_inst, end_inst, step_inst = self.visit(node.slice)
+				out = tgtinst.sequence_get_slice(self.context, start_inst, end_inst, step_inst)
+				return out
+			else:
+				kinst = self.visit(node.slice)
+				tmp = PyObjectLL(None, self)
+				tmp.declare(self.scope.context)
+				tgtinst.get_item(self.context, kinst, tmp)
+				return tmp
 		else:
 			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
 

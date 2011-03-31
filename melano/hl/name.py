@@ -2,12 +2,13 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.entity import Entity
 from melano.hl.types.hltype import HLType
 from melano.hl.types.pyobject import PyObjectType
 import logging
 
 
-class Name:
+class Name(Entity):
 	'''
 	An item that can be placed in a symbol table.  Contains information about a named
 	python entity, possibly including another symbol table.
@@ -16,6 +17,8 @@ class Name:
 		'''
 		parent: Scope (we cannot formally declare this type because Scope needs Name)
 		'''
+		super().__init__()
+
 		self.name = name
 		self.parent = parent
 
@@ -25,32 +28,8 @@ class Name:
 		# the types that we have proven this name can take
 		self.types = []
 
-		# The attribute map -- we record all potential attribute usage in the name
-		self.attributes = {} # {str: HLType}
-
-		# The subscript map -- we record all potential indexing of this name here
-		self.subscripts = {} # {slice: HLType}
-
 		# the ll instance
 		self.ll = None
-
-
-	def add_attribute(self, attrname, hltype):
-		if attrname not in self.attributes:
-			self.attributes[attrname] = []
-		if hltype:
-			self.attributes[attrname].append(hltype)
-
-
-	def add_subscript(self, slice, hltype):
-		if slice not in self.subscripts:
-			self.subscripts[slice] = []
-		if hltype:
-			self.subscripts[slice].append(hltype)
-
-
-	def lookup_attribute(self, attrname):
-		return self.attributes[attrname]
 
 
 	def get_type(self) -> type:

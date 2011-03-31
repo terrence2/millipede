@@ -4,6 +4,7 @@ All rights reserved.
 '''
 from melano.c import ast as c
 from melano.c.types.integer import CIntegerLL
+from melano.c.types.lltype import LLType
 from melano.c.types.pyobject import PyObjectLL
 
 

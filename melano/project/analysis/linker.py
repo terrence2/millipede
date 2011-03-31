@@ -60,13 +60,6 @@ class Linker(ASTVisitor):
 		node.hl = Coerce(Coerce.GENERALIZE, node.left.hl, node.right.hl)
 
 
-	def visit_DictComp(self, node):
-		with self.scope(node.hl):
-			self.visit_nodelist(node.generators)
-			self.visit(node.key)
-			self.visit(node.value)
-
-
 	def visit_Call(self, node):
 		self.visit(node.func)
 		self.visit_nodelist(node.args)
@@ -85,6 +78,18 @@ class Linker(ASTVisitor):
 		with self.scope(node.hl):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
+
+
+	def visit_Delete(self, node):
+		for target in node.targets:
+			self.visit(target)
+
+
+	def visit_DictComp(self, node):
+		with self.scope(node.hl):
+			self.visit_nodelist(node.generators)
+			self.visit(node.key)
+			self.visit(node.value)
 
 
 	def visit_FunctionDef(self, node):
@@ -158,7 +163,7 @@ class Linker(ASTVisitor):
 
 
 	def visit_Name(self, node):
-		if node.ctx == py.Load:
+		if node.ctx in [py.Load, py.Del]:
 			sym = self.context.lookup(str(node))
 			ref = self.context.add_reference(sym)
 			node.hl = ref

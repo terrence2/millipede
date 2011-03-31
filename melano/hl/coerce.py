@@ -2,15 +2,19 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.entity import Entity
 from melano.hl.types.pyobject import PyObjectType
 
-class Coerce:
+
+class Coerce(Entity):
 	GENERALIZE = 0
 	OVERRIDE = 2
 	INPLACE = 1
 
 
 	def __init__(self, coerce_type:int, *children):
+		super().__init__()
+
 		self.coerce_type = coerce_type
 		self.children = children
 		#self.ll = None

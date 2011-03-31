@@ -123,7 +123,9 @@ class PythonASTBuilder:
 	def handle_del_stmt(self, del_node):
 		children = self.children(del_node)
 		targets = self.handle_exprlist(children[1], ast.Del)
-		return ast.Delete(targets, del_node)
+		if isinstance(targets, ast.Tuple):
+			return ast.Delete(targets.elts, del_node)
+		return ast.Delete([targets], del_node)
 
 
 	def handle_flow_stmt(self, flow_node):
