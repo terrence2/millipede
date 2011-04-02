@@ -165,7 +165,8 @@ class Importer:
 			visitor = FindLinks()
 			visitor.visit(ast)
 			renames = visitor.renames.get(target_modname)
-		if not renames: raise
+		if not renames:
+			raise NoSuchModuleError
 
 		if len(renames) == 1:
 			renamed = renames[0]

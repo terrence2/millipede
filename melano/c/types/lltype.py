@@ -32,6 +32,11 @@ class LLType:
 		self.visitor.capture_error()
 		self.visitor.exit_with_exception()
 
+	def fail_formatted(self, typename, error, *insts):
+		self.visitor.set_exception_format(typename, error, *insts)
+		self.visitor.capture_error()
+		self.visitor.exit_with_exception()
+
 
 	def fail_if_null(self, ctx, name):
 		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None)

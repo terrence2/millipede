@@ -2,8 +2,8 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.types.hltype import HLType
+from melano.hl.types.pyobject import PyObjectType
 
 
-class PyComprehensionType(HLType):
+class PyComprehensionType(PyObjectType):
 	pass

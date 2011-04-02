@@ -64,7 +64,7 @@ class PyModuleLL(PyObjectLL):
 		if s is not None:
 			ps = PyStringLL(None, self.visitor)
 			ps.declare(self.visitor.scope.context)
-			ps.new(ctx, PyStringLL.str2c(s))
+			ps.new(ctx, s)
 		else:
 			ps = PyObjectLL(None, self.visitor)
 			ps.declare(self.visitor.scope.context)

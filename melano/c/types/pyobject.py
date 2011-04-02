@@ -45,6 +45,16 @@ class PyObjectLL(LLType):
 		return self
 
 
+	def str(self, ctx, out_inst=None):
+		'''Convert to a string.'''
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_str")
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_Str'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst
+
+
 	def assign_none(self, ctx):
 		ctx.add(c.Assignment('=', c.ID(self.name), c.ID(self.visitor.none.name)))
 
@@ -85,6 +95,14 @@ class PyObjectLL(LLType):
 		self.fail_if_nonzero(ctx, tmp.name)
 
 
+	def del_attr_string(self, ctx, attrname):
+		tmp = CIntegerLL(None, self.visitor)
+		tmp.declare(self.visitor.scope.context, init= -1)
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_DelAttrString'), c.ExprList(
+															c.ID(self.name), c.Constant('string', attrname)))))
+		self.fail_if_nonzero(ctx, tmp.name)
+
+
 
 	def get_item(self, ctx, key, out):
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetItem'), c.ExprList(
@@ -97,6 +115,15 @@ class PyObjectLL(LLType):
 		out.declare(self.visitor.scope.context, init= -1)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_SetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name), c.ID(val.name)))))
+		self.fail_if_nonzero(ctx, out.name)
+		return out
+
+
+	def del_item(self, ctx, key):
+		out = CIntegerLL(None, self.visitor)
+		out.declare(self.visitor.scope.context, init= -1)
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_DelItem'), c.ExprList(
+															c.ID(self.name), c.ID(key.name)))))
 		self.fail_if_nonzero(ctx, out.name)
 		return out
 
@@ -238,9 +265,13 @@ class PyObjectLL(LLType):
 		self.fail_if_null(ctx, out.name)
 
 
-	def not_(self, ctx, out):
+	def not_(self, ctx, out=None):
+		if not out:
+			out = CIntegerLL(None, self.visitor)
+			out.declare(self.visitor.scope.context, name="_not_rv")
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Not'), c.ExprList(c.ID(self.name)))))
-		self.fail_if_null(ctx, out.name)
+		self.fail_if_negative(ctx, out.name)
+		return out
 	## END Unary Ops ##
 
 
@@ -309,6 +340,21 @@ class PyObjectLL(LLType):
 			raise NotImplementedError("Slicing with a step size is not yet supported")
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_GetSlice'), c.ExprList(c.ID(self.name), _start, _end))))
 		self.fail_if_null(ctx, out.name)
+		return out
+
+
+	def sequence_del_slice(self, ctx,
+						start:int or CIntegerLL,
+						end:int or CIntegerLL,
+						step:int or CIntegerLL):
+		out = CIntegerLL(None, self.visitor)
+		out.declare(self.visitor.scope.context)
+		_start = c.Constant('integer', start) if isinstance(start, int) else c.ID(start.name)
+		_end = c.Constant('integer', end) if isinstance(end, int) else c.ID(end.name)
+		if step != 1:
+			raise NotImplementedError("Slicing with a step size is not yet supported")
+		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_DelSlice'), c.ExprList(c.ID(self.name), _start, _end))))
+		self.fail_if_nonzero(ctx, out.name)
 		return out
 	### End Sequence
 

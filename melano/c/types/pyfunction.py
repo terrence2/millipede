@@ -21,10 +21,6 @@ class PyFunctionLL(PyObjectLL):
 		self.locals_map = {} # {str: str}
 		self.args_pos_map = [] # map position to c level names
 
-		# the c instantce representing the defaults, for fast access (and since we can't store them on __defaults__ in a PyCFunction)
-		self.c_defaults_array = None
-		self.c_kwdefaults_array = None
-
 		# the ll name and instance representing the c function that does arg decoding for python style calls
 		self.c_pystub_func = None
 
@@ -38,37 +34,12 @@ class PyFunctionLL(PyObjectLL):
 		self.stub_self_inst = None
 		self.stub_args_tuple = None
 		self.stub_kwargs_dict = None
+		self.stub_arg_insts = None
 
 
 	def prepare(self):
 		pass
 
-	"""
-	def create_defaults(self, tu, defaults, kwdefaults):
-		if defaults:
-			cnt = len(defaults)
-			name = tu.reserve_name(self.hlnode.owner.name + '_defaults')
-			self.c_defaults_array = c.Decl(name,
-										c.ArrayDecl(c.PtrDecl(c.TypeDecl(name, c.IdentifierType('PyObject'))), cnt),
-										init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
-			tu.add_fwddecl(self.c_defaults_array)
-		if kwdefaults:
-			cnt = len(kwdefaults)
-			name = tu.reserve_name(self.hlnode.owner.name + '_kwdefaults')
-			self.c_kwdefaults_array = c.Decl(name,
-										c.ArrayDecl(c.PtrDecl(c.TypeDecl(name, c.IdentifierType('PyObject'))), cnt),
-										init=c.ExprList(*(cnt * [c.ID('NULL')])), quals=['static'])
-			tu.add_fwddecl(self.c_kwdefaults_array)
-
-
-	def attach_defaults(self, ctx, default_insts, kwdefault_insts):
-		for i, default_inst in enumerate(default_insts):
-			default_inst.incref(ctx)
-			ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.c_defaults_array.name), c.Constant('integer', i)), c.ID(default_inst.name)))
-		for i, default_inst in enumerate(kwdefault_insts):
-			default_inst.incref(ctx)
-			ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.c_kwdefaults_array.name), c.Constant('integer', i)), c.ID(default_inst.name)))
-	"""
 
 	def attach_defaults(self, ctx, default_insts, kwdefault_insts):
 		if default_insts:
@@ -148,13 +119,13 @@ class PyFunctionLL(PyObjectLL):
 
 	def stub_intro(self, ctx):
 		ctx.reserve_name('self')
-		self.stub_self_inst = PyObjectLL(None, self)
+		self.stub_self_inst = PyObjectLL(None, self.visitor)
 		self.stub_self_inst.name = 'self'
 		ctx.reserve_name('args')
-		self.stub_args_tuple = PyTupleLL(None, self)
+		self.stub_args_tuple = PyTupleLL(None, self.visitor)
 		self.stub_args_tuple.name = 'args'
 		ctx.reserve_name('kwargs')
-		self.stub_kwargs_dict = PyDictLL(None, self)
+		self.stub_kwargs_dict = PyDictLL(None, self.visitor)
 		self.stub_kwargs_dict.name = 'kwargs'
 		ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
 
@@ -162,9 +133,14 @@ class PyFunctionLL(PyObjectLL):
 		#TODO: this is really ugly -- makes extensive use of self.visitor; we really need a better way to expose
 		#		py2c functionality here without just passing a reference to every user
 
+		self.stub_arg_insts = []
+
 		# get args ref
 		args_tuple = self.stub_args_tuple
 		kwargs_dict = self.stub_kwargs_dict
+
+		# get copy of kwargs -- clear items out of it as we load them, or skip entirely
+		kwargs_inst = kwargs_dict.copy(ctx) if kwarg else None
 
 		# load positional and normal keyword args
 		if args:
@@ -174,8 +150,9 @@ class PyFunctionLL(PyObjectLL):
 
 			arg_insts = [None] * len(args)
 			for i, arg in enumerate(args):
-				# declare local variable for arg ref
-				arg_insts[i] = self.visitor.create_ll_instance(arg.arg.hl)
+				# Note: different scope than the actual args are declared in.. need to stub them out here
+				#TODO: make this type pull from the arg.arg.hl.get_type() through lookup... maybe create dup_ll_type or something
+				arg_insts[i] = PyObjectLL(arg.arg.hl, self.visitor)
 				arg_insts[i].declare(self.visitor.scope.context)
 
 				# query if in positional args
@@ -194,35 +171,47 @@ class PyFunctionLL(PyObjectLL):
 				kwargs_dict.get_item_string_nofail(have_kwarg.iftrue, str(arg.arg), arg_insts[i])
 
 				### if no kwargs passed or the item was not in the kwargs, load the default from defaults
-				query_default_inst = c.If(c.UnaryOp('!', c.ID(arg_insts[i].name)), c.Compound(), None)
-				query_inst.iffalse.add(query_default_inst)
-
-				# try loading from defaults
-				kwstartoffset = len(args) - len(defaults)
-				if i >= kwstartoffset:
-					default_offset = i - kwstartoffset
-					#FIXME: optionally load off of fast array here
-					if not self.c_defaults_array:
+				query_default_inst = query_inst.iffalse.add(c.If(c.UnaryOp('!', c.ID(arg_insts[i].name)), c.Compound(), c.Compound()))
+				with self.visitor.new_context(query_default_inst.iftrue):
+					kwstartoffset = len(args) - len(defaults)
+					if i >= kwstartoffset:
+						# try loading from defaults
+						default_offset = i - kwstartoffset
 						tmp = PyTupleLL(None, self.visitor)
 						tmp.declare(self.visitor.scope.context)
 						query_default_inst.iftrue.add(c.Assignment('=', c.ID(tmp.name),
 								c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.c_obj.name), c.Constant('string', '__defaults__')))))
 						query_default_inst.iftrue.add(c.Assignment('=', c.ID(arg_insts[i].name),
 								c.FuncCall(c.ID('PyTuple_GetItem'), c.ExprList(c.ID(tmp.name), c.Constant('integer', default_offset)))))
+						query_default_inst.iftrue.add(c.FuncCall(c.ID('Py_INCREF'), c.ID(arg_insts[i].name)))
 					else:
-						query_default_inst.iftrue.add(c.Assignment('=', c.ID(arg_insts[i].name),
-															c.ArrayRef(c.ID(self.c_defaults_array.name), c.Constant('integer', default_offset))))
-					query_default_inst.iftrue.add(c.FuncCall(c.ID('Py_INCREF'), c.ID(arg_insts[i].name)))
-				else:
-					# emit an error for an unpassed arg
-					with self.visitor.new_context(query_default_inst.iftrue):
-						self.fail('PyExc_TypeError', 'Missing arg {}'.format(str(arg)))
+						# emit an error for an unpassed arg
+						with self.visitor.new_context(query_default_inst.iftrue):
+							self.fail('PyExc_TypeError', 'Missing arg {}'.format(str(arg)))
+
+				# if we did get the item out of the kwargs, delete it from the inst copy so it's not duped in the args we pass 
+				with self.visitor.new_context(query_default_inst.iffalse):
+					if kwargs_inst:
+						kwargs_inst.del_item_string(self.visitor.context, str(arg.arg))
+
+			self.stub_arg_insts.extend(arg_insts)
+
+		# add unused args to varargs and pass if in taken args or error if not
+		if vararg:
+			ctx.add(c.Comment('load varargs'))
+			vararg_inst = args_tuple.get_slice(ctx, len(args), args_tuple.get_length(ctx))
+			self.stub_arg_insts.append(vararg_inst)
+		else:
+			len_inst = args_tuple.get_length(ctx)
+			ifstmt = ctx.add(c.If(c.BinaryOp('>', c.ID(len_inst.name), c.Constant('integer', len(args))), c.Compound(), None))
+			with self.visitor.new_context(ifstmt.iftrue):
+				self.fail_formatted('PyExc_TypeError', "{}() takes exactly {} positional arguments (%d given)".format(self.hlnode.owner.name, len(args)), len_inst)
 
 		# load all keyword only args
 		if kwonlyargs:
 			kwarg_insts = [None] * len(kwonlyargs)
 			for i, arg in enumerate(kwonlyargs):
-				kwarg_insts[i] = self.visitor.create_ll_instance(arg.arg.hl)
+				kwarg_insts[i] = PyObjectLL(arg.arg.hl, self.visitor)
 				kwarg_insts[i].declare(self.visitor.scope.context)
 
 			# ensure we have kwargs at all
@@ -232,11 +221,10 @@ class PyFunctionLL(PyObjectLL):
 			## in have_kwarg.iftrue, load all kwargs from the kwargs dict
 			for i, arg in enumerate(kwonlyargs):
 				kwargs_dict.get_item_string_nofail(have_kwarg.iftrue, str(arg.arg), kwarg_insts[i])
-				need_default = c.If(c.UnaryOp('!', c.ID(kwarg_insts[i].name)), c.Compound(), None)
-				have_kwarg.iftrue.add(need_default)
+				need_default = have_kwarg.iftrue.add(c.If(c.UnaryOp('!', c.ID(kwarg_insts[i].name)), c.Compound(), c.Compound()))
 
 				### not found in kwdict, means we need to load from default
-				if not self.c_kwdefaults_array:
+				with self.visitor.new_context(need_default.iftrue):
 					tmp = PyDictLL(None, self.visitor)
 					tmp.declare(self.visitor.scope.context)
 					need_default.iftrue.add(c.Assignment('=', c.ID(tmp.name),
@@ -244,42 +232,35 @@ class PyFunctionLL(PyObjectLL):
 					need_default.iftrue.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
 						c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(tmp.name), c.Constant('string', str(arg.arg))))))
 					self.fail_if_null(need_default.iftrue, kwarg_insts[i].name)
-				else:
-					need_default.iftrue.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
-													c.ArrayRef(c.ID(self.c_kwdefaults_array.name), c.Constant('integer', i))))
+				### found in kwdict, means we need to delete from kwdict to avoid passing duplicate arg in kwargs
+				with self.visitor.new_context(need_default.iffalse):
+					if kwargs_inst:
+						kwargs_inst.del_item_string(self.visitor.context, str(arg.arg))
+
 
 			## if have_kwarg.iffalse, just load from the kwargs dict
 			for i, arg in enumerate(kwonlyargs):
-				if not self.c_kwdefaults_array:
-					tmp = PyDictLL(None, self.visitor)
-					tmp.declare(self.visitor.scope.context)
-					have_kwarg.iffalse.add(c.Assignment('=', c.ID(tmp.name),
-						c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.c_obj.name), c.Constant('string', '__kwdefaults__')))))
-					have_kwarg.iffalse.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
-						c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(tmp.name), c.Constant('string', str(arg.arg))))))
-					self.fail_if_null(have_kwarg.iffalse, kwarg_insts[i].name)
-				else:
-					have_kwarg.iffalse.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
-													c.ArrayRef(c.ID(self.c_kwdefaults_array.name), c.Constant('integer', i))))
+				tmp = PyDictLL(None, self.visitor)
+				tmp.declare(self.visitor.scope.context)
+				have_kwarg.iffalse.add(c.Assignment('=', c.ID(tmp.name),
+					c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.c_obj.name), c.Constant('string', '__kwdefaults__')))))
+				have_kwarg.iffalse.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
+					c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(tmp.name), c.Constant('string', str(arg.arg))))))
+				self.fail_if_null(have_kwarg.iffalse, kwarg_insts[i].name)
+			self.stub_arg_insts.extend(kwarg_insts)
 
-		#TODO: add unused args to varargs and pass if needed or error if not
-		if vararg:
-			ctx.add(c.Comment('load varargs'))
-			vararg_inst = self.visitor.create_ll_instance(vararg.hl)
-			vararg_inst.declare(self.visitor.scope.context)
-			# if we have a vararg, we need to pass a list of some sort, even if empty -- it should be whatever is not passed as an arg
-			ctx.add(c.Assignment('=', c.ID(vararg_inst.name),
-					c.FuncCall(c.ID('PyTuple_GetSlice'), c.ExprList(c.ID(args_tuple.name), c.Constant('integer', len(args)),
-											c.FuncCall(c.ID('PyTuple_GET_SIZE'), c.ExprList(c.ID(args_tuple.name)))))))
-			self.fail_if_null(ctx, vararg_inst.name)
-
-		#TODO: add unused kwargs to varargs and pass if needed or error if not
+		#add unused kwargs to a new dict (it has to be new, unfortunately) and pass if needed or error if not
 		if kwarg:
 			ctx.add(c.Comment('load kwargs'))
-			kwarg_inst = self.visitor.create_ll_instance(kwarg.hl)
-			kwarg_inst.declare(self.visitor.scope.context)
-			# FIXME: we _should_ remove all of the args that we found through normal means...
-			kwarg_inst.assign_name(ctx, kwargs_dict)
+			self.stub_arg_insts.append(kwargs_inst)
+
+			#PyDictLL(None, self.visitor)
+			##kwarg_inst = self.visitor.create_ll_instance(kwarg.hl)
+			#kwarg_inst = PyObjectLL(kwarg.hl, self.visitor)
+			#kwarg_inst.declare(self.visitor.scope.context)
+			## FIXME: we _should_ remove all of the args that we found through normal means...
+			#kwarg_inst.assign_name(ctx, kwargs_dict)
+			#self.stub_arg_insts.append(kwarg_inst)
 
 
 	def _buildargs(self, args, vararg, kwonlyargs, kwarg):
@@ -299,7 +280,8 @@ class PyFunctionLL(PyObjectLL):
 		return out
 
 	def transfer_to_runnerfunc(self, ctx, args, vararg, kwonlyargs, kwarg):
-		args = self._buildargs_idlist(args, vararg, kwonlyargs, kwarg)
+		#args = self._buildargs_idlist(args, vararg, kwonlyargs, kwarg)
+		args = [c.ID(inst.name) for inst in self.stub_arg_insts]
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.FuncCall(c.ID(self.c_runner_func.decl.name),
 																	c.ExprList(c.ID('self'), *args))))
 
@@ -314,21 +296,40 @@ class PyFunctionLL(PyObjectLL):
 
 	# Runner
 	def create_runnerfunc(self, tu, args, vararg, kwonlyargs, kwarg):
-		base_decl = c.Decl('__self__', c.PtrDecl(c.TypeDecl('__self__', c.IdentifierType('PyObject'))))
-		args_decls = [c.Decl(str(arg.arg), c.PtrDecl(c.TypeDecl(str(arg.arg), c.IdentifierType('PyObject')))) for arg in args]
-		if vararg:
-			args_decls.append(c.Decl(str(vararg), c.PtrDecl(c.TypeDecl(str(vararg), c.IdentifierType('PyObject')))))
-		kw_decls = [c.Decl(str(arg.arg), c.PtrDecl(c.TypeDecl(str(arg.arg), c.IdentifierType('PyObject')))) for arg in kwonlyargs]
-		if kwarg:
-			args_decls.append(c.Decl(str(kwarg), c.PtrDecl(c.TypeDecl(str(kwarg), c.IdentifierType('PyObject')))))
-		param_list = c.ParamList(base_decl, *(args_decls + kw_decls))
-		self._create_runner_common(tu, param_list, PyObjectLL.typedecl())
+		body = c.Compound()
+		body.visitor = self.visitor
 
-	def _create_runner_common(self, tu, param_list, return_ty):
+		base_decl = c.Decl('__self__', c.PtrDecl(c.TypeDecl('__self__', c.IdentifierType('PyObject'))))
+
+		arg_decls = []
+		for arg in args:
+			ll_inst = self.visitor.create_ll_instance(arg.arg.hl)
+			ll_inst.name = body.reserve_name(str(arg.arg))
+			arg_decls.append(c.Decl(ll_inst.name, c.PtrDecl(c.TypeDecl(ll_inst.name, c.IdentifierType('PyObject')))))
+		if vararg:
+			ll_inst = self.visitor.create_ll_instance(vararg.hl)
+			ll_inst.name = body.reserve_name(str(vararg))
+			arg_decls.append(c.Decl(ll_inst.name, c.PtrDecl(c.TypeDecl(ll_inst.name, c.IdentifierType('PyObject')))))
+
+		kw_decls = []
+		for arg in kwonlyargs:
+			ll_inst = self.visitor.create_ll_instance(arg.arg.hl)
+			ll_inst.name = body.reserve_name(str(arg.arg))
+			kw_decls.append(c.Decl(ll_inst.name, c.PtrDecl(c.TypeDecl(ll_inst.name, c.IdentifierType('PyObject')))))
+		if kwarg:
+			ll_inst = self.visitor.create_ll_instance(kwarg.hl)
+			ll_inst.name = body.reserve_name(str(kwarg))
+			kw_decls.append(c.Decl(ll_inst.name, c.PtrDecl(c.TypeDecl(ll_inst.name, c.IdentifierType('PyObject')))))
+
+		param_list = c.ParamList(base_decl, *(arg_decls + kw_decls))
+		self._create_runner_common(tu, param_list, PyObjectLL.typedecl(), body)
+
+
+	def _create_runner_common(self, tu, param_list, return_ty, body):
 		name = tu.reserve_name(self.hlnode.owner.name + '_runner')
 		self.c_runner_func = c.FuncDef(
 			c.Decl(name, c.FuncDecl(param_list, return_ty), quals=['static']),
-			c.Compound()
+			body
 		)
 		tu.add_fwddecl(self.c_runner_func.decl)
 		tu.add(self.c_runner_func)
@@ -337,20 +338,24 @@ class PyFunctionLL(PyObjectLL):
 	def runner_load_args(self, ctx, args, vararg, kwonlyargs, kwarg):
 		# load args from parameter list into the locals
 		for arg in args:
-			arg_inst = self.visitor.create_ll_instance(arg.arg.hl)
-			arg_inst.name = str(arg.arg)
-			self.locals_map[str(arg.arg)] = str(arg.arg)
+			#arg_inst = self.visitor.create_ll_instance(arg.arg.hl)
+			#arg_inst.name = str(arg.arg)
+			arg_inst = arg.arg.hl.ll
+			self.locals_map[str(arg.arg)] = arg_inst.name
 			self.args_pos_map.append(str(arg.arg))
 		if vararg:
-			self.locals_map[str(vararg)] = str(vararg)
+			arg_inst = vararg.hl.ll
+			self.locals_map[str(vararg)] = arg_inst.name
 			self.args_pos_map.append(str(vararg))
 		for arg in kwonlyargs:
-			arg_inst = self.visitor.create_ll_instance(arg.arg.hl)
-			arg_inst.name = str(arg.arg)
-			self.locals_map[str(arg.arg)] = str(arg.arg)
+			#arg_inst = self.visitor.create_ll_instance(arg.arg.hl)
+			#arg_inst.name = str(arg.arg)
+			arg_inst = arg.arg.hl.ll
+			self.locals_map[str(arg.arg)] = arg_inst.name
 			self.args_pos_map.append(str(arg.arg))
 		if kwarg:
-			self.locals_map[str(kwarg)] = str(kwarg)
+			arg_inst = kwarg.hl.ll
+			self.locals_map[str(kwarg)] = arg_inst.name
 			self.args_pos_map.append(str(kwarg))
 
 

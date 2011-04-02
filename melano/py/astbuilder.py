@@ -9,6 +9,7 @@ NOTES for Melano:
 	- Handles our skiptokens by filtering the children lists as needed.
 '''
 import melano.py.ast as ast
+import pdb
 
 
 class PythonASTBuilder:
@@ -61,6 +62,14 @@ class PythonASTBuilder:
 			'*='  : ast.Mult,
 			'**=' : ast.Pow
 		}
+
+	def show_tokens(self):
+		import pprint
+		pprint.pprint({k: getattr(self.tokens, k) for k in dir(self.tokens)})
+
+	def show_symbols(self):
+		import pprint
+		pprint.pprint({k: getattr(self.syms, k) for k in dir(self.syms)})
 
 
 	def type_name(self, ty):
@@ -792,8 +801,9 @@ class PythonASTBuilder:
 				target_expr = self.handle_testlist(target_node)
 				self.set_context(target_expr, ast.Store)
 				targets.append(target_expr)
+			assert children[-2].type == self.tokens.EQUAL and children[-2].value == '='
 			value_child = children[-1]
-			if value_child.type == self.syms.testlist:
+			if value_child.type == self.syms.testlist or value_child.type == self.syms.testlist_star_expr:
 				value_expr = self.handle_testlist(value_child)
 			else:
 				value_expr = self.handle_expr(value_child)
@@ -808,6 +818,8 @@ class PythonASTBuilder:
 
 	def handle_testlist(self, tests):
 		'''
+		testlist: test (',' test)* [',']
+		testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
 		test: or_test ['if' or_test 'else' test] | lambdef
 		test_nocond: or_test | lambdef_nocond
 		'''
@@ -819,6 +831,7 @@ class PythonASTBuilder:
 		else:
 			elts = self.get_expression_list(tests)
 			return ast.Tuple(elts, ast.Load, tests)
+
 
 
 	def handle_expr(self, expr_node):

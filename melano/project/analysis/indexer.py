@@ -258,6 +258,7 @@ class Indexer(ASTVisitor):
 			if name not in self.context.symbols:
 				sym = self.context.add_symbol(name)
 				node.hl = sym
+
 			# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
 			if not node.hl:
 				node.hl = self.context.lookup(name)

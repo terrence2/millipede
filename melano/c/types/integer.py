@@ -37,9 +37,14 @@ class CIntegerLL(LLType):
 			return out
 
 
-	def not_(self, ctx):
-		out = CIntegerLL(None, self.visitor)
-		out.declare(self.visitor.scope.context)
+	def as_ssize(self, ctx):
+		return self
+
+
+	def not_(self, ctx, out=None):
+		if not out:
+			out = CIntegerLL(None, self.visitor)
+			out.declare(self.visitor.scope.context, name="_inv_rv")
 		ctx.add(c.Assignment('=', c.ID(out.name), c.UnaryOp('!', c.ID(self.name))))
 		return out
 

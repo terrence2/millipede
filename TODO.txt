@@ -3,3 +3,6 @@ py2c:
 * Make builtins const?
 * __warn_unused_result__?
 * Audit use of python api's and ensure we are using the abstract protocols where possible
+
+CLEANUPS:
+* rename PyMelanoFunction to MgFunction or MpFunction or _anything_ else

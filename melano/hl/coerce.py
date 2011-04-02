@@ -15,6 +15,8 @@ class Coerce(Entity):
 	def __init__(self, coerce_type:int, *children):
 		super().__init__()
 
+		self.ll = None
+
 		self.coerce_type = coerce_type
 		self.children = children
 		#self.ll = None

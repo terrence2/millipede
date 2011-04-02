@@ -74,3 +74,16 @@ class PyTupleLL(PyObjectLL):
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyTuple_Size'), c.ExprList(c.ID(self.name)))))
 		return out_inst
 
+
+	def get_slice(self, ctx, start:int or CIntegerLL, end:int or CIntegerLL, out_inst=None):
+		if not out_inst:
+			out_inst = PyTupleLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_slice_out")
+
+		start_ref = c.Constant('integer', start) if isinstance(start, int) else c.ID(end.as_ssize(ctx).name)
+		end_ref = c.Constant('integer', end) if isinstance(end, int) else c.ID(end.as_ssize(ctx).name)
+
+		ctx.add(c.Assignment('=', c.ID(out_inst.name),
+					c.FuncCall(c.ID('PyTuple_GetSlice'), c.ExprList(c.ID(self.name), start_ref, end_ref))))
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst

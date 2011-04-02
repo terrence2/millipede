@@ -23,6 +23,7 @@ class PyDictLL(PyObjectLL):
 	def set_item_string(self, ctx, name:str, var:PyObjectLL):
 		tmp = CIntegerLL(None, self.visitor)
 		tmp.declare(self.visitor.scope.context, name='_set_rv')
+		var = var.as_pyobject(ctx)
 		var.incref(ctx)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyDict_SetItemString'), c.ExprList(
 											c.ID(self.name), c.Constant('string', name), c.ID(var.name)))))
@@ -58,3 +59,11 @@ class PyDictLL(PyObjectLL):
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyDict_Update'), c.ExprList(c.ID(self.name), c.ID(other.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
 
+
+	def copy(self, ctx, out_inst=None):
+		if out_inst is None:
+			out_inst = PyDictLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_dict_cp")
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyDict_Copy'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst

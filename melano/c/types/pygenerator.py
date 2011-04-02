@@ -24,9 +24,28 @@ class PyGeneratorLL(PyFunctionLL):
 
 
 	def create_runnerfunc(self, tu, args, vararg, kwonlyargs, kwarg):
+		body = c.Compound()
+		body.visitor = self.visitor
+		body.reserve_name('gen_args')
+
+		# create ll insts and declare all args here to match normal functions decl order
+		for arg in args:
+			ll_inst = self.visitor.create_ll_instance(arg.arg.hl)
+			ll_inst.declare(self.visitor.scope.context)
+		if vararg:
+			ll_inst = self.visitor.create_ll_instance(vararg.hl)
+			ll_inst.declare(self.visitor.scope.context)
+		for kwarg in kwonlyargs:
+			ll_inst = self.visitor.create_ll_instance(arg.arg.hl)
+			ll_inst.declare(self.visitor.scope.context)
+		if kwarg:
+			ll_inst = self.visitor.create_ll_instance(kwarg.hl)
+			ll_inst.declare(self.visitor.scope.context)
+
+
 		param_list = c.ParamList(c.Decl('gen_args', c.PtrDecl(c.TypeDecl('gen_args', c.IdentifierType('void')))))
 		return_ty = c.TypeDecl(None, c.IdentifierType('void'))
-		self._create_runner_common(tu, param_list, return_ty)
+		self._create_runner_common(tu, param_list, return_ty, body)
 
 
 	def transfer_to_runnerfunc(self, ctx, args, vararg, kwonlyargs, kwarg):
