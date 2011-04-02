@@ -17,12 +17,17 @@ import subprocess
 
 
 def pytest_generate_tests(metafunc):
+	tests = []
 	if "testfile" in metafunc.funcargnames:
 		for root, _, files in os.walk('test'):
 			for fn in files:
 				if fn.endswith('.py') and not fn.startswith('_') and fn != 'test_all.py':
 					path = os.path.join(root, fn)
-					metafunc.addcall(funcargs=dict(testfile=path, root=root), id=path)
+					tests.append((path, root))
+
+	tests.sort()
+	for path, root in tests:
+		metafunc.addcall(funcargs=dict(testfile=path, root=root), id=path)
 
 
 def test_all(testfile, root):
