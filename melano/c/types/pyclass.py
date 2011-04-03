@@ -30,7 +30,7 @@ class PyClassLL(PyObjectLL):
 								c.Decl('self', c.PtrDecl(c.TypeDecl('self', c.IdentifierType('PyObject')))),
 								c.Decl('args', c.PtrDecl(c.TypeDecl('args', c.IdentifierType('PyObject')))),
 								c.Decl('kwargs', c.PtrDecl(c.TypeDecl('kwargs', c.IdentifierType('PyObject')))))
-		name = tu.reserve_name(self.hlnode.owner.name + '_builder')
+		name = tu.reserve_name(self.hlnode.owner.global_c_name + '_builder')
 		self.c_builder_func = c.FuncDef(
 			c.Decl(name,
 				c.FuncDecl(param_list,
@@ -45,9 +45,8 @@ class PyClassLL(PyObjectLL):
 		ctx.add(c.Comment('Declare Class creation pycfunction "{}"'.format(self.hlnode.owner.name)))
 
 		# create the function pyobject itself
-		name = self.hlnode.owner.name + "_builder_pycfunc"
 		self.c_builder_obj = PyObjectLL(self.hlnode, self.visitor)
-		self.c_builder_obj.declare(ctx, name=name)
+		self.c_builder_obj.declare(ctx, name=self.hlnode.owner.name + "_builder_pycfunc")
 		c_name = c.Constant('string', PyStringLL.str2c(self.hlnode.owner.name))
 		ctx.add(c.Assignment('=', c.ID(self.c_builder_obj.name), c.FuncCall(c.ID('PyMelanoFunction_New'), c.ExprList(
 													c_name, c.ID(self.c_builder_func.decl.name), c.ID('NULL')))))
@@ -58,7 +57,7 @@ class PyClassLL(PyObjectLL):
 
 	def declare_pyclass(self, tu):
 		self.c_obj = PyObjectLL(self.hlnode, self.visitor)
-		self.c_obj.declare(tu, quals=['static'], name=self.hlnode.owner.name)
+		self.c_obj.declare(tu, quals=['static'], name=self.hlnode.owner.global_c_name)
 		return self.c_obj
 
 

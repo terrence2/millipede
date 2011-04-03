@@ -32,6 +32,15 @@ class Name(Entity):
 		self.ll = None
 
 
+	@property
+	def global_c_name(self):
+		'''Get a name appropriate for use as the base of a c symbol.  Since we are in c, the name should reflect
+			the full scope of the item.'''
+		if self.parent:
+			return self.parent.owner.global_c_name + '_' + self.name
+		return self.name
+
+
 	def get_type(self) -> type:
 		'''
 		Query the type list to find the most appropriate type for this name.
@@ -71,3 +80,5 @@ class Name(Entity):
 			self.scope.show(level + 1)
 		else:
 			logging.info('{}Name: {}'.format('\t' * level, self.name))
+
+

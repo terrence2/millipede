@@ -90,9 +90,9 @@ class PyFunctionLL(PyObjectLL):
 
 		# create the function pyobject itself
 		self.c_obj = PyObjectLL(self.hlnode, self.visitor)
-		self.c_obj.declare(tu, ['static'], name=self.hlnode.owner.name + "_pycfunc")
+		self.c_obj.declare(tu, ['static'], name=self.hlnode.owner.global_c_name + "_pycfunc")
 		ctx.add(c.Assignment('=', c.ID(self.c_obj.name), c.FuncCall(c.ID('PyMelanoFunction_New'), c.ExprList(
-													c_name, c.ID(self.c_pystub_name), c_docstring))))
+													c_name, c.ID(self.c_pystub_func.decl.name), c_docstring))))
 		self.fail_if_null(ctx, self.c_obj.name)
 
 		return self.c_obj
@@ -107,11 +107,11 @@ class PyFunctionLL(PyObjectLL):
 								c.Decl('kwargs', c.PtrDecl(c.TypeDecl('kwargs', c.IdentifierType('PyObject')))))
 
 		# create the c function that will correspond to the py function
-		self.c_pystub_name = tu.reserve_name(self.hlnode.owner.name + '_pystub')
+		name = tu.reserve_name(self.hlnode.owner.global_c_name + '_pystub')
 		self.c_pystub_func = c.FuncDef(
-			c.Decl(self.c_pystub_name,
+			c.Decl(name,
 				c.FuncDecl(param_list,
-						c.PtrDecl(c.TypeDecl(self.c_pystub_name, c.IdentifierType('PyObject')))), quals=['static']),
+						c.PtrDecl(c.TypeDecl(name, c.IdentifierType('PyObject')))), quals=['static']),
 			c.Compound()
 		)
 		tu.add_fwddecl(self.c_pystub_func.decl)
@@ -193,7 +193,6 @@ class PyFunctionLL(PyObjectLL):
 				with self.visitor.new_context(query_default_inst.iffalse):
 					if kwargs_inst:
 						kwargs_inst.del_item_string(self.visitor.context, str(arg.arg))
-
 			self.stub_arg_insts.extend(arg_insts)
 
 		# add unused args to varargs and pass if in taken args or error if not
@@ -249,18 +248,8 @@ class PyFunctionLL(PyObjectLL):
 				self.fail_if_null(have_kwarg.iffalse, kwarg_insts[i].name)
 			self.stub_arg_insts.extend(kwarg_insts)
 
-		#add unused kwargs to a new dict (it has to be new, unfortunately) and pass if needed or error if not
 		if kwarg:
-			ctx.add(c.Comment('load kwargs'))
 			self.stub_arg_insts.append(kwargs_inst)
-
-			#PyDictLL(None, self.visitor)
-			##kwarg_inst = self.visitor.create_ll_instance(kwarg.hl)
-			#kwarg_inst = PyObjectLL(kwarg.hl, self.visitor)
-			#kwarg_inst.declare(self.visitor.scope.context)
-			## FIXME: we _should_ remove all of the args that we found through normal means...
-			#kwarg_inst.assign_name(ctx, kwargs_dict)
-			#self.stub_arg_insts.append(kwarg_inst)
 
 
 	def _buildargs(self, args, vararg, kwonlyargs, kwarg):
@@ -278,6 +267,7 @@ class PyFunctionLL(PyObjectLL):
 		out.extend([c.ID(arg.arg.hl.ll.name) for arg in kwonlyargs])
 		if kwarg: out.extend([c.ID(kwarg.hl.ll.name)])
 		return out
+
 
 	def transfer_to_runnerfunc(self, ctx, args, vararg, kwonlyargs, kwarg):
 		#args = self._buildargs_idlist(args, vararg, kwonlyargs, kwarg)
@@ -326,7 +316,7 @@ class PyFunctionLL(PyObjectLL):
 
 
 	def _create_runner_common(self, tu, param_list, return_ty, body):
-		name = tu.reserve_name(self.hlnode.owner.name + '_runner')
+		name = tu.reserve_name(self.hlnode.owner.global_c_name + '_runner')
 		self.c_runner_func = c.FuncDef(
 			c.Decl(name, c.FuncDecl(param_list, return_ty), quals=['static']),
 			body
