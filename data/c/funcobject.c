@@ -293,10 +293,10 @@ meth_richcompare(PyObject *self, PyObject *other, int op)
     return res;
 }
 
-static Py_hash_t
+static Py_ssize_t
 meth_hash(PyMelanoFunctionObject *a)
 {
-    Py_hash_t x;
+    Py_ssize_t x;
     x = _Py_HashPointer((void*)(a->m_func));
     return x;
 }
