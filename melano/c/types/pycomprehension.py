@@ -4,6 +4,7 @@ All rights reserved.
 '''
 from melano.c import ast as c
 from melano.c.types.lltype import LLType
+from melano.hl.nameref import NameRef
 
 
 class PyComprehensionLL(LLType):
@@ -14,6 +15,7 @@ class PyComprehensionLL(LLType):
 
 	def prepare_locals(self, context):
 		for name, sym in self.hlnode.symbols.items():
+			if isinstance(sym, NameRef): continue # skip refs, only create names created here
 			self.locals_map[name] = self.visitor.create_ll_instance(sym)
 			self.locals_map[name].declare(self.visitor.scope.context)
 
