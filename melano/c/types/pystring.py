@@ -23,7 +23,8 @@ class PyStringLL(PyObjectLL):
 			('\n', '\\n'),
 			('\t', '\\t'),
 			('\v', '\\v'),
-			('"', '\\"')
+			('"', '\\"'),
+			('\\\\\\\\', '\\\\')
 		]
 		for k, v in subs:
 			s = s.replace(k, v)
