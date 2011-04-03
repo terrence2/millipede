@@ -34,7 +34,7 @@ class PyFunctionLL(PyObjectLL):
 		self.stub_self_inst = None
 		self.stub_args_tuple = None
 		self.stub_kwargs_dict = None
-		self.stub_arg_insts = None
+		self.stub_arg_insts = []
 
 
 	def prepare(self):
