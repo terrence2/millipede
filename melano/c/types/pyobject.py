@@ -265,13 +265,14 @@ class PyObjectLL(LLType):
 		self.fail_if_null(ctx, out.name)
 
 
-	def not_(self, ctx, out=None):
-		if not out:
-			out = CIntegerLL(None, self.visitor)
-			out.declare(self.visitor.scope.context, name="_not_rv")
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Not'), c.ExprList(c.ID(self.name)))))
-		self.fail_if_negative(ctx, out.name)
-		return out
+	def not_(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = CIntegerLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_not_rv")
+		assert isinstance(out_inst, CIntegerLL)
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_Not'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_negative(ctx, out_inst.name)
+		return out_inst
 	## END Unary Ops ##
 
 
