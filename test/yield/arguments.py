@@ -23,10 +23,10 @@ for i in foo(0, 1, c='a', d='b'):
 #out: b
 
 print('kwonlyargs')
-for i in foo('a', 'b', 'c', 'd'):
-	print(i)
+try:
+	for i in foo('a', 'b', 'c', 'd'):
+		print(i)
+except TypeError:
+	print('te')
 #out: kwonlyargs
-#out: a
-#out: b
-#out: 0
-#out: 1
+#out: te
