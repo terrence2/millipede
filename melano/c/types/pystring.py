@@ -19,6 +19,7 @@ class PyStringLL(PyObjectLL):
 		'''Reformats a python string to make it suitable for use as a C string constant.'''
 		#FIXME: r prefixed strings
 		subs = [
+			('\\', '\\\\'),
 			('\n', '\\n'),
 			('\t', '\\t'),
 			('\v', '\\v'),
