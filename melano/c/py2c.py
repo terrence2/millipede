@@ -362,12 +362,15 @@ class Py2C(ASTVisitor):
 			# if we can't fit the full error context on one line, also print the number of lines longer it goes and the ending column
 			src = self.hl_module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
 			rng = (st[1], len(src))
-		src = src.strip().replace('"', '\\"')
 
 		self.context.add(
 					c.FuncCall(c.ID('__err_capture__'), c.ExprList(
-						c.Constant('string', filename), c.Constant('integer', st[0]), c.ID('__LINE__'), c.Constant('string', context),
-						c.Constant('string', src), c.Constant('integer', rng[0]), c.Constant('integer', rng[1]))))
+						c.Constant('string', PyStringLL.str2c(filename)),
+						c.Constant('integer', st[0]), c.ID('__LINE__'),
+						c.Constant('string', PyStringLL.str2c(context)),
+						c.Constant('string', PyStringLL.str2c(src)),
+						c.Constant('integer', rng[0]),
+						c.Constant('integer', rng[1]))))
 
 
 	@contextmanager
