@@ -35,7 +35,7 @@ class PyGeneratorLL(PyFunctionLL):
 		if vararg:
 			ll_inst = self.visitor.create_ll_instance(vararg.hl)
 			ll_inst.declare(self.visitor.scope.context)
-		for kwarg in kwonlyargs:
+		for arg in kwonlyargs:
 			ll_inst = self.visitor.create_ll_instance(arg.arg.hl)
 			ll_inst.declare(self.visitor.scope.context)
 		if kwarg:
