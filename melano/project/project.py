@@ -118,15 +118,13 @@ class MelanoProject:
 
 	def build(self, target):
 		self.locate_modules()
-		self.show()
 		self.index_names()
-		self.show()
 		self.link_references()
 		self.derive_types()
-		self.show()
 		if target.endswith('.c'):
 			c = self.transform_lowlevel_c()
-			with COut('test.c') as v:
+			logging.info("Writing: {}".format(target))
+			with COut(target) as v:
 				v.visit(c)
 		else:
 			raise NotImplementedError('target must be a c file at the moment')
