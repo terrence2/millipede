@@ -49,7 +49,7 @@ class PyGeneratorLL(PyFunctionLL):
 
 
 	def transfer_to_runnerfunc(self, ctx, args, vararg, kwonlyargs, kwarg):
-		args = self._buildargs_idlist(args, vararg, kwonlyargs, kwarg)
+		#args = self._buildargs_idlist(args, vararg, kwonlyargs, kwarg)
 
 		## PyObject **tmp = calloc(sizeof(PyObject*), <len(args)> + 2)
 		#0: set to the function object
@@ -65,9 +65,10 @@ class PyGeneratorLL(PyFunctionLL):
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', self.SELF_INDEX)), c.ID('self')))
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', self.GENERATOR_INDEX)), c.ID('NULL')))
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))
-		for i, argid in enumerate(args, self.ARGS_INDEX):
-			ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', i)), argid))
-			ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(argid)))
+		if self.stub_arg_insts:
+			for i, arg_inst in enumerate(self.stub_arg_insts, self.ARGS_INDEX):
+				ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', i)), c.ID(arg_inst.name)))
+				ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(arg_inst.name))))
 
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.FuncCall(c.ID('MelanoGen_New'), c.ExprList(
 												c.FuncCall(c.ID('strdup'), c.ExprList(c.Constant('string', PyStringLL.str2c(self.hlnode.owner.name)))),
@@ -83,6 +84,7 @@ class PyGeneratorLL(PyFunctionLL):
 	def runner_load_args(self, ctx, args, vararg, kwonlyargs, kwarg):
 		arg_list = self._buildargs(args, vararg, kwonlyargs, kwarg)
 
+		#FIXME: do not re-declare here... maybe share this with pyfunction? 
 		for offset, arg in enumerate(arg_list, self.ARGS_INDEX):
 			ctx.add(c.Comment("set arg '{}'".format(str(arg.arg))))
 			inst = PyObjectLL(arg.arg.hl, self.visitor)
