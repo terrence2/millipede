@@ -59,12 +59,16 @@ class PyTupleLL(PyObjectLL):
 		ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(out_var.name))))
 
 
-	def get_item(self, ctx, offset:CIntegerLL, out_var):
+	def get_item(self, ctx, offset:CIntegerLL, out_inst=None):
 		if not isinstance(offset, CIntegerLL):
 			offset = offset.as_ssize(ctx)
-		ctx.add(c.Assignment('=', c.ID(out_var.name), c.FuncCall(c.ID('PyTuple_GetItem'), c.ExprList(c.ID(self.name), c.ID(offset.name)))))
-		out_var.fail_if_null(ctx, out_var.name)
-		out_var.incref(ctx)
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_item")
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyTuple_GetItem'), c.ExprList(c.ID(self.name), c.ID(offset.name)))))
+		self.fail_if_null(ctx, out_inst.name)
+		out_inst.incref(ctx)
+		return out_inst
 
 
 	def get_length(self, ctx, out_inst=None):

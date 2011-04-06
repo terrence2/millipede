@@ -566,10 +566,9 @@ class Py2C(ASTVisitor):
 			key = PyIntegerLL(None, self)
 			key.declare(self.scope.context)
 			for i, elt in enumerate(node.elts):
-				_ = self.visit(elt)
 				key.set_constant(self.context, i)
-				src_inst.get_item(self.context, key, elt.hl.ll)
-				self._store_any(elt, elt.hl.ll)
+				tmp = src_inst.get_item(self.context, key)
+				self._store_any(elt, tmp)
 		else:
 			raise NotImplementedError("Don't know how to assign to type: {}".format(type(node)))
 

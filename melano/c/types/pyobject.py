@@ -106,10 +106,14 @@ class PyObjectLL(LLType):
 
 
 
-	def get_item(self, ctx, key, out):
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_GetItem'), c.ExprList(
+	def get_item(self, ctx, key, out_inst=None):
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name="_item")
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_GetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name)))))
-		self.fail_if_null(ctx, out.name)
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst
 
 
 	def set_item(self, ctx, key, val):
