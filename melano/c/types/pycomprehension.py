@@ -4,14 +4,20 @@ All rights reserved.
 '''
 from melano.c import ast as c
 from melano.c.types.lltype import LLType
+from melano.c.types.pyobject import PyObjectLL
 from melano.hl.nameref import NameRef
 
 
 class PyComprehensionLL(LLType):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-
 		self.locals_map = {} # {str: inst}
+
+
+	def declare(self, ctx, quals=[], name=None):
+		super().declare(ctx, quals, name)
+		ctx.add_variable(c.Decl(self.name, PyObjectLL.typedecl(self.name), quals=quals, init=c.ID('NULL')), True)
+
 
 	def prepare_locals(self, context):
 		for name, sym in self.hlnode.symbols.items():

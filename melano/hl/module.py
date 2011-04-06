@@ -3,6 +3,7 @@ Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
 from melano.hl.builtins import Builtins
+from melano.hl.entity import Entity
 from melano.hl.name import Name
 from melano.hl.scope import Scope
 from melano.hl.types.pymodule import PyModuleType
@@ -11,7 +12,7 @@ import logging
 import tokenize
 
 
-class MelanoModule(Scope):
+class MelanoModule(Scope, Entity):
 	'''
 	Represents one python-level module.
 	'''
@@ -88,6 +89,10 @@ class MelanoModule(Scope):
 		except KeyError:
 			return self.builtins_scope.lookup(name)
 		raise KeyError(name)
+
+
+	def has_symbol(self, name:str) -> bool:
+		return name in self.symbols
 
 
 	def lookup_star(self) -> [str]:

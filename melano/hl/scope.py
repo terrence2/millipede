@@ -15,6 +15,8 @@ class Scope:
 	A symbol table.
 	'''
 	def __init__(self, owner:Name):
+		super().__init__()
+
 		self.symbols = OrderedDict()
 		self.owner = owner
 

@@ -28,6 +28,7 @@ from melano.c.types.pytype import PyTypeLL
 from melano.hl.class_ import MelanoClass
 from melano.hl.function import MelanoFunction
 from melano.hl.module import MelanoModule
+from melano.hl.nameref import NameRef
 from melano.hl.types.hltype import HLType
 from melano.hl.types.integer import CIntegerType
 from melano.hl.types.pybool import PyBoolType
@@ -579,13 +580,15 @@ class Py2C(ASTVisitor):
 		scope.ll.del_attr_string(self.context, str(target))
 
 
-	def _store_name(self, target, val):
+	def _store_name(self, target, val, scope=None):
 		'''
 		Common "normal" assignment handler.  Things like for-loop targets and with-stmt vars 
 			need the same full suite of potential assignment targets as normal assignments.  With
 			the caveat that only assignment will have non-Name children.
 		
-		target -- the node that is the lhs of the storage.
+		target -- the node that is the lhs of the storage
+		val -- the low-level object that will get set on it
+		scope -- defaults to the parent of the symbol, but sometimes we need to assign into a different scope.
 		'''
 		assert isinstance(target, py.Name)
 
@@ -1322,43 +1325,41 @@ class Py2C(ASTVisitor):
 		return out_inst
 
 
+	def _import_module(self, module, fullname):
+		tmp = PyObjectLL(None, self)
+		tmp.declare(self.scope.context)
+		if module.modtype == MelanoModule.PROJECT:
+			# call the builder function to construct or access the module
+			self.comment("Import local module {}".format(str(module.python_name)))
+			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(module.ll.c_builder_name), c.ExprList())))
+		else:
+			# import the module at the c level
+			self.comment("Import external module {}".format(str(module.python_name)))
+			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+																												c.Constant('string', fullname)))))
+		tmp.fail_if_null(self.context, tmp.name)
+		tmp.incref(self.context)
+		return tmp
+
+
 	def visit_Import(self, node):
 		def _import_as_name(self, node, name, asname):
 			ref = asname.hl.scope
 			assert ref is not None
 			tgt = self.visit(asname)
-			self.comment("Import module {} as {}".format(str(name), str(asname)))
-			tmp = PyObjectLL(None, self)
-			tmp.declare(self.scope.context)
-			if ref.modtype == MelanoModule.PROJECT:
-				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(ref.ll.c_builder_name), c.ExprList())))
-			else:
-				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																												c.Constant('string', str(name))))))
-			tmp.fail_if_null(self.context, tmp.name)
-			tmp.incref(self.context)
+			tmp = self._import_module(ref, str(name))
+			self.comment("store imported '{}' as '{}'".format(str(name), str(asname)))
 			self._store_name(asname, tmp)
 
 		def _import_name(self, node, name):
 			ref = name.hl.scope
 			tgt = self.visit(name)
 			assert ref is not None
-
-			self.comment("Import module {}".format(str(name)))
-			tmp = PyObjectLL(None, self)
-			tmp.declare(self.scope.context)
-			if ref.modtype == MelanoModule.PROJECT:
-				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(ref.ll.c_builder_name), c.ExprList())))
-			else:
-				self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																												c.Constant('string', str(name))))))
-			tmp.fail_if_null(self.context, tmp.name)
-			tmp.incref(self.context)
+			tmp = self._import_module(ref, str(name))
 			self._store_name(name, tmp)
 
 		def _import_attribute(self, node, attr):
 			parts = []
-
 			prior = None
 			for name in attr.get_names():
 				ref = name.hl.scope
@@ -1369,16 +1370,7 @@ class Py2C(ASTVisitor):
 				fullname = '.'.join(parts)
 
 				# import the next part of the name
-				self.comment("Import module '{}'".format(fullname))
-				tmp = PyObjectLL(None, self)
-				tmp.declare(self.scope.context)
-				if ref.modtype == MelanoModule.PROJECT:
-					self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(ref.ll.c_builder_name), c.ExprList())))
-				else:
-					self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																													c.Constant('string', fullname)))))
-				tmp.fail_if_null(self.context, tmp.name)
-				tmp.incref(self.context)
+				tmp = self._import_module(ref, fullname)
 
 				# subsequent sets are in the wrong dict... how does this decide where to set attrs?
 				if name is attr.first():
@@ -1400,47 +1392,38 @@ class Py2C(ASTVisitor):
 
 	def visit_ImportFrom(self, node):
 		mod = node.module.hl
-
-		# load the module reference
-		tmp = PyObjectLL(None, self)
-		tmp.declare(self.scope.context)
-		if mod.modtype == MelanoModule.PROJECT:
-			# call the builder function to construct or access the module
-			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(mod.ll.c_builder_name), c.ExprList())))
-		else:
-			# import the module at the c level
-			modname = '.' * node.level + str(node.module)
-			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
-																												c.Constant('string', str(modname))))))
-		tmp.fail_if_null(self.context, tmp.name)
-		tmp.incref(self.context)
+		base_module_inst = self._import_module(mod, mod.python_name)
 
 		# pluck names out of the module and into our namespace
-		def _import_name(name, asname):
+		def _import_name(name, from_module_inst):
 			# load the name off of the module
 			val = PyObjectLL(None, self)
 			val.declare(self.scope.context)
-			self.context.add(c.Assignment('=', c.ID(val.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
-																		c.ID(tmp.name), c.Constant('string', PyStringLL.str2c(str(name)))))))
+			from_module_inst.get_attr_string(self.context, PyStringLL.str2c(str(name)), val)
 			val.fail_if_null(self.context, val.name)
-			if asname:
-				self._store_name(asname, val)
-			else:
-				self._store_name(name, val)
+			return val
 
 		for alias in node.names:
-			if alias.asname:
-				tgt = self.visit(alias.asname)
-				_import_name(alias.name, alias.asname)
+			# handle star names separately
+			if str(alias.name) == '*':
+				for name in mod.lookup_star():
+					py_name = py.Name(name, py.Store, None)
+					py_name.hl = self.scope.symbols[name]
+					val = _import_name(py_name, base_module_inst)
+					self._store_name(py_name, val)
+				continue
+
+			# get the reference -- hl is always stored on the name by the indexer
+			if isinstance(alias.name.hl, NameRef) and isinstance(alias.name.hl.ref, MelanoModule):
+				val = self._import_module(alias.name.hl.ref, alias.name.hl.ref.python_name)
 			else:
-				if str(alias.name) == '*':
-					for name in mod.lookup_star():
-						py_name = py.Name(name, py.Store, None)
-						py_name.hl = self.hl_module.symbols[name]
-						_import_name(py_name, None)
-				else:
-					tgt = self.visit(alias.name)
-					_import_name(alias.name, alias.asname)
+				val = _import_name(alias.name, base_module_inst)
+
+			# store the name or asname as needed
+			if alias.asname:
+				self._store_name(alias.asname, val)
+			else:
+				self._store_name(alias.name, val)
 
 
 	def visit_Index(self, node):
@@ -1920,7 +1903,8 @@ class Py2C(ASTVisitor):
 		if node.op == py.Invert:
 			o.invert(self.context, inst)
 		elif node.op == py.Not:
-			o.not_(self.context, inst)
+			tmp = o.not_(self.context)
+			inst.assign_name(self.context, tmp.as_pyobject(self.context))
 		elif node.op == py.UAdd:
 			o.positive(self.context, inst)
 		elif node.op == py.USub:

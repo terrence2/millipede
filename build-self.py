@@ -12,7 +12,7 @@ def main():
 
 	project = MelanoProject('melano', programs=['run'], roots=[os.path.expanduser('~/Projects/melano')])
 	project.configure()
-	project.build('build/melano.c')
+	project.build('test.c')
 
 	#app = MelanoApplication(project, sys.argv)
 	#signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c

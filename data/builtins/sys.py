@@ -1,1 +1,37 @@
 #TODO: put stubs here
+__stderr__ = None
+__stdin__ = None
+__stdout__ = None
+api_version = 1013
+argv = []
+builtin_module_names = ('__main__', '_ast', '_codecs', '_functools', '_io', '_locale', '_sre', '_symtable', '_thread', '_warnings', '_weakref', 'builtins', 'errno', 'gc', 'imp', 'marshal', 'posix', 'pwd', 'signal', 'sys', 'xxsubtype', 'zipimport')
+byteorder = 'little'
+copyright = 'Copyright (c) 2001-2010 Python Software Foundation.\nAll Rights Reserved.\n\nCopyright (c) 2000 BeOpen.com.\nAll Rights Reserved.\n\nCopyright (c) 1995-2001 Corporation for National Research Initiatives.\nAll Rights Reserved.\n\nCopyright (c) 1991-1995 Stichting Mathematisch Centrum, Amsterdam.\nAll Rights Reserved.'
+dont_write_bytecode = False
+exec_prefix = '/usr'
+executable = '/usr/bin/python3.1'
+flags = None
+float_info = None
+float_repr_style = 'short'
+hexversion = 50398192
+int_info = None
+last_value = None
+maxsize = 9223372036854775807
+maxunicode = 1114111
+meta_path = []
+modules = {}
+path = []
+path_hooks = []
+path_importer_cache = {}
+platform = 'linux2'
+prefix = '/usr'
+ps1 = '>>> '
+ps2 = '... '
+stderr = None
+stdin = None
+stdout = None
+subversion = ('CPython', 'tags/r313', '86834')
+version = '3.1.3 (r313:86834, Feb 27 2011, 17:07:58) \n[GCC 4.4.5]'
+version_info = None
+warnoptions = []
+

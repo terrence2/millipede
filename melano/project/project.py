@@ -138,7 +138,8 @@ class MelanoProject:
 
 		# load all modules in depth-first order
 		for program in self.programs:
-			for modname, filename, modtype, ref_paths in importer.trace_import_tree(program):
+			importer.trace_import_tree(program)
+			for modname, filename, modtype, ref_paths in reversed(importer.out):
 				if filename in self.modules_by_path:
 					continue
 				logging.info("mapping module: " + modname + ' -> ' + filename)
@@ -154,8 +155,10 @@ class MelanoProject:
 					mod.ast.hl = mod
 				# store aside the refmap for after we have loaded all modules
 				ref_paths_by_module[filename] = ref_paths
-			# NOTE: mark each program (last out in depth first order) as having real name __main__
-			self.modules_by_path[filename].set_as_main()
+
+				# NOTE: mark each program as having real name __main__
+				if modname == program:
+					mod.set_as_main()
 
 		# after we have loaded all modules, fill in the refs in each module
 		for filename, mod in self.modules_by_path.items():
@@ -168,7 +171,9 @@ class MelanoProject:
 		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
 		missing = {}
 		records = {}
+		visited = set()
 		def _index(self):
+			nonlocal missing, records, visited
 			for fn in self.order:
 				if fn not in missing or missing[fn] > 0:
 					mod = self.modules_by_path[fn]
@@ -176,11 +181,12 @@ class MelanoProject:
 						logging.info("Indexing: {}".format(mod.filename))
 					else:
 						logging.info("[{} remaining] Indexing: {}".format(sum(list(missing.values())), fn))
-					indexer = Indexer(self, mod)
+					indexer = Indexer(self, mod, visited)
 					indexer.visit(mod.ast)
-					if self.is_local(mod):
-						missing[fn] = len(indexer.missing)
-						records[fn] = indexer.missing
+					missing[fn] = len(indexer.missing)
+					records[fn] = indexer.missing
+					if 0 == missing[fn]:
+						visited.add(mod)
 
 		logging.info("Indexing: Phase 1, {} files".format(len(self.order)))
 		_index(self)
@@ -192,7 +198,6 @@ class MelanoProject:
 			cur = sum(list(missing.values()))
 			if cur == prior:
 				raise MissingSymbolsError({fn: sym for fn, sym in records.items() if len(sym) > 0})
-
 
 
 	def link_references(self):
@@ -222,7 +227,8 @@ class MelanoProject:
 			if self.is_local(mod):
 				logging.info("Preparing: {}".format(mod.filename))
 				visitor.preallocate(mod.ast)
-		for mod in self.modules_by_path.values():
+		for fn in self.order:
+			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
 				logging.info("Emitting: {}".format(mod.filename))
 				visitor.visit(mod.ast)
@@ -258,6 +264,7 @@ class MelanoProject:
 			ast = self.parser_driver.parse_string(source)
 			with open(cachefile, 'wb') as fp:
 				pickle.dump(ast, fp, pickle.HIGHEST_PROTOCOL)
+				self.cached[checksum] = True
 		return ast
 
 
@@ -273,3 +280,4 @@ class MelanoProject:
 			mod.ast = self.parser_driver.parse_string(mod.source)
 			with open(cachefile, 'wb') as fp:
 				pickle.dump(mod.ast, fp, pickle.HIGHEST_PROTOCOL)
+				self.cached[checksum] = True

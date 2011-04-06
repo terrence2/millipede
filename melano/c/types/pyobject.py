@@ -18,7 +18,7 @@ class PyObjectLL(LLType):
 
 	def declare(self, ctx, quals=[], name=None):
 		super().declare(ctx, quals, name)
-		ctx.add_variable(c.Decl(self.name, c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('PyObject'))), quals=quals, init=c.ID('NULL')), True)
+		ctx.add_variable(c.Decl(self.name, self.typedecl(self.name), quals=quals, init=c.ID('NULL')), True)
 
 
 	def clear(self, ctx):
@@ -48,7 +48,7 @@ class PyObjectLL(LLType):
 	def str(self, ctx, out_inst=None):
 		'''Convert to a string.'''
 		if not out_inst:
-			out_inst = PyObjectLL(None, self.visitor)
+			out_inst = PyStringLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context, name="_str")
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_Str'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out_inst.name)
@@ -294,6 +294,24 @@ class PyObjectLL(LLType):
 		return out
 
 
+	### Mapping
+	def mapping_size(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = CIntegerLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name='_size')
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyMapping_Size'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_negative(ctx, out_inst.name)
+		return out_inst
+
+	def mapping_keys(self, ctx, out_inst=None):
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name='_keys')
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyMapping_Keys'), c.ExprList(c.ID(self.name)))))
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst
+	### End Mapping
+
 	### Sequence
 	def sequence_contains(self, ctx, item):
 		out = CIntegerLL(None, self.visitor)
@@ -304,10 +322,14 @@ class PyObjectLL(LLType):
 		return out
 
 
-	def sequence_get_item(self, ctx, key, out):
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_GetItem'), c.ExprList(
+	def sequence_get_item(self, ctx, key, out_inst=None):
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context)
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_GetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name)))))
-		self.fail_if_null(ctx, out.name)
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst
 
 
 	def sequence_inplace_concat(self, ctx, seq_inst, out_inst=None):
@@ -397,5 +419,6 @@ class PyObjectLL(LLType):
 
 
 from melano.c.types.integer import CIntegerLL
+from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
 from melano.c.types.pytype import PyTypeLL

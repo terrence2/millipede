@@ -8,6 +8,7 @@ from melano.hl.comprehension import MelanoComprehension
 from melano.hl.constant import Constant
 from melano.hl.function import MelanoFunction
 from melano.hl.name import Name
+from melano.hl.nameref import NameRef
 from melano.hl.scope import Scope
 from melano.hl.types.pybytes import PyBytesType
 from melano.hl.types.pydict import PyDictType
@@ -30,11 +31,14 @@ class Indexer(ASTVisitor):
 	This builds the high-level scope tree.
 	'''
 
-	def __init__(self, project, module):
+	def __init__(self, project, module, visited):
 		super().__init__()
 		self.project = project
 		self.module = module
 		self.context = self.module
+
+		# modules which have been visited
+		self.visited = visited
 
 		# anon scopes need to be unique
 		self.anon_count = itertools.count()
@@ -169,20 +173,17 @@ class Indexer(ASTVisitor):
 			if alias.asname:
 				# Note: don't visit name if we have asname, since name is Load in this case, but it's not a Load on this module
 				self.visit(alias.asname)
-				try:
-					alias.asname.hl.scope = self.module.refs[str(alias.name)]
-				except KeyError:
-					logging.info("Skipping missing: {}".format(str(alias.name)))
-					self.missing.add(str(alias.name))
+				alias.asname.hl.scope = self.module.refs[str(alias.name)]
 			else:
 				if isinstance(alias.name, py.Attribute):
 					assert alias.name.is_all_names()
 					parts = []
 					for name in alias.name.get_names():
-						# visit the name to build the hl node
-						# NOTE: override as Store before visiting, since this is our one exception to "all attribute lhs are Load"
+						# NOTE: don't bother visiting, since this recorded as a Load
 						name.set_context(py.Store)
-						self.visit(name)
+						name.hl = Name(str(name), self.context)
+						if name is alias.name.first():
+							self.context.symbols[str(name)] = name.hl
 						# find the real name of this part of the module and create a ref to the underlying module
 						parts.append(str(name))
 						fullname = '.'.join(parts)
@@ -193,22 +194,59 @@ class Indexer(ASTVisitor):
 
 
 	def visit_ImportFrom(self, node):
-		modname = '.' * node.level + str(node.module)
-		mod = self.module.refs.get(modname, None)
+		# query the module (keeping in mind that this may be a package we want)
+		pkg_or_mod_name = '.' * node.level + str(node.module)
+		mod = self.module.refs.get(pkg_or_mod_name, None)
+		node.module.hl = mod
+
 		if mod is None:
-			logging.info("Skipping missing: {}".format(modname))
-			self.missing.add(modname)
+			logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
+			self.missing.add(pkg_or_mod_name + '.*')
 			return
 
 		for alias in node.names:
-			if alias.asname:
-				self.visit(alias.asname)
-				alias.asname.hl.scope = mod
+			if str(alias.name) == '*':
+				for name in mod.lookup_star():
+					# don't visit until we have already visited the parent
+					if mod not in self.visited:
+						logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
+						self.missing.add(pkg_or_mod_name + '.*')
+						return
+					if not self.context.has_symbol(name):
+						ref = NameRef(mod.lookup(name))
+						ref.parent = self.context
+						self.context.add_symbol(name, ref)
+				continue
+
+			# Note: the queried name may be in the given module (maybe an __init__), or 
+			#		it may be a submodule in the package of that name
+			if mod.has_symbol(str(alias.name)):
+				sym = mod.lookup(str(alias.name))
+			elif mod.filename.endswith('__init__.py'):
+				real_filename = mod.filename[:-11] + str(alias.name).replace('.', '/') + '.py'
+				try:
+					sym = self.project.modules_by_path[real_filename]
+				except KeyError:
+					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
+					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
+					return
 			else:
-				if str(alias.name) == '*':
-					pass # Note: add these cross-module refs in the linker
-				else:
-					self.visit(alias.name)
+				logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
+				self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
+				continue
+
+			ref = NameRef(sym)
+			ref.parent = self.context
+
+			if alias.asname:
+				#self.visit(alias.asname)
+				self.context.add_symbol(str(alias.asname), ref)
+				alias.asname.hl = ref
+				alias.name.hl = ref
+			else:
+				#self.visit(alias.name)
+				self.context.add_symbol(str(alias.name), ref)
+				alias.name.hl = ref
 
 
 	def visit_Lambda(self, node):

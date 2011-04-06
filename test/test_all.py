@@ -17,40 +17,47 @@ import subprocess
 
 
 def pytest_generate_tests(metafunc):
-	tests = []
-	if "testfile" in metafunc.funcargnames:
-		for root, _, files in os.walk('test'):
-			for fn in files:
-				if fn.endswith('.py') and not fn.startswith('_') and fn != 'test_all.py':
-					path = os.path.join(root, fn)
-					tests.append((path, root))
+	for interpreter in ('melano', 'python3.1', 'python3.3'):
+		tests = []
+		if "testfile" in metafunc.funcargnames:
+			for root, _, files in os.walk('test'):
+				for fn in files:
+					if fn.endswith('.py') and not fn.startswith('_') and fn != 'test_all.py':
+						path = os.path.join(root, fn)
+						tests.append((path, root))
+		tests.sort()
+		for path, root in tests:
+			id = interpreter + ':' + path
+			print(id)
+			metafunc.addcall(funcargs=dict(testfile=path, root=root, interpreter=interpreter), id=id)
 
-	tests.sort()
-	for path, root in tests:
-		metafunc.addcall(funcargs=dict(testfile=path, root=root), id=path)
 
-
-def test_all(testfile, root):
+def test_all(testfile, root, interpreter):
 	expect = load_expectations(testfile)
 	if expect['xfail']:
 		pytest.xfail()
 
-	fn = os.path.basename(testfile)
-	project = MelanoProject('test', programs=[fn[:-3]], roots=[root])
-	project.configure(limit='', verbose=False)
-	project.build('test.c')
+	if interpreter == 'melano':
+		fn = os.path.basename(testfile)
+		project = MelanoProject('test', programs=[fn[:-3]], roots=[root])
+		project.configure(limit='', verbose=False)
+		project.build('test.c')
 
-	p = subprocess.Popen(['make'])
-	out = p.communicate()
-	assert p.returncode == 0, "Failed Make: {}".format(out)
+		p = subprocess.Popen(['make'])
+		out = p.communicate()
+		assert p.returncode == 0, "Failed Make: {}".format(out)
 
-	p = subprocess.Popen([os.path.join(TESTDIR, 'test-prog')], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		p = subprocess.Popen([os.path.join(TESTDIR, 'test-prog')], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+
+	elif interpreter.startswith('python'):
+		p = subprocess.Popen([interpreter, testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+
 	out = p.communicate()
 	assert p.returncode == expect['returncode']
 	if not expect['skip_io']:
 		assert filter_output(out[0]) == expect['stdout']
 		assert filter_output(out[1]) == expect['stderr']
-	if expect['no_external']:
+	if interpreter == 'melano' and expect['no_external']:
 		with open('test.c', 'r') as fp:
 			assert len([ln for ln in fp if 'PyImport_ImportModule' in ln]) <= 1
 

@@ -34,6 +34,87 @@ class Importer:
 		self._visited = set()
 		self._renames = {}
 
+		# outputs
+		self.out = []
+
+
+	def get_existing(self, initial_modname):
+		matches = [i for i in self.out if i[0] == initial_modname]
+		if len(matches) > 1:
+			logging.error("More than one match found for module: {}".format(initial_modname))
+		if len(matches) == 0:
+			return None
+		return matches[0]
+
+
+	def trace_import_tree(self, initial_modname):
+		'''
+		Generate tuples of modnames, filenames, type, and the visitor.  This list will contain the source of all files 
+		that may possibly be referenced on any platform at any time by use of initial_path.  In general, this will 
+		be a much larger set of files than is actually used, but is the minimum set needed for static analysis of 
+		the program at initial_path.
+		'''
+		logging.debug("Tracing: {}".format(initial_modname))
+		absolute_modfile, base_location, module_type = self.find_best_path_for_modname(initial_modname)
+
+		# get the package directory for where we found the module
+		package_directory = os.path.dirname(absolute_modfile)
+
+		# check for opaque finds and skip them
+		logging.debug("Found file: {}".format(absolute_modfile))
+		if not absolute_modfile.endswith('.py'):
+			logging.debug("Opaque: {}".format(absolute_modfile))
+			self.out.append((initial_modname, absolute_modfile, module_type, {}))
+			return (initial_modname, absolute_modfile, module_type, {})
+
+		# don't loop
+		existing = self.get_existing(initial_modname)
+		if existing:
+			return existing
+
+		# visit and pull out refs and renames
+		logging.info("Scanning: {} -> {}".format(initial_modname, absolute_modfile))
+		ast = self.project.get_file_ast(absolute_modfile)
+		visitor = FindLinks()
+		visitor.visit(ast)
+		self._renames[initial_modname] = visitor.renames
+		out = (initial_modname, absolute_modfile, module_type, visitor.ref_paths)
+		self.out.append(out)
+
+		for imp in visitor.imports:
+			for alias in imp.names:
+				for modname in self.__import_name_parts(alias.name):
+					entry = self.trace_import_tree(modname)
+					last = entry[1]
+
+					# last module is always info about the module itself
+					assert last is not None
+					visitor.ref_paths[modname] = last
+
+		for imp in visitor.importfroms:
+			# find absolute module name
+			rel_pkg_or_mod_name = '.' * imp.level + str(imp.module)
+			abs_pkg_or_mod_name = self.find_absolute_modname(rel_pkg_or_mod_name, package_directory, base_location)
+
+			# fetch info on module and all children
+			entry = self.trace_import_tree(abs_pkg_or_mod_name)
+			last = entry[1]
+
+			# store last module path
+			assert last is not None
+			visitor.ref_paths[rel_pkg_or_mod_name] = last
+
+			# Note: the names in the from . import <names> may be either names in the module we just added, 
+			#		or they may also be modules under the package, if it is a package we just imported
+			if last.endswith('__init__.py'):
+				for alias in imp.names:
+					try:
+						self.trace_import_tree(abs_pkg_or_mod_name + '.' + str(alias.name))
+					except NoSuchModuleError:
+						pass
+
+		return out
+
 
 	def find_absolute_modname(self, maybe_rel_modname, package_directory, base_dir):
 		'''
@@ -67,8 +148,9 @@ class Importer:
 			maybe_rel_modname = maybe_rel_modname[1:]
 
 		# the real module name is the remainder of the package and the remainder of the modname
-		absolute_modname = '.'.join(package_parts + maybe_rel_modname.split('.'))
-		logging.info("Found rel modname: {} from {} in {}".format(absolute_modname, starting_rel_modname, starting_package_dir))
+		from_base_parts = [] if not maybe_rel_modname else maybe_rel_modname.split('.')
+		absolute_modname = '.'.join(package_parts + from_base_parts)
+		logging.debug("Found rel modname: {} from {} in {}".format(absolute_modname, starting_rel_modname, starting_package_dir))
 		return absolute_modname
 
 
@@ -85,73 +167,6 @@ class Importer:
 				yield '.'.join(parts)
 		else:
 			yield str(alias_name)
-
-
-	def trace_import_tree(self, initial_modname):
-		'''
-		Generate tuples of modnames, filenames, type, and the visitor.  This list will contain the source of all files 
-		that may possibly be referenced on any platform at any time by use of initial_path.  In general, this will 
-		be a much larger set of files than is actually used, but is the minimum set needed for static analysis of 
-		the program at initial_path.
-		'''
-		logging.info("Tracing: {}".format(initial_modname))
-		absolute_modfile, base_location, module_type = self.find_best_path_for_modname(initial_modname)
-
-		# get the package directory for where we found the module
-		package_directory = os.path.dirname(absolute_modfile)
-
-		# don't loop
-		if absolute_modfile in self._visited:
-			raise ImportLoop(absolute_modfile)
-		self._visited.add(absolute_modfile)
-
-		logging.info("Found file: {}".format(absolute_modfile))
-		if not absolute_modfile.endswith('.py'):
-			yield initial_modname, absolute_modfile, module_type, {}
-			return
-
-		ast = self.project.get_file_ast(absolute_modfile)
-		visitor = FindLinks()
-		visitor.visit(ast)
-		self._renames[initial_modname] = visitor.renames
-
-		for imp in visitor.imports:
-			for alias in imp.names:
-				for modname in self.__import_name_parts(alias.name):
-					# fetch info on module and all children
-					last = None
-					try:
-						for item in self.trace_import_tree(modname):
-							last = item[1]
-							yield item
-					except ImportLoop as ex:
-						last = ex.filename
-
-					# last module is always info about the module itself
-					assert last is not None
-					visitor.ref_paths[modname] = last
-
-		for imp in visitor.importfroms:
-			# find absolute module name
-			rel_modname = '.' * imp.level + str(imp.module)
-			abs_modname = self.find_absolute_modname(rel_modname, package_directory, base_location)
-
-			# fetch info on module and all children
-			last = None
-			try:
-				for item in self.trace_import_tree(abs_modname):
-					last = item[1]
-					yield item
-			except ImportLoop as ex:
-				last = ex.filename
-
-			# store last module path
-			assert last is not None
-			visitor.ref_paths[rel_modname] = last
-
-		yield initial_modname, absolute_modfile, module_type, visitor.ref_paths
-
-
 
 	def __get_renamed_modname(self, parent_modname, target_modname):
 		# check the cache
@@ -209,12 +224,11 @@ class Importer:
 					logging.debug("looking for {}".format(trial_abs_modpath))
 					if os.path.exists(trial_abs_modpath):
 						return trial_abs_modpath, base_path, ty
-				# 2) modpath might refer to a directory, so try with __init__
-				for ext in ['/__init__.py']:
-					trial_abs_modpath = trial_abs_noext_modpath + ext
-					logging.debug("looking for {}".format(trial_abs_modpath))
-					if os.path.exists(trial_abs_modpath):
-						return trial_abs_modpath, base_path, ty
+				# 2) modpath might refer to a directory / package, so try with __init__
+				trial_abs_modpath = os.path.join(trial_abs_noext_modpath, '__init__.py')
+				logging.debug("looking for {}".format(trial_abs_modpath))
+				if os.path.exists(trial_abs_modpath):
+					return trial_abs_modpath, base_path, ty
 
 		raise NoSuchModuleError(modname)
 

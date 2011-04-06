@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from melano.c import ast as c
 from melano.c.types.integer import CIntegerLL
 from melano.c.types.pydict import PyDictLL
+from melano.c.types.pyinteger import PyIntegerLL
 from melano.c.types.pyobject import PyObjectLL
 from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
@@ -164,8 +165,7 @@ class PyFunctionLL(PyObjectLL):
 				args_tuple.get_unchecked(query_inst.iftrue, i, arg_insts[i])
 
 				## get the keyword arg on the false side
-				have_kwarg = c.If(c.ID('kwargs'), c.Compound(), None)
-				query_inst.iffalse.add(have_kwarg)
+				have_kwarg = query_inst.iffalse.add(c.If(c.ID('kwargs'), c.Compound(), None))
 
 				### if we took kwargs, then get it directly
 				kwargs_dict.get_item_string_nofail(have_kwarg.iftrue, str(arg.arg), arg_insts[i])
@@ -248,8 +248,32 @@ class PyFunctionLL(PyObjectLL):
 				self.fail_if_null(have_kwarg.iffalse, kwarg_insts[i].name)
 			self.stub_arg_insts.extend(kwarg_insts)
 
+		# pass remainder of kwargs dict in as the kwarg slot
 		if kwarg:
 			self.stub_arg_insts.append(kwargs_inst)
+		'''
+		# if we have items left in the kwargs dict:
+		#		- if we don't take a kwargs slot, then raise a TypeError
+		#		- if the args would have overrided an argument we took, then raise a TypeError
+		#import pdb; pdb.set_trace()
+		if kwargs_dict:
+			ifkwargs = self.visitor.context.add(c.If(c.ID(kwargs_dict.name), c.Compound(), None))
+			with self.visitor.new_context(ifkwargs.iftrue):
+				tmp = kwargs_dict.mapping_size(self.visitor.context)
+				have_extra = self.visitor.context.add(c.If(c.BinaryOp('<', c.Constant('integer', 0), c.ID(tmp.name)), c.Compound(), None))
+				with self.visitor.new_context(have_extra.iftrue):
+					if not kwarg:
+						#tmp = kwargs_dict.mapping_keys(self.visitor.context)
+						#key = CIntegerLL(None, self.visitor)
+						#key.declare(self.visitor.scope.context, name='_key')
+						#key.set_constant(self.visitor.context, 0)
+						#first_extra_inst = tmp.sequence_get_item(self.visitor.context, key)
+						#first_extra_inst = first_extra_inst.str(self.visitor.context)
+						#first_extra_inst = first_extra_inst.as_c_string(self.visitor.context)
+						self.fail('PyExc_TypeError', self.hlnode.owner.name + "() got an unexpected keyword argument '%s'")
+				#out: foo() got an unexpected keyword argument 'e'
+				#out: foo() got multiple values for keyword argument 'a'
+		'''
 
 
 	def _buildargs(self, args, vararg, kwonlyargs, kwarg):
@@ -351,7 +375,8 @@ class PyFunctionLL(PyObjectLL):
 
 	def runner_load_locals(self, ctx):
 		for name, sym in self.hlnode.symbols.items():
-			if name not in self.locals_map and isinstance(sym, Name):
+			#if name not in self.locals_map and isinstance(sym, Name):
+			if name not in self.locals_map and sym.parent.ll is self:
 				arg_inst = self.visitor.create_ll_instance(sym)
 				arg_inst.declare(self.visitor.scope.context)
 				self.locals_map[name] = arg_inst.name

@@ -11,6 +11,10 @@ class NameRef:
 		self.ref = ref
 		self.inst = None
 
+		# override properties
+		self._parent = None
+		self.ll = None
+
 		# property flags
 		self.is_global = False
 		self.is_nonlocal = False
@@ -24,12 +28,12 @@ class NameRef:
 		self.ref.name = value
 
 
-	@property
-	def ll(self):
-		return self.ref.ll
-	@ll.setter
-	def ll(self, value):
-		self.ref.ll = value
+	#@property
+	#def ll(self):
+	#	return self.ref.ll
+	#@ll.setter
+	#def ll(self, value):
+	#	self.ref.ll = value
 
 
 	@property
@@ -42,7 +46,10 @@ class NameRef:
 
 	@property
 	def parent(self):
-		return self.ref.parent
+		return self._parent or self.ref.parent
+	@parent.setter
+	def parent(self, value):
+		self._parent = value
 
 
 	def get_type(self):

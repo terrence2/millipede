@@ -4,5 +4,5 @@ print(a)
 print(b)
 print(c)
 #out: 1
-#out: (2, 3, 4)
+#out: [2, 3, 4]
 #out: 5
