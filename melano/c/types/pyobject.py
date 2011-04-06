@@ -60,6 +60,7 @@ class PyObjectLL(LLType):
 
 
 	def assign_name(self, ctx, from_var):
+		from_var = from_var.as_pyobject(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.name), c.ID(from_var.name)))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(self.name))))
 
@@ -82,6 +83,7 @@ class PyObjectLL(LLType):
 	def set_attr_string(self, ctx, attrname, attrval):
 		tmp = CIntegerLL(None, self.visitor)
 		tmp.declare(self.visitor.scope.context, init= -1, name="setattr_rv")
+		attrval = attrval.as_pyobject(ctx)
 		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyObject_SetAttrString'), c.ExprList(
 															c.ID(self.name), c.Constant('string', attrname), c.ID(attrval.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)

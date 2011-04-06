@@ -406,6 +406,7 @@ class PyFunctionLL(PyObjectLL):
 
 	def set_attr_string(self, ctx, attrname, val):
 		ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(self.locals_map[attrname]))))
+		val = val.as_pyobject(ctx)
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
 		ctx.add(c.Assignment('=', c.ID(self.locals_map[attrname]), c.ID(val.name)))
 

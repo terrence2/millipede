@@ -280,4 +280,4 @@ class MelanoProject:
 			mod.ast = self.parser_driver.parse_string(mod.source)
 			with open(cachefile, 'wb') as fp:
 				pickle.dump(mod.ast, fp, pickle.HIGHEST_PROTOCOL)
-				self.cached[checksum] = True
+				self.cached[mod.checksum] = True

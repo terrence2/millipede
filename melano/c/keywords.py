@@ -22,6 +22,7 @@ C_KEYWORDS = {
 	'if',
 	'int',
 	'long',
+	'main', # not really a keyword, but close enough to make the compiler mad
 	'register',
 	'return',
 	'short',

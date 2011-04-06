@@ -17,7 +17,7 @@ import subprocess
 
 
 def pytest_generate_tests(metafunc):
-	for interpreter in ('melano', 'python3.1', 'python3.3'):
+	for interpreter in ('melano', 'xmelano', 'python3.1', 'python3.3'):
 		tests = []
 		if "testfile" in metafunc.funcargnames:
 			for root, _, files in os.walk('test'):
@@ -49,7 +49,7 @@ def test_all(testfile, root, interpreter):
 
 		p = subprocess.Popen([os.path.join(TESTDIR, 'test-prog')], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-	elif interpreter.startswith('python'):
+	elif interpreter.startswith('python') or interpreter.startswith('xmelano'):
 		p = subprocess.Popen([interpreter, testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
 	out = p.communicate()

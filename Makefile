@@ -1,6 +1,6 @@
 GCC=gcc
 CFLAGS=-DCORO_UCONTEXT
-CFLAGS_WARN=-Wall -Wno-unused-label
+CFLAGS_WARN=-Wall -Wno-unused-label -Wtrigraphs
 CFLAGS_OPT=-O0 -g
 CFLAGS_INCLUDE=-I/usr/local/include -I./data/c -I./data/c/libcoro
 

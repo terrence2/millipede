@@ -174,6 +174,7 @@ class PyClosureLL(PyFunctionLL):
 		i, j = self.locals_map[attrname]
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
+		val = val.as_pyobject(ctx)
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
 		ctx.add(c.Assignment('=', ref, c.ID(val.name)))
 

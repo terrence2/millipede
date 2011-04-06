@@ -1578,6 +1578,7 @@ class Py2C(ASTVisitor):
 		# get the return value for when we exit
 		if node.value:
 			inst = self.visit(node.value)
+			inst = inst.as_pyobject(self.context)
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
 		else:
 			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.none.name)))

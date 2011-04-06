@@ -1186,8 +1186,8 @@ class PythonASTBuilder:
 				key = self.handle_testlist(children[0])
 				value = self.handle_testlist(children[2])
 				generators = self.handle_comp_for(children[3])
-				key.set_context(ast.Store)
-				value.set_context(ast.Store)
+				key.set_context(ast.Load)
+				value.set_context(ast.Load)
 				return ast.DictComp(key, value, generators, atom_node)
 			# Normal Dict
 			else:
