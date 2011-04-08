@@ -57,7 +57,7 @@ class DFA(object):
     def __eq__(self, other):
         if not isinstance(other, DFA):
             # This shouldn't really happen.
-            return NotImplemented
+            raise NotImplemented
         if other.is_final != self.is_final:
             return False
         if len(self.arcs) != len(other.arcs):
@@ -230,7 +230,7 @@ class ParserGenerator(object):
         for label, their_first in overlap_check.items():
             for sub_label in their_first:
                 if sub_label in inverse:
-                    raise PgenError("ambiguous symbol at '%s': %s" % (label, 
+                    raise PgenError("ambiguous symbol at '%s': %s" % (label,
                                     sub_label))
                 inverse[sub_label] = label
         self.first[name] = all_labels
@@ -246,7 +246,7 @@ class ParserGenerator(object):
         if value is not None:
             if value != current_value:
                 msg = "expected %r but got %r" % (value, current_value)
-                raise PgenError(msg,self.location)
+                raise PgenError(msg, self.location)
         self.advance_token()
         return current_value
 

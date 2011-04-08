@@ -64,6 +64,7 @@ class PyDictLL(PyObjectLL):
 		if out_inst is None:
 			out_inst = PyDictLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context, name="_dict_cp")
+		ctx.add(c.If(c.UnaryOp('!', c.ID(self.name)), c.Compound(c.FuncCall(c.ID('abort'), c.ExprList())), None))
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyDict_Copy'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out_inst.name)
 		return out_inst

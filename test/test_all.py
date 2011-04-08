@@ -17,7 +17,7 @@ import subprocess
 
 
 def pytest_generate_tests(metafunc):
-	for interpreter in ('melano', 'xmelano', 'python3.1', 'python3.3'):
+	for interpreter in ('melano', 'melano-x', 'python3.1', 'python3.3'):
 		tests = []
 		if "testfile" in metafunc.funcargnames:
 			for root, _, files in os.walk('test'):
@@ -49,7 +49,18 @@ def test_all(testfile, root, interpreter):
 
 		p = subprocess.Popen([os.path.join(TESTDIR, 'test-prog')], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-	elif interpreter.startswith('python') or interpreter.startswith('xmelano'):
+	elif interpreter.startswith('melano-x'):
+		p = subprocess.Popen([os.path.realpath(interpreter), testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		p.communicate()
+		assert p.returncode == 0, "Failed melano-x build for {}".format(testfile)
+
+		p = subprocess.Popen(['make'])
+		out = p.communicate()
+		assert p.returncode == 0, "Failed Make: {}".format(out)
+
+		p = subprocess.Popen([os.path.join(TESTDIR, 'test-prog')], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+
+	elif interpreter.startswith('python'):
 		p = subprocess.Popen([interpreter, testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
 	out = p.communicate()
@@ -62,8 +73,8 @@ def test_all(testfile, root, interpreter):
 			assert len([ln for ln in fp if 'PyImport_ImportModule' in ln]) <= 1
 
 def filter_output(data:bytes) -> [str]:
-	out = data.strip().decode('UTF-8').split('\n') # turn into text lines
-	return [o.strip() for o in out if o and not re.match(r'\[\d+ refs\]', o)] # remove empty elements
+	out = data.strip().decode('UTF - 8').split('\n') # turn into text lines
+	return [o.strip() for o in out if o and not re.match(r'\[\d + refs\]', o)] # remove empty elements
 
 
 def load_expectations(testfile):

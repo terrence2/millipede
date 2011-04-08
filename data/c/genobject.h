@@ -32,6 +32,7 @@ typedef struct {
 } MelanoGenObject;
 
 PyObject * MelanoGen_New(char *name, coro_func func, void *data, int stacksize);
+void MelanoGen_Yield(PyObject *self);
 coro_context * MelanoGen_GetContext(PyObject *self);
 coro_context * MelanoGen_GetSourceContext(PyObject *self);
 

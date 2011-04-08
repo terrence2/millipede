@@ -15,6 +15,7 @@ class PyGeneratorLL(PyFunctionLL):
 	RETURN_INDEX = 2
 	ARGS_INDEX = 3
 
+	STACKSIZE = 1024 * 1024 * 10
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
@@ -68,10 +69,10 @@ class PyGeneratorLL(PyFunctionLL):
 			ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(arg_inst.name))))
 
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.FuncCall(c.ID('MelanoGen_New'), c.ExprList(
-												c.FuncCall(c.ID('strdup'), c.ExprList(c.Constant('string', PyStringLL.str2c(self.hlnode.owner.name)))),
+												c.FuncCall(c.ID('strdup'), c.ExprList(c.Constant('string', PyStringLL.name_to_c_string(self.hlnode.owner.name)))),
 												c.ID(self.c_runner_func.decl.name),
 												c.ID(argsname),
-												c.Constant('integer', 4096) #FIXME: try to discover and set a good size for the stack
+												c.Constant('integer', self.STACKSIZE) #FIXME: try to discover and set a good size for the stack
 											))))
 		self.fail_if_null(ctx, '__return_value__')
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID('__return_value__'))))
@@ -119,7 +120,7 @@ class PyGeneratorLL(PyFunctionLL):
 		ctx.add(c.Comment('mark us as in the generator'))
 		tmp = CIntegerLL(None, self.visitor)
 		tmp.declare(self.visitor.scope.context)
-		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MelanoGen_EnterContext'), c.ExprList(c.ID('__self__')))))
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MelanoGen_EnterContext'), c.ExprList(c.ID(self.gen_inst.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
 
 
@@ -131,14 +132,12 @@ class PyGeneratorLL(PyFunctionLL):
 
 		tmp = CIntegerLL(None, self.visitor)
 		tmp.declare(self.visitor.scope.context)
-		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.self_inst.name)))))
+		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name)))))
 		self.fail_if_nonzero(ctx, tmp.name)
 
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))
-		ctx.add(c.FuncCall(c.ID('coro_transfer'), c.ExprList(
-																	c.FuncCall(c.ID('MelanoGen_GetContext'), c.ExprList(c.ID(self.gen_inst.name))),
-																	c.FuncCall(c.ID('MelanoGen_GetSourceContext'), c.ExprList(c.ID(self.gen_inst.name)))
-																	)))
+		ctx.add(c.FuncCall(c.ID('MelanoGen_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
+
 
 	def do_yield(self, ctx, rv_inst):
 		# assign to our yielded slot slot
@@ -147,14 +146,10 @@ class PyGeneratorLL(PyFunctionLL):
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID(rv_inst.name)))
 		rv_inst.incref(ctx)
 
-
 		# transfer control back to originator
-		ctx.add(c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.self_inst.name))))
-		ctx.add(c.FuncCall(c.ID('coro_transfer'), c.ExprList(
-																	c.FuncCall(c.ID('MelanoGen_GetContext'), c.ExprList(c.ID(self.gen_inst.name))),
-																	c.FuncCall(c.ID('MelanoGen_GetSourceContext'), c.ExprList(c.ID(self.gen_inst.name)))
-																	)))
-		ctx.add(c.FuncCall(c.ID('MelanoGen_EnterContext'), c.ExprList(c.ID(self.self_inst.name))))
+		ctx.add(c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name))))
+		ctx.add(c.FuncCall(c.ID('MelanoGen_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
+		ctx.add(c.FuncCall(c.ID('MelanoGen_EnterContext'), c.ExprList(c.ID(self.gen_inst.name))))
 
 		# set yielded slot to null
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))

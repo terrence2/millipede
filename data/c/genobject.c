@@ -9,6 +9,8 @@ static coro_context __main_coroutine__;
 #define GEN_CAPSULE_NAME "coroutine context"
 #define RETURN_INDEX 2
 
+#define DEBUG 0
+
 static void
 gen_del(PyObject *self) {
 	MelanoGenObject *gen = (MelanoGenObject *)self;
@@ -55,6 +57,9 @@ gen_iter(PyObject *obj)
 	// set from the top coroutine
 	gen->coro_source = PyCapsule_GetPointer(cap, GEN_CAPSULE_NAME);
 
+	if(DEBUG)
+		printf("GetIter:     %p\n", gen->coro_source);
+
     Py_INCREF(obj);
     return obj;
 }
@@ -77,7 +82,11 @@ gen_iternext(MelanoGenObject *gen)
 		Py_DECREF(obj);
 	}
 
+	if(DEBUG)
+		printf("(0)IterNext: %p -> %p\n", gen->coro_source, &gen->coro);
 	coro_transfer(gen->coro_source, &gen->coro);
+	if(DEBUG)
+		printf("(1)IterNext: %p -> %p\n", gen->coro_source, &gen->coro);
 	rv = ((PyObject **)(gen->data))[RETURN_INDEX];
 	if(!rv) {
 		gen->exhausted = 1;
@@ -188,6 +197,8 @@ MelanoGen_New(char *name, coro_func func, void *data, int stacksize)
 
 	// NOTE: not reentrant -- this depends on the GIL currently
 	coro_create(&gen->coro, func, data, gen->stack, gen->stacksize);
+	if(DEBUG)
+		printf("New:         %p\n", &gen->coro);
 
 	return (PyObject *)gen;
 }
@@ -220,6 +231,12 @@ MelanoGen_EnterContext(PyObject *obj) {
 	if(!stack)
 		Py_FatalError("No generator stack in thread.");
 
+	if(DEBUG) {
+		cap = PyList_GetItem(stack, PyList_Size(stack) - 1);
+		if(!cap) return -1;
+		printf("EnterCtx:    %p -> %p\n", PyCapsule_GetPointer(cap, GEN_CAPSULE_NAME), &gen->coro);
+	}
+
 	// build a new capsule for this context
 	cap = PyCapsule_New(&gen->coro, GEN_CAPSULE_NAME, NULL);
 	if(!cap)
@@ -235,7 +252,7 @@ MelanoGen_EnterContext(PyObject *obj) {
 
 int
 MelanoGen_LeaveContext(PyObject *obj) {
-	PyObject *dict, *stack;
+	PyObject *dict, *stack, *top0, *top1;
 	int rv;
 
     // get the thread state dict
@@ -248,13 +265,38 @@ MelanoGen_LeaveContext(PyObject *obj) {
 	if(!stack)
 		Py_FatalError("No generator stack in thread.");
 
+	if(DEBUG) {
+		top0 = PyList_GetItem(stack, PyList_Size(stack) - 1);
+		if(!top0) return -1;
+	}
+
 	// pop the top element
 	rv = PyList_SetSlice(stack, PyList_GET_SIZE(stack) - 1, PyList_GET_SIZE(stack), NULL);
 	if(rv)
 		return -1;
 
+	if(DEBUG) {
+		top1 = PyList_GetItem(stack, PyList_Size(stack) - 1);
+		if(!top1) return -1;
+		printf("LeaveCtx:    %p -> %p\n",
+			PyCapsule_GetPointer(top0, GEN_CAPSULE_NAME),
+			PyCapsule_GetPointer(top1, GEN_CAPSULE_NAME));
+	}
+
 	return 0;
 }
+
+void
+MelanoGen_Yield(PyObject *self) {
+	MelanoGenObject *gen = (MelanoGenObject *)self;
+
+	if(DEBUG)
+		printf("(0)GenYld:%p -> %p", &gen->coro, gen->coro_source);
+	coro_transfer(&gen->coro, gen->coro_source);
+	if(DEBUG)
+		printf("(1)GenYld:%p -> %p", &gen->coro, gen->coro_source);
+}
+
 
 void
 MelanoGen_Initialize()
@@ -262,6 +304,9 @@ MelanoGen_Initialize()
 	PyObject *dict, *stack, *cap;
 
 	coro_create(&__main_coroutine__, 0, 0, 0, 0);
+
+	if(DEBUG)
+		printf("GenMain:     %p\n", &__main_coroutine__);
 
     // get the thread state dict
     dict = PyThreadState_GET()->dict;

@@ -39,8 +39,7 @@ class LLType:
 
 
 	def fail_if_null(self, ctx, name):
-		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None)
-		ctx.add(check)
+		check = ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None))
 		with self.visitor.new_context(check.iftrue):
 			self.visitor.capture_error()
 			self.visitor.exit_with_exception()

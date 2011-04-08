@@ -50,14 +50,32 @@ class PyModuleLL(PyObjectLL):
 
 
 	def new(self, ctx):
-		# create the module in the creation function
-		ctx.add(c.Assignment('=', c.ID(self.ll_mod.name), c.FuncCall(c.ID('PyModule_New'), c.ExprList(c.Constant('string', self.hlnode.name)))))
+		ctx.add(c.Comment('Create module "{}" with __name__ "{}"'.format(self.hlnode.python_name, self.hlnode.owner.name)))
+		self.name = self.ll_mod.name
+		ctx.add(c.Assignment('=', c.ID(self.ll_mod.name), c.FuncCall(c.ID('PyModule_New'),
+																	c.ExprList(c.Constant('string', self.hlnode.python_name)))))
 		self.fail_if_null(ctx, self.ll_mod.name)
 
+		# get the modules dict
+		mods = PyDictLL(None, self.visitor)
+		mods.declare(self.visitor.scope.context, name='_modules')
+		ctx.add(c.Comment('Insert into sys.modules'))
+		ctx.add(c.Assignment('=', c.ID(mods.name), c.FuncCall(c.ID('PyImport_GetModuleDict'), c.ExprList())))
+		self.fail_if_null(ctx, self.ll_mod.name)
+		mods.incref(ctx)
 
-	def get_dict(self, ctx):
+		# add ourself to the modules dict
+		mods.set_item_string(ctx, self.hlnode.owner.name, self)
+
+		# clear the ref so we don't free it later
+		mods.clear(ctx)
+
+		# grab the module dict
 		ctx.add(c.Assignment('=', c.ID(self.ll_dict.name), c.FuncCall(c.ID('PyModule_GetDict'), c.ExprList(c.ID(self.ll_mod.name)))))
 		self.fail_if_null(ctx, self.ll_dict.name)
+
+		# set the builtins on the module
+		self.set_attr_string(ctx, '__builtins__', self.visitor.builtins)
 
 
 	def set_initial_string_attribute(self, ctx, name:str, s:str):
@@ -94,7 +112,8 @@ class PyModuleLL(PyObjectLL):
 
 
 	def set_attr_string(self, ctx, name:str, val:LLType):
-		return self.ll_dict.set_item_string(ctx, name, val)
+		self.ll_dict.set_item_string(ctx, name, val)
+		super().set_attr_string(ctx, name, val)
 
 
 	def get_attr_string(self, ctx, attrname:str, out:LLType):

@@ -86,8 +86,8 @@ class PyFunctionLL(PyObjectLL):
 	### MelanoFunction
 	def declare_function_object(self, ctx, tu, docstring):
 		# create the function definition structure
-		c_name = c.Constant('string', PyStringLL.str2c(self.hlnode.owner.name))
-		c_docstring = c.Constant('string', PyStringLL.str2c(docstring)) if docstring else c.ID('NULL')
+		c_name = c.Constant('string', PyStringLL.name_to_c_string(self.hlnode.owner.name))
+		c_docstring = c.Constant('string', PyStringLL.python_to_c_string(docstring)) if docstring else c.ID('NULL')
 
 		# create the function pyobject itself
 		self.c_obj = PyObjectLL(self.hlnode, self.visitor)
@@ -141,7 +141,15 @@ class PyFunctionLL(PyObjectLL):
 		kwargs_dict = self.stub_kwargs_dict
 
 		# get copy of kwargs -- clear items out of it as we load them, or skip entirely
-		kwargs_inst = kwargs_dict.copy(ctx) if kwarg else None
+		if kwarg:
+			if_have_kwargs = ctx.add(c.If(c.ID(kwargs_dict.name), c.Compound(), c.Compound()))
+			with self.visitor.new_context(if_have_kwargs.iftrue):
+				kwargs_inst = kwargs_dict.copy(self.visitor.context)
+			with self.visitor.new_context(if_have_kwargs.iffalse):
+				kwargs_dict.new(self.visitor.context)
+				kwargs_inst = kwargs_dict
+		else:
+			kwargs_inst = None
 
 		# load positional and normal keyword args
 		if args:

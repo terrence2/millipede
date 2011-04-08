@@ -68,10 +68,9 @@ class PyClosureLL(PyFunctionLL):
 		self.locals_map = {} # {str: (int, int)}
 		for i, scope in enumerate(reversed(list(self.each_func_scope()))):
 			names = list(scope.symbols.keys())
-			for j, name in enumerate(names):
-				sym = scope.symbols[name]
-				if not isinstance(sym, NameRef):
-					self.locals_map[name] = (i, j)
+			local_names = [n for n in names if not isinstance(scope.symbols[n], NameRef)]
+			for j, name in enumerate(local_names):
+				self.locals_map[name] = (i, j)
 		self.own_scope_offset = len(list(self.each_func_scope())) - 1
 
 
@@ -127,8 +126,8 @@ class PyClosureLL(PyFunctionLL):
 	def runner_intro(self, ctx):
 		super().runner_intro(ctx)
 
-		local_syms = [(b, name) for name, (a, b) in self.locals_map.items() if a == self.own_scope_offset]
-		local_syms.sort()
+		self.local_syms = [(b, name) for name, (a, b) in self.locals_map.items() if a == self.own_scope_offset]
+		self.local_syms.sort()
 
 		# on entry, grab the "stack" out of __self__ and put into local __stack__
 		self.stack_name = self.visitor.scope.context.reserve_name('__stack__')
@@ -140,7 +139,7 @@ class PyClosureLL(PyFunctionLL):
 		# create a MelanoLocals* for this run of the function, set on __locals__ at position n
 		self.locals_name = self.visitor.scope.context.reserve_name('__locals__')
 		ctx.add_variable(c.Decl(self.locals_name, self.locals_typedecl(self.locals_name)), False)
-		ctx.add(c.Assignment('=', c.ID(self.locals_name), c.FuncCall(c.ID('MelanoLocals_Create'), c.ExprList(c.Constant('integer', len(local_syms))))))
+		ctx.add(c.Assignment('=', c.ID(self.locals_name), c.FuncCall(c.ID('MelanoLocals_Create'), c.ExprList(c.Constant('integer', len(self.local_syms))))))
 		self.fail_if_null(ctx, self.locals_name)
 		ctx.add(c.FuncCall(c.ID('MelanoStack_SetLocals'), c.ExprList(
 															c.ID(self.stack_name),
@@ -172,6 +171,7 @@ class PyClosureLL(PyFunctionLL):
 
 	def set_attr_string(self, ctx, attrname, val):
 		i, j = self.locals_map[attrname]
+		assert j < len(self.local_syms)
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
 		val = val.as_pyobject(ctx)
@@ -181,6 +181,7 @@ class PyClosureLL(PyFunctionLL):
 
 	def get_attr_string(self, ctx, attrname, outvar):
 		i, j = self.locals_map[attrname]
+		assert j < len(self.local_syms)
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.Assignment('=', c.ID(outvar.name), ref))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(outvar.name))))

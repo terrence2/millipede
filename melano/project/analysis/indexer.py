@@ -17,7 +17,7 @@ from melano.hl.types.pyinteger import PyIntegerType
 from melano.hl.types.pylist import PyListType
 from melano.hl.types.pymodule import PyModuleType
 from melano.hl.types.pyset import PySetType
-from melano.hl.types.pystring import PyStringType
+from melano.hl.types.pystring import PyStringType, MalformedStringError
 from melano.hl.types.pytuple import PyTupleType
 from melano.lang.visitor import ASTVisitor
 from melano.py import ast as py
@@ -84,7 +84,6 @@ class Indexer(ASTVisitor):
 
 
 	def visit_Bytes(self, node):
-		node.s = node.s.strip('"').strip("'")
 		node.hl = Constant(PyBytesType())
 
 
@@ -223,6 +222,12 @@ class Indexer(ASTVisitor):
 			if mod.has_symbol(str(alias.name)):
 				sym = mod.lookup(str(alias.name))
 			elif mod.filename.endswith('__init__.py'):
+				# ensure we have actually visited the real target before we go looking for submodules --
+				# Note: if we _are_ '.' outself, then we can continue here without issues
+				if not self.module.filename.endswith('__init__.py') and mod not in self.visited:
+					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
+					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
+					return
 				real_filename = mod.filename[:-11] + str(alias.name).replace('.', '/') + '.py'
 				try:
 					sym = self.project.modules_by_path[real_filename]
@@ -338,7 +343,6 @@ class Indexer(ASTVisitor):
 
 	def visit_Str(self, node):
 		#TODO: discover if we can use a non-unicode or c string type?
-		node.s = node.s.strip('"').strip("'")
 		node.hl = Constant(PyStringType())
 
 

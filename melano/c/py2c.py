@@ -280,11 +280,10 @@ class Py2C(ASTVisitor):
 
 	def split_docstring(self, nodes:[py.AST]) -> (Nonable(str), [py.AST]):
 		'''Given the body, will pull off the docstring node and return it and the rest of the body.'''
-		#if not isinstance(nodes, list): return None, [nodes]
 		if nodes and isinstance(nodes[0], py.Expr) and isinstance(nodes[0].value, py.Str):
 			if self.opt_elide_docstrings:
 				return None, nodes[1:]
-			return nodes[0].value.s, nodes[1:]
+			return PyStringType.dequote(nodes[0].value.s), nodes[1:]
 		return None, nodes
 
 
@@ -333,7 +332,7 @@ class Py2C(ASTVisitor):
 	def set_exception_str(self, type_name, message):
 		if isinstance(message, str):
 			self.context.add(c.FuncCall(c.ID('PyErr_SetString'), c.ExprList(c.ID(type_name),
-																c.Constant('string', PyStringLL.str2c(message)))))
+																c.Constant('string', PyStringLL.escape_c_string(message)))))
 		elif isinstance(message, PyObjectLL):
 			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(type_name), c.ID(message.name))))
 		else:
@@ -366,10 +365,10 @@ class Py2C(ASTVisitor):
 
 		self.context.add(
 					c.FuncCall(c.ID('__err_capture__'), c.ExprList(
-						c.Constant('string', PyStringLL.str2c(filename)),
+						c.Constant('string', PyStringLL.escape_c_string(filename)),
 						c.Constant('integer', st[0]), c.ID('__LINE__'),
-						c.Constant('string', PyStringLL.str2c(context)),
-						c.Constant('string', PyStringLL.str2c(src)),
+						c.Constant('string', PyStringLL.escape_c_string(context)),
+						c.Constant('string', PyStringLL.escape_c_string(src)),
 						c.Constant('integer', rng[0]),
 						c.Constant('integer', rng[1]))))
 
@@ -813,7 +812,10 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Bytes(self, node):
-		raise NotImplementedError
+		inst = self.create_ll_instance(node.hl)
+		inst.declare(self.scope.context)
+		inst.new(self.context, PyStringType.dequote(node.s))
+		return inst
 
 
 	def visit_Break(self, node):
@@ -1398,7 +1400,7 @@ class Py2C(ASTVisitor):
 			# load the name off of the module
 			val = PyObjectLL(None, self)
 			val.declare(self.scope.context)
-			from_module_inst.get_attr_string(self.context, PyStringLL.str2c(str(name)), val)
+			from_module_inst.get_attr_string(self.context, PyStringLL.name_to_c_string(str(name)), val)
 			val.fail_if_null(self.context, val.name)
 			return val
 
@@ -1457,16 +1459,13 @@ class Py2C(ASTVisitor):
 		# set the initial context
 		with self.new_context(self.ll_module.c_builder_func.body):
 			with self.new_label('end'):
-				# setup the module
-				self.ll_module.return_existing(self.context)
-				self.comment('Create module "{}" as "{}"'.format(self.hl_module.name, self.hl_module.owner.name))
-				self.ll_module.new(self.context)
-				self.ll_module.get_dict(self.context)
-
-				self.ll_module.intro(self.context)
-
-				# visit all children
 				with self.global_scope(self.hl_module, self.context):
+					# setup the module
+					self.ll_module.return_existing(self.context)
+					self.ll_module.new(self.context)
+					self.ll_module.intro(self.context)
+
+					# visit all children
 					# load and attach special attributes to the module dict
 					self.ll_module.set_initial_string_attribute(self.context, '__name__', self.hl_module.owner.name)
 					self.ll_module.set_initial_string_attribute(self.context, '__file__', self.hl_module.filename)
@@ -1631,7 +1630,7 @@ class Py2C(ASTVisitor):
 	def visit_Str(self, node):
 		inst = self.create_ll_instance(node.hl)
 		inst.declare(self.scope.context)
-		inst.new(self.context, node.s)
+		inst.new(self.context, PyStringType.dequote(node.s))
 		return inst
 
 

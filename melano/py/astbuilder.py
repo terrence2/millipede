@@ -129,6 +129,17 @@ class PythonASTBuilder:
 		#	self.error_ast("assignment to %s" % (e.name,), e.node)
 
 
+	def is_byte_string(self, s):
+		prefix_chars = []
+		for c in s:
+			if c in ('"', "'"):
+				break
+			prefix_chars.append(c)
+		if 'b' in prefix_chars:
+			return True
+		return False
+
+
 	def handle_del_stmt(self, del_node):
 		children = self.children(del_node)
 		targets = self.handle_exprlist(children[1], ast.Del)
@@ -1128,6 +1139,8 @@ class PythonASTBuilder:
 				final_string = ''.join(sub_strings)
 			else:
 				final_string = sub_strings
+			if self.is_byte_string(final_string):
+				return ast.Bytes(final_string, atom_node)
 			return ast.Str(final_string, atom_node)
 		elif first_child_type == self.tokens.NUMBER:
 			num_value = self.parse_number(first_child.value)
