@@ -1,1 +1,2 @@
 def CREATE_NEW_CONSOLE(): pass
+def CREATE_NEW_PROCESS_GROUP(): pass

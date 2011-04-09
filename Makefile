@@ -11,9 +11,11 @@ py31:
 	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/include/python3.1 -o test-prog test.c ${EXTRA_SOURCES} -lpython3.1 ${LIBS} 
 
 self:
-	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/include/python3.1 -o melano-x test.c ${EXTRA_SOURCES} -lpython3.1 ${LIBS} 
+	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/include/python3.1 -o melano-x melano.c ${EXTRA_SOURCES} -lpython3.1 ${LIBS} 
 
 
 py33:
 	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/local/include/python3.3dmu -o test-prog test.c ${EXTRA_SOURCES} -lpython3.3dmu ${LIBS} 
 
+self33:
+	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/local/include/python3.3dmu -o melano-x melano.c ${EXTRA_SOURCES} -lpython3.3dmu ${LIBS} 

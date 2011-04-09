@@ -56,8 +56,8 @@ class MelanoProject:
 		self.roots = roots
 		self.build_dir = os.path.realpath('./build')
 
-		self.stdlib = [os.path.realpath('./data/lib-dynload'), '/usr/lib/python3.1', '/usr/lib/python3.1/lib-dynload']
-		self.extensions = ['/usr/lib/python3.1/site-packages']
+		self.stdlib = [os.path.realpath('./data/lib-dynload')]
+		self.extensions = []
 		self.builtins = [os.path.realpath('./data/builtins')]
 		self.override = [os.path.realpath('./data/override')]
 

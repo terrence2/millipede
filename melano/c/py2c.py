@@ -627,7 +627,7 @@ class Py2C(ASTVisitor):
 			if not node.msg:
 				s = None
 			elif isinstance(node.msg, py.Str):
-				s = node.msg.s
+				s = PyStringType.dequote(node.msg.s)
 			else:
 				inst = self.visit(node.msg)
 				s = inst.str(self.context)

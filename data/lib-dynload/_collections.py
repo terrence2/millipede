@@ -3,3 +3,6 @@ class defaultdict:
 
 class deque:
 	pass
+
+def _count_elements():
+	pass

@@ -1,0 +1,2 @@
+System = None
+Exception = Exception
