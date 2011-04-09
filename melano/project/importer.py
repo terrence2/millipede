@@ -181,7 +181,7 @@ class Importer:
 			visitor.visit(ast)
 			renames = visitor.renames.get(target_modname)
 		if not renames:
-			raise NoSuchModuleError
+			raise NoSuchModuleError("looking for {} in {}".format(target_modname, parent_modname))
 
 		if len(renames) == 1:
 			renamed = renames[0]
@@ -209,8 +209,8 @@ class Importer:
 		'''
 		search = [
 			(MelanoModule.PROJECT, self.roots),
-			(MelanoModule.STDLIB, self.stdlib),
 			(MelanoModule.BUILTIN, self.builtins),
+			(MelanoModule.STDLIB, self.stdlib),
 			(MelanoModule.EXTENSION, self.extensions)
 		]
 		rel_noext_modpath = modname.replace('.', '/')
@@ -236,7 +236,7 @@ class Importer:
 	def find_best_path_for_relocated_modname(self, modname):
 		# if we have no parent, then there is nothing to look for
 		if '.' not in modname:
-			raise NoSuchModuleError
+			raise NoSuchModuleError(modname)
 
 		# split out the parent modname and the target within it
 		parent_modname, _, target_modname = modname.rpartition('.')
