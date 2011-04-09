@@ -7,18 +7,20 @@ from melano.c.types.pyobject import PyObjectLL
 
 
 class PyStringLL(PyObjectLL):
-	PY_LITERALS = {'newline', '\\', '\'', '"', 'a', 'b', 'f', 'n', 'r', 't', 'v'}
-	PY_ESCAPES = {
-		'\\': '\\\\', 			# 	Backslash (\) 	 
-		'\'': '\\\'', 			# 	Single quote (') 	 
-		'"': '\\"', 			# 	Double quote (") 	 
-		'\a': '\\a', 			# 	ASCII Bell (BEL) 	 
-		'\b': '\\b', 			# 	ASCII Backspace (BS) 	 
-		'\f': '\\f', 			#	ASCII Formfeed (FF) 	 
-		'\n': '\\n', 			# 	ASCII Linefeed (LF) 	 
-		'\r': '\\r', 			# 	ASCII Carriage Return (CR) 	 
-		'\t': '\\t', 			# 	ASCII Horizontal Tab (TAB) 	 
-		'\v': '\\v', 			# 	ASCII Vertical Tab (VT) 	 
+	PY_LITERALS = {'newline', '\\', '\'', '"', 'a', 'b', 'f', 'n', 'r', 't', 'v', '\n'}
+	PY_UNESCAPES = {
+		'\\\\': '\\', 			# 	Backslash (\) 	 
+		'\\\'': '\'', 			# 	Single quote (') 	 
+		'\\"': '"', 			# 	Double quote (") 	 
+		'\\a': '\a', 			# 	ASCII Bell (BEL) 	 
+		'\\b': '\b', 			# 	ASCII Backspace (BS) 	 
+		'\\f': '\f', 			#	ASCII Formfeed (FF) 	 
+		'\\n': '\n', 			# 	ASCII Linefeed (LF) 	 
+		'\\r': '\r', 			# 	ASCII Carriage Return (CR) 	 
+		'\\t': '\t', 			# 	ASCII Horizontal Tab (TAB) 	 
+		'\\v': '\v', 			# 	ASCII Vertical Tab (VT)
+		'\\\n': '',
+		'\\newline': '\n',
 		#'\\ooo' 			#	Character with octal value ooo 	(1,3)
 		#'\xhh' 				#	Character with hex value hh 	(2,3)
 
@@ -27,7 +29,6 @@ class PyStringLL(PyObjectLL):
 		#'\uxxxx' 			#	Character with 16-bit hex value xxxx 	(4)
 		#'\Uxxxxxxxx' #	Character with 32-bit hex value xxxxxxxx 	(5)
 	}
-	PY_UNESCAPES = {v: k for k, v in PY_ESCAPES.items()}
 
 	# Note: leaves out x and 0-9 which need special processing
 	C_ESCAPE_CHARS = {'a', 'b', 'f', 'n', 'r', 't', 'v', '\'', '"', '\\', '?'}
@@ -60,8 +61,6 @@ class PyStringLL(PyObjectLL):
 	def _apply_python_escapes(cls, s):
 		'''Replace python escape sequences with their literal counterparts'''
 		#FIXME: apply unicode, octal, and hex escapes here
-		if s == '\\t':
-			import pdb; pdb.set_trace()
 		skip = 0
 		out = []
 		for i, c in enumerate(s):
@@ -69,12 +68,12 @@ class PyStringLL(PyObjectLL):
 				skip -= 1
 				continue
 			if c == '\\':
-				n = s[i + 1] if i < len(s) else '\0'
+				n = s[i + 1] if i + 1 < len(s) else '\0'
 				if n in cls.PY_LITERALS:
 					out.append(cls.PY_UNESCAPES['\\' + n])
 					skip = 1
 				else:
-					raise TypeError('Invalid escape in python string: {}'.format(s))
+					out.append('\\\\')
 			else:
 				out.append(c)
 		return ''.join(out)
