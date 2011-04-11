@@ -559,7 +559,7 @@ class Py2C(ASTVisitor):
 			i = self.visit(node.slice)
 			o.set_item(self.context, i, src_inst)
 		elif isinstance(node, py.Name):
-			tgt = self.visit(node)
+			#tgt = self.visit(node)
 			self._store_name(node, src_inst)
 		elif isinstance(node, py.Tuple):
 			key = PyIntegerLL(None, self)
@@ -2002,16 +2002,16 @@ class Py2C(ASTVisitor):
 		list_inst = self.create_ll_instance(node.hl)
 		list_inst.prepare_locals(self.scope.context)
 
-		out = PyListLL(None, self)
-		out.declare(self.scope.context, name="_listcomp_")
-		out.new(self.context)
+		out_inst = PyListLL(None, self)
+		out_inst.declare(self.scope.context, name="_listcomp_")
+		out_inst.new(self.context)
 
 		def _set():
 			obj = self.visit(node.elt)
-			out.append(self.context, obj)
+			out_inst.append(self.context, obj)
 		self.visit_comp_generators(node.generators, _set)
 
-		return out
+		return out_inst
 
 
 	def visit_SetComp(self, node):
