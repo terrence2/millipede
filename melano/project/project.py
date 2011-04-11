@@ -14,7 +14,8 @@ from melano.hl.module import MelanoModule
 from melano.hl.name import Name
 from melano.hl.scope import Scope
 from melano.project.analysis.find_links import FindLinks
-from melano.project.analysis.indexer import Indexer
+from melano.project.analysis.indexer0 import Indexer0
+from melano.project.analysis.indexer1 import Indexer1
 from melano.project.analysis.linker import Linker
 from melano.project.analysis.typer import Typer
 from melano.project.importer import Importer
@@ -118,7 +119,8 @@ class MelanoProject:
 
 	def build(self, target):
 		self.locate_modules()
-		self.index_names()
+		self.index_static()
+		self.index_imports()
 		self.link_references()
 		self.derive_types()
 		if target.endswith('.c'):
@@ -167,8 +169,18 @@ class MelanoProject:
 				mod.refs[local_modname] = self.modules_by_path[ref_filename]
 
 
-	def index_names(self):
+	def index_static(self):
 		'''Find all statically scoped names in reachable modules -- classes, functions, variable, etc.'''
+		logging.info("Indexing: Phase 0, {} files".format(len(self.order)))
+		for fn in self.order:
+			mod = self.modules_by_path[fn]
+			logging.info("Indexing0: {}".format(mod.filename))
+			indexer = Indexer0(self, mod)
+			indexer.visit(mod.ast)
+
+
+	def index_imports(self):
+		'''Find and add to the scope stack, all names from imports.'''
 		missing = {}
 		records = {}
 		visited = set()
@@ -178,10 +190,10 @@ class MelanoProject:
 				if fn not in missing or missing[fn] > 0:
 					mod = self.modules_by_path[fn]
 					if fn not in missing:
-						logging.info("Indexing: {}".format(mod.filename))
+						logging.info("Indexing1: {}".format(mod.filename))
 					else:
-						logging.info("[{} remaining] Indexing: {}".format(sum(list(missing.values())), fn))
-					indexer = Indexer(self, mod, visited)
+						logging.info("[{} remaining] Indexing1: {}".format(sum(list(missing.values())), fn))
+					indexer = Indexer1(self, mod, visited)
 					indexer.visit(mod.ast)
 					missing[fn] = len(indexer.missing)
 					records[fn] = indexer.missing

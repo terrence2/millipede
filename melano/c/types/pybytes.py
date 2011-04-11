@@ -11,8 +11,8 @@ class PyBytesLL(PyObjectLL):
 	@classmethod
 	def bytes2c(cls, b):
 		'''Reformats a python bytes to make it suitable for use as a C string constant.'''
-		s = str(b)[2:-1]
-		return s.replace('"', '\\x22')
+		# FIXME: make this work
+		return b
 
 
 	@classmethod
@@ -21,6 +21,7 @@ class PyBytesLL(PyObjectLL):
 
 
 	def new(self, ctx, py_init):
+		import pdb; pdb.set_trace()
 		init = self.bytes2c(py_init)
 		strlen = self.strlen(init)
 		assert all(map(lambda x: ord(x) < 256 and ord(x) >= 0, init)), 'Out of range character for char in: {}'.format(init)

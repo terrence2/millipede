@@ -219,7 +219,7 @@ class Importer:
 				base_path = os.path.realpath(base_path)
 				trial_abs_noext_modpath = os.path.join(base_path, rel_noext_modpath)
 				# 1) assume modpath refers directly to a file 
-				for ext in ['.py', '.so']:
+				for ext in ['.py']:
 					trial_abs_modpath = trial_abs_noext_modpath + ext
 					logging.debug("looking for {}".format(trial_abs_modpath))
 					if os.path.exists(trial_abs_modpath):

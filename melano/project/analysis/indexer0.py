@@ -26,19 +26,15 @@ import logging
 import pdb
 
 
-class Indexer(ASTVisitor):
+class Indexer0(ASTVisitor):
 	'''
 	This builds the high-level scope tree.
 	'''
-
-	def __init__(self, project, module, visited):
+	def __init__(self, project, module):
 		super().__init__()
 		self.project = project
 		self.module = module
 		self.context = self.module
-
-		# modules which have been visited
-		self.visited = visited
 
 		# anon scopes need to be unique
 		self.anon_count = itertools.count()
@@ -46,8 +42,9 @@ class Indexer(ASTVisitor):
 		# count of symbols we weren't able to index because of missing dependencies
 		self.missing = set()
 
+
 	@contextmanager
-	def scope(self, node, scope_ty=Scope, name=None):
+	def new_scope(self, node, scope_ty=Scope, name=None):
 		# NOTE: since we can repeatedly visit index to find names defined later, we need
 		#		to not overwrite existing symbols dicts
 		if node.hl:
@@ -93,10 +90,9 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.keywords)
 		self.visit(node.starargs)
 		self.visit(node.kwargs)
-		with self.scope(node, scope_ty=MelanoClass):
+		with self.new_scope(node, scope_ty=MelanoClass):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
-		node.hl.is_building = False
 
 
 	def visit_Dict(self, node):
@@ -109,7 +105,7 @@ class Indexer(ASTVisitor):
 
 	def visit_DictComp(self, node):
 		name = 'dictcomp_scope_' + str(next(self.anon_count))
-		with self.scope(node, scope_ty=MelanoComprehension, name=name):
+		with self.new_scope(node, scope_ty=MelanoComprehension, name=name):
 			self.visit(node.key)
 			self.visit(node.value)
 			self.visit_nodelist(node.generators)
@@ -128,7 +124,7 @@ class Indexer(ASTVisitor):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
-		with self.scope(node, scope_ty=MelanoFunction):
+		with self.new_scope(node, scope_ty=MelanoFunction):
 			if self.find_nearest_function(self.context.owner.parent):
 				self.context.set_needs_closure()
 
@@ -148,7 +144,7 @@ class Indexer(ASTVisitor):
 		name = 'genexp_scope_' + str(next(self.anon_count))
 		node.name = py.Name(name, py.Store, None)
 		self.visit(node.name)
-		with self.scope(node, scope_ty=MelanoFunction, name=name):
+		with self.new_scope(node, scope_ty=MelanoFunction, name=name):
 			self.context.is_generator = True
 			self.context.is_anonymous = True
 			self.context.set_needs_closure()
@@ -167,6 +163,7 @@ class Indexer(ASTVisitor):
 			ref.is_global = True
 
 
+	'''
 	def visit_Import(self, node):
 		for alias in node.names:
 			if alias.asname:
@@ -252,7 +249,7 @@ class Indexer(ASTVisitor):
 				#self.visit(alias.name)
 				self.context.add_symbol(str(alias.name), ref)
 				alias.name.hl = ref
-
+	'''
 
 	def visit_Lambda(self, node):
 		#defaults
@@ -262,7 +259,7 @@ class Indexer(ASTVisitor):
 		name = 'lambda_scope_' + str(next(self.anon_count))
 		node.name = py.Name(name, py.Store, None)
 		self.visit(node.name)
-		with self.scope(node, scope_ty=MelanoFunction):
+		with self.new_scope(node, scope_ty=MelanoFunction):
 			if self.find_nearest_function(self.context.owner.parent):
 				self.context.set_needs_closure()
 			self.context.is_anonymous = True
@@ -282,7 +279,7 @@ class Indexer(ASTVisitor):
 
 	def visit_ListComp(self, node):
 		name = 'listcomp_scope_' + str(next(self.anon_count))
-		with self.scope(node, scope_ty=MelanoComprehension, name=name):
+		with self.new_scope(node, scope_ty=MelanoComprehension, name=name):
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 
@@ -336,7 +333,7 @@ class Indexer(ASTVisitor):
 
 	def visit_SetComp(self, node):
 		name = 'setcomp_scope_' + str(next(self.anon_count))
-		with self.scope(node, scope_ty=MelanoComprehension, name=name):
+		with self.new_scope(node, scope_ty=MelanoComprehension, name=name):
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 

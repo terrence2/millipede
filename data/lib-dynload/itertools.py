@@ -21,3 +21,4 @@ class starmap:
 	def __next__(self): pass
 
 def tee(iter, n=2): pass
+

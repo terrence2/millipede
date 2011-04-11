@@ -1,5 +1,5 @@
 import sys
-print(sorted(dir(sys.modules['__main__'])))
+print(sorted(list(set(dir(sys.modules['__main__'])) - {'__cached__'})))
 #out: ['__builtins__', '__doc__', '__file__', '__name__', '__package__', 'sys']
 
 import _tgt
@@ -10,7 +10,7 @@ class Foo:
 	pass
 import pickle
 
-print(sorted(dir(sys.modules['__main__'])))
+print(sorted(list(set(dir(sys.modules['__main__'])) - {'__cached__'})))
 #out: ['Foo', '__builtins__', '__doc__', '__file__', '__name__', '__package__', '_tgt', 'pickle', 'sys']
 
 rv = pickle.dumps(Foo())
