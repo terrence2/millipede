@@ -171,7 +171,6 @@ class PyClosureLL(PyFunctionLL):
 
 	def set_attr_string(self, ctx, attrname, val):
 		i, j = self.locals_map[attrname]
-		assert j < len(self.local_syms)
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
 		val = val.as_pyobject(ctx)
@@ -181,7 +180,6 @@ class PyClosureLL(PyFunctionLL):
 
 	def get_attr_string(self, ctx, attrname, outvar):
 		i, j = self.locals_map[attrname]
-		assert j < len(self.local_syms)
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		ctx.add(c.Assignment('=', c.ID(outvar.name), ref))
 		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(outvar.name))))
