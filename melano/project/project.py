@@ -178,6 +178,12 @@ class MelanoProject:
 			indexer = Indexer0(self, mod)
 			indexer.visit(mod.ast)
 
+			# NOTE: we may need to visit twice (but only twice) because of a nonlocal declared before its target
+			if indexer.missing:
+				indexer = Indexer0(self, mod)
+				indexer.visit(mod.ast)
+				assert not indexer.missing, 'Missing symbols: {}'.format(indexer.missing)
+
 
 	def index_imports(self):
 		'''Find and add to the scope stack, all names from imports.'''
