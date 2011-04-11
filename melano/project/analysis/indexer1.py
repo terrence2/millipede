@@ -65,13 +65,6 @@ class Indexer1(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
-	def visit_DictComp(self, node):
-		with self.new_scope(node):
-			self.visit(node.key)
-			self.visit(node.value)
-			self.visit_nodelist(node.generators)
-
-
 	def visit_FunctionDef(self, node):
 		# name
 		self.visit(node.name)
@@ -98,17 +91,11 @@ class Indexer1(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
-	def visit_GeneratorExp(self, node):
-		with self.new_scope(node):
-			self.visit(node.elt)
-			self.visit_nodelist(node.generators)
-
-
 	def visit_Import(self, node):
 		for alias in node.names:
 			if alias.asname:
 				# Note: don't visit name if we have asname, since name is Load in this case, but it's not a Load on this module
-				self.visit(alias.asname)
+				#self.visit(alias.asname)
 				alias.asname.hl.scope = self.module.refs[str(alias.name)]
 			else:
 				if isinstance(alias.name, py.Attribute):
@@ -125,7 +112,7 @@ class Indexer1(ASTVisitor):
 						fullname = '.'.join(parts)
 						name.hl.scope = self.module.refs[fullname]
 				else:
-					self.visit(alias.name)
+					#self.visit(alias.name)
 					alias.name.hl.scope = self.module.refs[str(alias.name)]
 
 
@@ -191,49 +178,8 @@ class Indexer1(ASTVisitor):
 				alias.name.hl = ref
 
 
-	def visit_Lambda(self, node):
-		#defaults
-		self.visit_nodelist(node.args.defaults) # positional arg default values
-		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
-		#name
-		self.visit(node.name)
-		with self.new_scope(node):
-			# args
-			self.visit_nodelist_field(node.args.args, 'arg')
-			self.visit(node.args.vararg)
-			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
-			self.visit(node.args.kwarg)
-			#body
-			self.visit_nodelist(node.body)
-
-
-	def visit_ListComp(self, node):
-		with self.new_scope(node):
-			self.visit(node.elt)
-			self.visit_nodelist(node.generators)
-
-
 	def visit_Module(self, node):
 		assert node.hl is self.module
 		node.hl.owner.types = [PyModuleType]
 		self.visit_nodelist(node.body)
 
-
-	def visit_SetComp(self, node):
-		with self.new_scope(node):
-			self.visit(node.elt)
-			self.visit_nodelist(node.generators)
-
-
-	def visit_Name(self, node):
-		if node.ctx in [py.Store, py.Param, py.Aug]:
-			#NOTE: store to global/nonlocal will have already visited the global/nonlocal node and created
-			#		this name as a ref, thus preventing us from doing the (incorrect) lookup here
-			name = str(node)
-			if name not in self.context.symbols:
-				sym = self.context.add_symbol(name)
-				node.hl = sym
-
-			# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
-			if not node.hl:
-				node.hl = self.context.lookup(name)

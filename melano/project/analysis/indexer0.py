@@ -163,32 +163,15 @@ class Indexer0(ASTVisitor):
 			ref.is_global = True
 
 
-	'''
 	def visit_Import(self, node):
 		for alias in node.names:
 			if alias.asname:
 				# Note: don't visit name if we have asname, since name is Load in this case, but it's not a Load on this module
 				self.visit(alias.asname)
-				alias.asname.hl.scope = self.module.refs[str(alias.name)]
 			else:
-				if isinstance(alias.name, py.Attribute):
-					assert alias.name.is_all_names()
-					parts = []
-					for name in alias.name.get_names():
-						# NOTE: don't bother visiting, since this recorded as a Load
-						name.set_context(py.Store)
-						name.hl = Name(str(name), self.context)
-						if name is alias.name.first():
-							self.context.symbols[str(name)] = name.hl
-						# find the real name of this part of the module and create a ref to the underlying module
-						parts.append(str(name))
-						fullname = '.'.join(parts)
-						name.hl.scope = self.module.refs[fullname]
-				else:
-					self.visit(alias.name)
-					alias.name.hl.scope = self.module.refs[str(alias.name)]
+				self.visit(alias.name)
 
-
+	'''
 	def visit_ImportFrom(self, node):
 		# query the module (keeping in mind that this may be a package we want)
 		pkg_or_mod_name = '.' * node.level + str(node.module)
