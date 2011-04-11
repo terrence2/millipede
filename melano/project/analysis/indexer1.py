@@ -65,6 +65,13 @@ class Indexer1(ASTVisitor):
 		self.visit_nodelist(node.decorator_list)
 
 
+	def visit_DictComp(self, node):
+		with self.new_scope(node):
+			self.visit(node.key)
+			self.visit(node.value)
+			self.visit_nodelist(node.generators)
+
+
 	def visit_FunctionDef(self, node):
 		# name
 		self.visit(node.name)
@@ -89,6 +96,12 @@ class Indexer1(ASTVisitor):
 
 		# decorators
 		self.visit_nodelist(node.decorator_list)
+
+
+	def visit_GeneratorExp(self, node):
+		with self.new_scope(node):
+			self.visit(node.elt)
+			self.visit_nodelist(node.generators)
 
 
 	def visit_Import(self, node):
@@ -194,10 +207,22 @@ class Indexer1(ASTVisitor):
 			self.visit_nodelist(node.body)
 
 
+	def visit_ListComp(self, node):
+		with self.new_scope(node):
+			self.visit(node.elt)
+			self.visit_nodelist(node.generators)
+
+
 	def visit_Module(self, node):
 		assert node.hl is self.module
 		node.hl.owner.types = [PyModuleType]
 		self.visit_nodelist(node.body)
+
+
+	def visit_SetComp(self, node):
+		with self.new_scope(node):
+			self.visit(node.elt)
+			self.visit_nodelist(node.generators)
 
 
 	def visit_Name(self, node):
