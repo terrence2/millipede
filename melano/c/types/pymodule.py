@@ -50,10 +50,11 @@ class PyModuleLL(PyObjectLL):
 
 
 	def new(self, ctx):
-		ctx.add(c.Comment('Create module "{}" with __name__ "{}"'.format(self.hlnode.python_name, self.hlnode.owner.name)))
 		self.name = self.ll_mod.name
+		n = '__main__' if self.hlnode.is_main else self.hlnode.python_name
+		ctx.add(c.Comment('Create module "{}" with __name__ "{}"'.format(self.hlnode.python_name, n)))
 		ctx.add(c.Assignment('=', c.ID(self.ll_mod.name), c.FuncCall(c.ID('PyModule_New'),
-																	c.ExprList(c.Constant('string', self.hlnode.python_name)))))
+																	c.ExprList(c.Constant('string', n)))))
 		self.fail_if_null(ctx, self.ll_mod.name)
 
 		# get the modules dict
@@ -65,7 +66,7 @@ class PyModuleLL(PyObjectLL):
 		mods.incref(ctx)
 
 		# add ourself to the modules dict
-		mods.set_item_string(ctx, self.hlnode.owner.name, self)
+		mods.set_item_string(ctx, n, self)
 
 		# clear the ref so we don't free it later
 		mods.clear(ctx)
@@ -77,6 +78,10 @@ class PyModuleLL(PyObjectLL):
 		# set the builtins on the module
 		self.set_attr_string(ctx, '__builtins__', self.visitor.builtins)
 
+		# set builtin properties
+		self.set_initial_string_attribute(ctx, '__name__', n)
+		#self.ll_module.set_initial_string_attribute(self.context, '__name__', self.hl_module.owner.python_name)
+
 
 	def set_initial_string_attribute(self, ctx, name:str, s:str):
 		if s is not None:
@@ -87,7 +92,7 @@ class PyModuleLL(PyObjectLL):
 			ps = PyObjectLL(None, self.visitor)
 			ps.declare(self.visitor.scope.context)
 			ps.assign_none(ctx)
-		self.ll_dict.set_item_string(ctx, name, ps)
+		self.set_attr_string(ctx, name, ps)
 
 
 	def intro(self, ctx):

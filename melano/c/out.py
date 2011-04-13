@@ -52,10 +52,11 @@ class COut(ASTVisitor):
 		self.fp.write('break')
 
 	def visit_Cast(self, node):
-		self.fp.write('(')
+		self.fp.write('((')
 		self.visit(node.to_type)
 		self.fp.write(')')
 		self.visit(node.expr)
+		self.fp.write(')')
 
 	def visit_Comment(self, node):
 		self.fp.write('/* ' + node.value + ' */')

@@ -8,9 +8,9 @@ import sys
 #from melano.ui.application import MelanoApplication
 
 def main():
-	logging.basicConfig(level=logging.INFO)
+	logging.basicConfig(level=logging.DEBUG)
 
-	if 'py33' in sys.argv:
+	if '3.3' in sys.argv:
 		logging.info("Building against Python3.3")
 		stdlib = ['/usr/local/lib/python3.3', '/usr/local/lib/python3.3/lib-dynload']
 		extensions = ['/usr/lib/python3.3/site-packages']

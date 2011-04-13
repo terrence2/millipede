@@ -27,7 +27,7 @@ class MelanoModule(Scope, Entity):
 		The source is the location (project root relative) where
 		this module can be found.
 		'''
-		super().__init__(Name(dottedname.replace('.', '_'), None))
+		super().__init__(Name(dottedname, None))
 		self.python_name = dottedname
 
 		# the common builtins scope used by all modules for missing lookups
@@ -59,10 +59,12 @@ class MelanoModule(Scope, Entity):
 		# the hl type definition
 		self.type = PyModuleType(self)
 
+		# set to true if we are the main module
+		self.is_main = False
+
 
 	def set_as_main(self):
-		self.real_name = self.owner.name
-		self.owner.name = '__main__'
+		self.is_main = True
 
 
 	@property

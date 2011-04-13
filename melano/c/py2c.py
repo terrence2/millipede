@@ -385,8 +385,7 @@ class Py2C(ASTVisitor):
 	def maybe_save_exception(self):
 		'''Like save_exception, but checks if an exception is set before saving/restoring.'''
 		# if we have an exception set, store it asside during finally processing
-		check_err = c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), None)
-		self.context.add(check_err)
+		check_err = self.context.add(c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), None))
 		with self.new_context(check_err.iftrue):
 			exc_cookie = self.fetch_exception()
 
@@ -550,6 +549,12 @@ class Py2C(ASTVisitor):
 		return False
 
 
+	def _delete_name(self, target):
+		assert isinstance(target, py.Name)
+		scope = target.hl.parent
+		scope.ll.del_attr_string(self.context, str(target))
+
+
 	def _store_any(self, node, src_inst):
 		if isinstance(node, py.Attribute):
 			o = self.visit(node.value)
@@ -559,7 +564,6 @@ class Py2C(ASTVisitor):
 			i = self.visit(node.slice)
 			o.set_item(self.context, i, src_inst)
 		elif isinstance(node, py.Name):
-			#tgt = self.visit(node)
 			self._store_name(node, src_inst)
 		elif isinstance(node, py.Tuple):
 			key = PyIntegerLL(None, self)
@@ -572,10 +576,17 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError("Don't know how to assign to type: {}".format(type(node)))
 
 
-	def _delete_name(self, target):
-		assert isinstance(target, py.Name)
-		scope = target.hl.parent
-		scope.ll.del_attr_string(self.context, str(target))
+	def _load_any(self, source):
+		if isinstance(source, py.Name):
+			tgt_inst = self._load_name(source)
+		elif isinstance(source, py.Subscript):
+			o = self.visit(source.value)
+			i = self.visit(source.slice)
+			tgt_inst = o.get_item(self.context, i)
+		else:
+			tgt_inst = self.visit(source)
+
+		return tgt_inst
 
 
 	def _store_name(self, target, val, scope=None):
@@ -617,6 +628,7 @@ class Py2C(ASTVisitor):
 		else:
 			self.ll_module.get_attr_string(self.context, str(source), tmp)
 		return tmp
+
 
 
 	def visit_Assert(self, node):
@@ -680,10 +692,7 @@ class Py2C(ASTVisitor):
 	def visit_AugAssign(self, node):
 		self.comment('AugAssign: {} {} {}'.format(str(node.target), self.AUGASSIGN_PRETTY[node.op], str(node.value)))
 		val_inst = self.visit(node.value)
-		if isinstance(node.target, py.Name):
-			tgt_inst = self._load_name(node.target)
-		else:
-			tgt_inst = self.visit(node.target)
+		tgt_inst = self._load_any(node.target)
 
 		# get the intermediate instance
 		out_inst = self.create_ll_instance(node.hl)
@@ -715,13 +724,7 @@ class Py2C(ASTVisitor):
 		elif node.op == py.Pow:
 			tgt_inst.inplace_power(self.context, val_inst, out_inst)
 
-		# store back to the owner location
 		self._store_any(node.target, out_inst)
-
-		# FIXME: we do need this don't we?
-		# decrement the old value
-		#tgt_inst.decref(self.context)
-
 		return out_inst
 
 
@@ -871,7 +874,7 @@ class Py2C(ASTVisitor):
 			# Note: we always need to pass a tuple as args, even if there is nothing in it
 			if not node.starargs:
 				args1 = PyTupleLL(None, self)
-				args1.declare(self.scope.context)
+				args1.declare(self.scope.context, name='args')
 				args1.pack(self.context, *args_insts)
 			else:
 				args0 = PyListLL(None, self)
@@ -968,7 +971,7 @@ class Py2C(ASTVisitor):
 
 			inst.set_namespace(namespace_inst)
 
-			inst.intro(self.context, docstring, self.hl_module.owner.name)
+			inst.intro(self.context, docstring, '__main__' if self.hl_module.is_main else self.hl_module.owner.python_name)
 			self.visit_nodelist(body)
 			inst.outro(self.context)
 
@@ -1149,6 +1152,7 @@ class Py2C(ASTVisitor):
 				self._store_any(node.target, tmp)
 				self.visit_nodelist(node.body)
 			self.context.add(c.Label(continue_label))
+			tmp.decref(self.context)
 
 		# handle the no-break case: else
 		# if we don't jump to forloop, then we need to just run the else block
@@ -1467,7 +1471,6 @@ class Py2C(ASTVisitor):
 
 					# visit all children
 					# load and attach special attributes to the module dict
-					self.ll_module.set_initial_string_attribute(self.context, '__name__', self.hl_module.owner.name)
 					self.ll_module.set_initial_string_attribute(self.context, '__file__', self.hl_module.filename)
 					docstring, body = self.split_docstring(node.body)
 					self.ll_module.set_initial_string_attribute(self.context, '__doc__', docstring)
@@ -1482,7 +1485,7 @@ class Py2C(ASTVisitor):
 			self.ll_module.outro(self.context)
 
 		# the only module we want to load automatically at runtime is the main module
-		if self.hl_module.owner.name == '__main__':
+		if self.hl_module.is_main:
 			tmp = self.main.body.tmp_pyobject()
 			self.main.body.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(self.ll_module.c_builder_name), c.ExprList())))
 			self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
@@ -1511,12 +1514,16 @@ class Py2C(ASTVisitor):
 
 
 	#def visit_NonLocal(self, node):
-	#	raise NotImplementedError
+	#	Not needed
 
 
 	def visit_Num(self, node):
-		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.scope.context)
+		if not node.hl.ll:
+			inst = self.create_ll_instance(node.hl)
+			inst.declare(self.scope.context)
+		else:
+			inst = node.hl.ll
+			inst.decref(self.context)
 		inst.new(self.context, node.n)
 		return inst
 
@@ -1675,6 +1682,7 @@ class Py2C(ASTVisitor):
 		exc_type_inst.declare(self.scope.context)
 		self.context.add(c.Assignment('=', c.ID(exc_type_inst.name), c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList())))
 		exc_type_inst.fail_if_null(self.context, exc_type_inst.name)
+		exc_type_inst.incref(self.context)
 		## Store the exception during exception processing
 		with self.save_exception() as exc_cookie:
 			## check the exception handles against the exception that occurred
@@ -1942,14 +1950,19 @@ class Py2C(ASTVisitor):
 
 			# if we have selectors on this generator, visit them recursively
 			if node.ifs:
-				return self.visit_comp_ifs(generators, 0, setter)
+				rv = self.visit_comp_ifs(generators, 0, setter)
+				tmp.decref(self.context)
+				return rv
 
 			# if we have more generators, visit them, otherwise set our targets
 			if len(generators) > 1:
-				return self.visit_comp_generators(generators[1:], setter)
+				rv = self.visit_comp_generators(generators[1:], setter)
+				tmp.decref(self.context)
+				return rv
 
 			# if out of generators, go to setting our result
 			setter()
+
 
 
 	def visit_comp_ifs(self, generators, offset, setter):

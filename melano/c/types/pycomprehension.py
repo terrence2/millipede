@@ -27,9 +27,12 @@ class PyComprehensionLL(LLType):
 
 
 	def set_attr_string(self, ctx, attrname, val_inst):
+		self.locals_map[attrname].xdecref(ctx)
 		val_inst = val_inst.as_pyobject(ctx)
+		val_inst.incref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.locals_map[attrname].name), c.ID(val_inst.name)))
 
 
 	def get_attr_string(self, ctx, attrname, out_inst):
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.ID(self.locals_map[attrname].name)))
+		out_inst.incref(ctx)

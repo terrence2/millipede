@@ -131,32 +131,12 @@ class Linker(ASTVisitor):
 
 
 	def visit_Import(self, node):
-		pass # all work is done for plain imports in indexer
+		'''All work is done for plain imports in indexer.'''
 
 
 	def visit_ImportFrom(self, node):
 		'''Note: we need to already be indexed to provide names for * imports, so we _also_
 			do import_from in link.'''
-		return
-
-		#TODO: push this algorithm (and all other existing inline implementations of it) down into the ImportFrom node
-		modname = '.' * node.level + str(node.module)
-		mod = self.module.refs.get(modname, None)
-		if not mod:
-			raise NotImplementedError('No ref to module {} when linking'.format(modname))
-		node.module.hl = mod
-
-		for alias in node.names:
-			assert not isinstance(alias.name, py.Attribute)
-			if alias.asname:
-				self.visit(alias.asname)
-			else:
-				if str(alias.name) == '*':
-					for name in mod.lookup_star():
-						if not self.context.has_symbol(name):
-							self.context.add_symbol(name, NameRef(mod.lookup(name)))
-				else:
-					self.visit(alias.name)
 
 
 	def visit_ListComp(self, node):

@@ -274,7 +274,7 @@ class MelanoProject:
 		checksum = hashlib.sha1(source.encode('UTF-8')).hexdigest()
 		cachefile = os.path.join(self.cachedir, checksum)
 		if checksum in self.cached:
-			logging.debug("Cached: {}".format(filename))
+			logging.debug("Cached: {} @ {}".format(filename, checksum))
 			with open(cachefile, 'rb') as fp:
 				ast = pickle.load(fp)
 		else:

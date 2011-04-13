@@ -59,7 +59,7 @@ def test_all(testfile, root, interpreter, version):
 		if expect['xfail']:
 			pytest.xfail()
 
-		p = subprocess.Popen(['millipede-x-' + version, testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		p = subprocess.Popen([os.path.join(TESTDIR, 'millipede-x-' + version), testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 		p.communicate()
 		assert p.returncode == 0, "Failed melano-x build for {}".format(testfile)
 

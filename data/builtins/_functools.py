@@ -1,3 +1,5 @@
+def cmp_to_key(*args, **kwargs):
+	pass
 
 class partial:
 	pass

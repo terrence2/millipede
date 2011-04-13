@@ -19,7 +19,8 @@ class Name(Entity):
 		'''
 		super().__init__()
 
-		self.name = name
+		self.python_name = name
+		self.name = name.replace('.', '_')
 		self.parent = parent
 
 		# a name can have a child scope (class/functions, etc)
