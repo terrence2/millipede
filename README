@@ -1,7 +1,7 @@
-Melano
+Millipede - Give your snake legs!
 ======
 
-Melano is a Python-to-C translator, using CPython's libpython, similar in concept to Pyrex or Cython, but with a significantly different focus.
+Millipede is a Python-to-C translator, using CPython's libpython, similar in concept to Nuitka, but with a different focus.
 
 
 Goal
@@ -30,34 +30,24 @@ Turning Python into C++ is not the goal!  We want our full, type-agnostic dynami
 
 What about JITing?
 ------------------
-JITing is the way of the future.  Unfortunately though, that is the future, and not the whole story right now.
+JITing is the way of the future.  Unfortunately though, that is the future, and not the whole story as of this moment.
 
-Extenuating factors:
+Extenuating factors leading to Millipede:
 
 1) Python3 support.  Right now.  (Although that's changing fast)
 
 2) Some applications are static by their very nature: i.e. serialization frameworks.  In these cases, dynamic recompilation is not going to be able to do much better than a static compiler.
 
-3) Some applications need low latency, so a JIT is inappropriate.
+3) Some applications need low latency and can't afford to wait for a JIT, even if the aggregate performance is lower.
 
-4) As Python found out when trying to integrate LLVM, a JIT comes with some cost to the size of the program binary and startup times.  For some applications, a simple, small executable is preferable to having a JIT on-board.
-
-5) Other side benefits: http://brendaneich.com/2010/08/static-analysis-ftw/
-
-6) Consider the optimization of a C program from the perspective of a programmer using the language.  Compiling with -O1 is reliably more performant than -O0, and compiling with -O2 is reliably more performant than -O1.  But here things tend to break down.  On some programs, -Os is faster than -O3, and sometimes it is the other way around.  On the occasional pathological test case, -O0 will even beat -O3.
-
-In order to address this problem, gcc has introduced something called Profile Guided Optimization (PGO).  With PGO compilation, you run the target executable once on a representative workload while the infrastructure captures a trace of the run.  It then uses the trace to build a highly optimized binary for that workload.  If this sounds familiar, it is because this is JIT.  It is, however, a fairly poor form of JIT that cannot adapt to runtime workload changes.  Mark my words, the C programming language will have something along the lines of runtime recompilation (which they probably will not call JIT) within the next 20 years.  They will probably start pursuing this when "scripting languages" begin beating them reliably in performance benchmarks in the next 10 or so years.
-
-No matter what platform we decide to target, Melano's boat will rise with the tide as compiler technology gets more sophisticated.
+4) JIT's currently only target loops, so code paths that run very frequently, but are not in a loop, do not benefit.
 
 
 Current Status
 --------------
-Working:  Python-to-C compilation of the harder elements -- classes, functions, importing, names, flow control, and so on, as well as most of the easier elements.
+Millipede is fully self hosting.
 
-Todo: Bytes, Delete, Ellipsis, ExtSlice, GeneratorExp, IfExp, Lambda, Slice, Starred.  Static and type analysis is still incredibly basic, but we need to know that fully general python translation works before we can start safely eliding bits of it.
-
-Halfway: The GUI elements exist (built on PyQt4) although the highlighting engine is still mostly pointing at a prior experiment and are, thus, mainly broken at the moment.
+Halfway There: The GUI elements exist (built on PyQt4) although the highlighting engine is still mostly pointing at a prior experiment and are, thus, mainly broken at the moment.
 
 
 Playing with Melano
@@ -73,9 +63,7 @@ For the truely brave/foolhardy:
 > ./test-prog
 ### And check the output against the code, if you value correct answers.
 
-Or:
-> py.test -k test/ -v test/
-### I'm writing tests as I go, so expect surprisingly little breakage.
-
-Problems reported at this juncture will be swept under the rug, so consider it a fun toy and nothing else for the moment.
+Or run all tests with:
+> py.test -k <interpreter>:<version>:test/ -v test/
+### <Interpreter> is one of "python", "millipede", or "hosted" and <version> is one of 3.1 or 3.3. 
 
