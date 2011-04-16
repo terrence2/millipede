@@ -118,6 +118,7 @@ class PyModuleLL(PyObjectLL):
 
 	def set_attr_string(self, ctx, name:str, val:LLType):
 		self.ll_dict.set_item_string(ctx, name, val)
+		#FIXME: do we really need both dict and attr?  don't these go to the same place?
 		super().set_attr_string(ctx, name, val)
 
 
