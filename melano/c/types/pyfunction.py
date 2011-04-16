@@ -92,6 +92,7 @@ class PyFunctionLL(PyObjectLL):
 		# create the function pyobject itself
 		self.c_obj = PyObjectLL(self.hlnode, self.visitor)
 		self.c_obj.declare(tu, ['static'], name=self.hlnode.owner.global_c_name + "_pycfunc")
+		self.c_obj.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.c_obj.name), c.FuncCall(c.ID('PyMelanoFunction_New'), c.ExprList(
 													c_name, c.ID(self.c_pystub_func.decl.name), c_docstring))))
 		self.fail_if_null(ctx, self.c_obj.name)
@@ -400,6 +401,7 @@ class PyFunctionLL(PyObjectLL):
 
 
 	def runner_outro(self, ctx):
+		self.visitor.none.incref(ctx)
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.visitor.none.name)))
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):
@@ -420,6 +422,7 @@ class PyFunctionLL(PyObjectLL):
 
 
 	def get_attr_string(self, ctx, attrname, outvar):
+		outvar.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(outvar.name), c.ID(self.locals_map[attrname])))
 		self.except_if_null(ctx, outvar.name, 'PyExc_UnboundLocalError', "local variable '{}' referenced before assignment".format(attrname))
 		outvar.incref(ctx)

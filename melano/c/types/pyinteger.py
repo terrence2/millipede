@@ -16,16 +16,17 @@ class PyIntegerLL(PyObjectLL):
 
 
 	def set_constant(self, ctx, n):
-		self.xdecref(ctx)
 		return self.new(ctx, n)
 
 
 	def _new_from_long(self, ctx, c_n):
+		self.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyLong_FromLong'), c.ExprList(c_n))))
 		self.fail_if_null(ctx, self.name)
 
 
 	def _new_from_string(self, ctx, c_s):
+		self.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyLong_FromString'), c.ExprList(
 																c_s, c.ID('NULL'), c.Constant('integer', 0)))))
 		self.fail_if_null(ctx, self.name)

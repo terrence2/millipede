@@ -40,6 +40,7 @@ class PyTupleLL(PyObjectLL):
 			else:
 				raise ValueError('unrecognized type to pack in PyTupleLL.pack: {}'.format(inst))
 		self._length = len(ids_to_pack)
+		self.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyTuple_Pack'), c.ExprList(
 																						c.Constant('integer', len(ids_to_pack)), *ids_to_pack))))
 		self.fail_if_null(ctx, self.name)

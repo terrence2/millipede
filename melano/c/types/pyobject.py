@@ -50,19 +50,23 @@ class PyObjectLL(LLType):
 		if not out_inst:
 			out_inst = PyStringLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context, name="_str")
+		out_inst.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_Str'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out_inst.name)
 		return out_inst
 
 
 	def assign_none(self, ctx):
+		self.xdecref(ctx)
+		self.visitor.none.incref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.name), c.ID(self.visitor.none.name)))
 
 
 	def assign_name(self, ctx, from_var):
+		self.xdecref(ctx)
 		from_var = from_var.as_pyobject(ctx)
+		from_var.xincref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.name), c.ID(from_var.name)))
-		ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(self.name))))
 
 
 	def get_length(self, ctx, out_inst=None):
@@ -75,6 +79,7 @@ class PyObjectLL(LLType):
 
 
 	def get_attr_string(self, ctx, attrname, out_var):
+		out_var.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_var.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
 														c.ID(self.name), c.Constant('string', attrname)))))
 		self.fail_if_null(ctx, out_var.name)
@@ -110,6 +115,7 @@ class PyObjectLL(LLType):
 		if not out_inst:
 			out_inst = PyObjectLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context, name="_item")
+		out_inst.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyObject_GetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name)))))
 		self.fail_if_null(ctx, out_inst.name)
@@ -138,67 +144,80 @@ class PyObjectLL(LLType):
 		'''Returns the instance of the return value.'''
 		posid = c.ID(posargs.name) if posargs else c.ID('NULL')
 		kwid = c.ID(kwargs.name) if kwargs else c.ID('NULL')
+		out_var.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_var.name), c.FuncCall(c.ID('PyObject_Call'), c.ExprList(c.ID(self.name), posid, kwid))))
 		self.fail_if_null(ctx, out_var.name)
 
 
 	## Binary Ops ##
 	def bitor(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Or'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def bitxor(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Xor'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def bitand(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_And'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def lshift(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Lshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def rshift(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Rshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def add(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Add'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def subtract(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Subtract'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def multiply(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Multiply'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def divide(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_TrueDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def floor_divide(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_FloorDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def modulus(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Remainder'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def power(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Power'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID(self.visitor.none.name)))))
 		self.fail_if_null(ctx, out.name)
 	## END Binary Ops ##
@@ -206,50 +225,62 @@ class PyObjectLL(LLType):
 
 	## Inplace Binary Ops ##
 	def inplace_bitor(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceOr'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_bitxor(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceXor'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_bitand(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceAnd'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_lshift(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceLshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_rshift(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceRshift'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_add(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceAdd'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_subtract(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceSubtract'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_multiply(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceMultiply'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_divide(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceTrueDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_floor_divide(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceFloorDivide'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_modulus(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlaceRemainder'), c.ExprList(c.ID(self.name), c.ID(rhs.name)))))
 		self.fail_if_null(ctx, out.name)
 
 	def inplace_power(self, ctx, rhs, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_InPlacePower'), c.ExprList(c.ID(self.name), c.ID(rhs.name), c.ID(self.visitor.none.name)))))
 		self.fail_if_null(ctx, out.name)
 	## END Inplace Binary Ops ##
@@ -257,16 +288,19 @@ class PyObjectLL(LLType):
 
 	## Unary Ops ##
 	def invert(self, ctx, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Invert'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def positive(self, ctx, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Positive'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
 
 
 	def negative(self, ctx, out):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyNumber_Negative'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
 
@@ -313,6 +347,7 @@ class PyObjectLL(LLType):
 		if not out_inst:
 			out_inst = PyObjectLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context, name='_keys')
+		out_inst.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyMapping_Keys'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out_inst.name)
 		return out_inst
@@ -332,6 +367,7 @@ class PyObjectLL(LLType):
 		if not out_inst:
 			out_inst = PyObjectLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context)
+		out_inst.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_GetItem'), c.ExprList(
 															c.ID(self.name), c.ID(key.name)))))
 		self.fail_if_null(ctx, out_inst.name)
@@ -342,6 +378,7 @@ class PyObjectLL(LLType):
 		if not out_inst:
 			out_inst = PyObjectLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context)
+		out_inst.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_InPlaceConcat'), c.ExprList(c.ID(self.name), c.ID(seq_inst.name)))))
 		self.fail_if_null(ctx, out_inst.name)
 		return out_inst
@@ -351,6 +388,7 @@ class PyObjectLL(LLType):
 		if not out_inst:
 			out_inst = PyTupleLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context)
+		out_inst.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_Tuple'), c.ExprList(c.ID(self.name)))))
 		return out_inst
 
@@ -359,17 +397,18 @@ class PyObjectLL(LLType):
 						start:int or CIntegerLL,
 						end:int or CIntegerLL,
 						step:int or CIntegerLL,
-						out=None):
-		if not out:
-			out = PyObjectLL(None, self.visitor)
-			out.declare(self.visitor.scope.context)
+						out_inst=None):
+		if not out_inst:
+			out_inst = PyObjectLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context)
+		out_inst.xdecref(ctx)
 		_start = c.Constant('integer', start) if isinstance(start, int) else c.ID(start.name)
 		_end = c.Constant('integer', end) if isinstance(end, int) else c.ID(end.name)
 		if step != 1:
 			raise NotImplementedError("Slicing with a step size is not yet supported")
-		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_GetSlice'), c.ExprList(c.ID(self.name), _start, _end))))
-		self.fail_if_null(ctx, out.name)
-		return out
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_GetSlice'), c.ExprList(c.ID(self.name), _start, _end))))
+		self.fail_if_null(ctx, out_inst.name)
+		return out_inst
 
 
 	def sequence_del_slice(self, ctx,
@@ -396,12 +435,14 @@ class PyObjectLL(LLType):
 
 
 	def get_iter(self, ctx, iter):
+		iter.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(iter.name), c.FuncCall(c.ID('PyObject_GetIter'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, iter.name)
 
 
 	def get_type(self, ctx, out):
 		assert isinstance(out, PyTypeLL)
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyObject_Type'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out.name)
 

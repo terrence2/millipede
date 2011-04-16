@@ -41,16 +41,20 @@ class PyDictLL(PyObjectLL):
 
 
 	def get_item_string(self, ctx, name:str, out:PyObjectLL, error_type='PyExc_KeyError', error_str=None):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(
 												c.ID(self.name), c.Constant('string', name)))))
 		self.except_if_null(ctx, out.name, error_type, error_str)
 		out.incref(ctx)
+		return out
 
 
 	def get_item_string_nofail(self, ctx, name:str, out:PyObjectLL):
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(
 												c.ID(self.name), c.Constant('string', name)))))
 		out.xincref(ctx)
+		return out
 
 
 	def update(self, ctx, other:PyObjectLL):
@@ -61,9 +65,11 @@ class PyDictLL(PyObjectLL):
 
 
 	def copy(self, ctx, out_inst=None):
-		if out_inst is None:
+		if not out_inst:
 			out_inst = PyDictLL(None, self.visitor)
 			out_inst.declare(self.visitor.scope.context, name="_dict_cp")
+		out_inst.xdecref(ctx)
+		#FIXME: abort?!?
 		ctx.add(c.If(c.UnaryOp('!', c.ID(self.name)), c.Compound(c.FuncCall(c.ID('abort'), c.ExprList())), None))
 		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyDict_Copy'), c.ExprList(c.ID(self.name)))))
 		self.fail_if_null(ctx, out_inst.name)

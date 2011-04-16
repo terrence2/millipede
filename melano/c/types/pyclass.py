@@ -47,6 +47,7 @@ class PyClassLL(PyObjectLL):
 		# create the function pyobject itself
 		self.c_builder_obj = PyObjectLL(self.hlnode, self.visitor)
 		self.c_builder_obj.declare(ctx, name=self.hlnode.owner.name + "_builder_pycfunc")
+		self.c_builder_obj.xdecref(ctx)
 		c_name = c.Constant('string', PyStringLL.name_to_c_string(self.hlnode.owner.name))
 		ctx.add(c.Assignment('=', c.ID(self.c_builder_obj.name), c.FuncCall(c.ID('PyMelanoFunction_New'), c.ExprList(
 													c_name, c.ID(self.c_builder_func.decl.name), c.ID('NULL')))))
@@ -86,6 +87,7 @@ class PyClassLL(PyObjectLL):
 
 
 	def outro(self, ctx):
+		self.visitor.none.incref(ctx)
 		ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.visitor.none.name)))
 		ctx.add(c.Label('end'))
 		for name in reversed(ctx.cleanup):

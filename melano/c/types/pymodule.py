@@ -128,6 +128,7 @@ class PyModuleLL(PyObjectLL):
 			mode = 'unlikely'
 
 		# access globals first, fall back to builtins -- remember to ref the global if we get it, since dict get item borrows
+		out.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(self.ll_dict.name), c.Constant('string', attrname)))))
 		frombuiltins = c.If(c.FuncCall(c.ID(mode), c.ExprList(c.UnaryOp('!', c.ID(out.name)))),
 				c.Compound(

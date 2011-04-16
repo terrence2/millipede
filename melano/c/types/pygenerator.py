@@ -143,13 +143,13 @@ class PyGeneratorLL(PyFunctionLL):
 		# assign to our yielded slot slot
 		if not rv_inst:
 			rv_inst = self.visitor.none
-		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID(rv_inst.name)))
 		rv_inst.incref(ctx)
+		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID(rv_inst.name)))
 
 		# transfer control back to originator
 		ctx.add(c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name))))
 		ctx.add(c.FuncCall(c.ID('MelanoGen_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
 		ctx.add(c.FuncCall(c.ID('MelanoGen_EnterContext'), c.ExprList(c.ID(self.gen_inst.name))))
 
-		# set yielded slot to null
+		# set yielded slot to null -- other context stole the ref
 		ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))
