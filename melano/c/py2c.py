@@ -1780,13 +1780,7 @@ class Py2C(ASTVisitor):
 		if node.ctx in [py.Load, py.Aug]:
 			inst = self.create_ll_instance(node.hl)
 			inst.declare(self.scope.context)
-			to_pack = []
-			if node.elts:
-				for n in node.elts:
-					e_inst = self.visit(n)
-					to_pack.append(e_inst)
-			for e_inst in to_pack:
-				e_inst.incref(self.context)
+			to_pack = [self.visit(n) for n in node.elts] if node.elts else []
 			inst.pack(self.context, *to_pack)
 			return node.hl.ll
 		else:
