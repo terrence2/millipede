@@ -19,3 +19,6 @@ py33:
 
 self33:
 	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/local/include/python3.3dmu -o millipede-x-3.3 melano.c ${EXTRA_SOURCES} -lpython3.3dmu ${LIBS} 
+
+perf-dispatcher: perf-dispatcher.c
+	gcc -Wall -O2 -o perf-dispatcher perf-dispatcher.c
