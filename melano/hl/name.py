@@ -46,10 +46,6 @@ class Name(Entity):
 		'''
 		Query the type list to find the most appropriate type for this name.
 		'''
-		# if we have a scope, then that scope should always know our type correctly
-		#if self.scope:
-		#	return self.scope.get_type()
-
 		# if we have only one type assigned, just use it
 		if len(self.types) == 1:
 			return self.types[0]
