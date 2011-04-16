@@ -153,8 +153,3 @@ class PyStringLL(PyObjectLL):
 											c.Constant('integer', strlen)))))
 		self.fail_if_null(ctx, self.name)
 
-
-	def as_c_string(self, ctx, out_inst=None):
-		return out_inst
-
-
