@@ -837,6 +837,8 @@ class Py2C(ASTVisitor):
 
 	def visit_Call(self, node):
 		def _call_super(self, node, funcinst):
+			#FIXME: what happens if we write to __class__ at runtime?
+
 			# get the class type and the instance
 			cls = self.find_nearest_class_scope(err='super must be called in a class context: {}'.format(node.start))
 			fn = self.find_nearest_method_scope(err='super must be called in a method context: {}'.format(node.start))
