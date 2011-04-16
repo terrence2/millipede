@@ -23,7 +23,16 @@ class PyListLL(PyObjectLL):
 
 
 	def pack(self, ctx, *to_pack):
-		ids_to_pack = [c.ID(inst.name) if inst is not None else c.ID(self.visitor.none.name) for inst in to_pack]
+		ids_to_pack = []
+		for inst in to_pack:
+			if isinstance(inst, PyObjectLL):
+				inst.incref(ctx)
+				ids_to_pack.append(c.ID(inst.name))
+			elif inst is None:
+				self.visitor.none.incref(ctx)
+				ids_to_pack.append(c.ID(self.visitor.none.name))
+			else:
+				raise ValueError('unrecognized type to pack in PyListLL.pack: {}'.format(inst))
 		self.xdecref(ctx)
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyList_New'), c.ExprList(c.Constant('integer', len(ids_to_pack))))))
 		self.fail_if_null(ctx, self.name)
