@@ -27,9 +27,9 @@ def main():
 	path = sys.argv[-1]
 	base = os.path.dirname(path)
 	fn = os.path.basename(path)
-	project = MelanoProject('test', programs=[fn[:-3]], roots=[base])
+	project = MelanoProject('test', programs=[fn[:-3]], roots=[base], build_dir='.')
 	project.configure(limit='', verbose=False, stdlib=stdlib, extensions=extensions)
-	project.build('test.c')
+	project.build_one(fn[:-3], 'test.c')
 
 	#app = MelanoApplication(project, sys.argv)
 	#signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c

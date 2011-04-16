@@ -170,9 +170,9 @@ class Py2C(ASTVisitor):
 		# add includes
 		self.tu.add_include(c.Comment(' ***Includes*** '))
 		self.tu.add_include(c.Include('Python.h', True))
-		self.tu.add_include(c.Include('data/c/env.h', False))
-		self.tu.add_include(c.Include('data/c/funcobject.h', False))
-		self.tu.add_include(c.Include('data/c/genobject.h', False))
+		self.tu.add_include(c.Include('env.h', False))
+		self.tu.add_include(c.Include('funcobject.h', False))
+		self.tu.add_include(c.Include('genobject.h', False))
 
 		# add common names
 		self.builtins = PyObjectLL(None, self)

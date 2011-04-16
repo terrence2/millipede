@@ -4,16 +4,14 @@ All rights reserved.
 
 Toplevel tool for analyzing a source base.
 '''
-from collections import OrderedDict
-from copy import copy
+from melano.c.makefile import Makefile
 from melano.c.out import COut
 from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.hl.builtins import Builtins
 from melano.hl.module import MelanoModule
 from melano.hl.name import Name
-from melano.hl.scope import Scope
-from melano.project.analysis.find_links import FindLinks
+from melano.project.analysis.clean import Clean
 from melano.project.analysis.indexer0 import Indexer0
 from melano.project.analysis.indexer1 import Indexer1
 from melano.project.analysis.linker import Linker
@@ -44,7 +42,7 @@ class MelanoProject:
 	query the sources to build an information database about a project.
 	'''
 
-	def __init__(self, name:str, programs:[str], roots:[str]):
+	def __init__(self, name:str, programs:[str], roots:[str], build_dir:str='./build'):
 		'''
 		The project root(s) is the filesystem path(s) where we should
 		start searching for modules in import statements.
@@ -55,7 +53,8 @@ class MelanoProject:
 		self.name = name
 		self.programs = {p: None for p in programs}
 		self.roots = roots
-		self.build_dir = os.path.realpath('./build')
+		self.build_dir = os.path.realpath(build_dir)
+		self.data_dir = os.path.join(os.path.realpath('.'), 'data')
 
 		self.stdlib = [os.path.realpath('./data/lib-dynload')]
 		self.extensions = []
@@ -81,6 +80,10 @@ class MelanoProject:
 		self.cachedir = os.path.realpath('./cache')
 		if not os.path.exists(self.cachedir):
 			os.makedirs(self.cachedir)
+
+		# ensure the build directory exists
+		if not os.path.exists(self.build_dir):
+			os.makedirs(self.build_dir)
 
 		# list our currently cached entries for fast lookup later
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
@@ -117,19 +120,24 @@ class MelanoProject:
 			logging.info("Builtins Search: {}".format(self.builtins))
 
 
-	def build(self, target):
+	def build_one(self, program, target):
+		assert program in self.programs
+		assert target.endswith('.c')
 		self.locate_modules()
 		self.index_static()
 		self.index_imports()
 		self.link_references()
 		self.derive_types()
-		if target.endswith('.c'):
-			c = self.transform_lowlevel_c()
-			logging.info("Writing: {}".format(target))
-			with COut(target) as v:
-				v.visit(c)
-		else:
-			raise NotImplementedError('target must be a c file at the moment')
+		c = self.transform_ll_c([program], target, False)
+
+
+	def build_all(self):
+		self.locate_modules()
+		self.index_static()
+		self.index_imports()
+		self.link_references()
+		self.derive_types()
+		self.transform_ll_c()
 
 
 	def locate_modules(self):
@@ -151,6 +159,7 @@ class MelanoProject:
 				self.order.append(filename)
 				# map the module by filename
 				self.modules_by_path[filename] = mod
+				self.modules_by_absname[modname] = mod
 				# load the (already cached) ast into the module struct and backref it
 				if filename.endswith('.py'):
 					self.__load_ast(mod)
@@ -206,6 +215,7 @@ class MelanoProject:
 					if 0 == missing[fn]:
 						visited.add(mod)
 
+
 		logging.info("Indexing: Phase 1, {} files".format(len(self.order)))
 		_index(self)
 
@@ -239,20 +249,65 @@ class MelanoProject:
 				typer.visit(mod.ast)
 
 
-	def transform_lowlevel_c(self):
-		visitor = Py2C()
-		for mod in self.modules_by_path.values():
-			if self.is_local(mod):
-				logging.info("Preparing: {}".format(mod.filename))
-				visitor.preallocate(mod.ast)
+	def transform_ll_c(self, programs=None, target=None, emit_makefile=True):
+		makefile = Makefile(os.path.join(self.build_dir, 'Makefile'), self.data_dir)
+
+		if not programs: programs = self.programs
+		for program in programs:
+			# apply the low-level transformation
+			visitor = Py2C()
+			for fn in self.order:
+				mod = self.modules_by_path[fn]
+				if self.is_local(mod):
+					logging.info("Preparing: {}".format(mod.filename))
+					visitor.preallocate(mod.ast)
+			for fn in self.order:
+				mod = self.modules_by_path[fn]
+				if self.is_local(mod):
+					if mod.python_name in self.programs and mod.python_name != program:
+						continue
+					logging.info("Emitting: {}".format(mod.filename))
+					visitor.visit(mod.ast)
+			visitor.close()
+
+			# write the file
+			if not target:
+				target = os.path.join(self.build_dir, program + '.c')
+			logging.info("Writing: {}".format(target))
+			with COut(target) as v:
+				v.visit(visitor.tu)
+
+			# add us to the makefile
+			makefile.add_target(program, target)
+
+			# reset the lowlevel linkage to the now written C structure
+			self.reset_ll()
+
+		# write the makefile
+		if emit_makefile:
+			makefile.write()
+
+
+	def reset_ll(self):
+		logging.info("Reset LL nodes")
+
+		def _visit_sym(sym):
+			sym.ll = None
+			if sym.scope:
+				_visit_scope(sym.scope)
+
+		def _visit_scope(scope):
+			scope.ll = None
+			for _, sym in scope.symbols.items():
+				if isinstance(sym, Name) and sym.ll:
+					_visit_sym(sym)
+
 		for fn in self.order:
 			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
-				logging.info("Emitting: {}".format(mod.filename))
-				visitor.visit(mod.ast)
-		visitor.close()
-
-		return visitor.tu
+				_visit_scope(mod)
+				v = Clean()
+				v.visit(mod.ast)
 
 
 	def show(self):
@@ -267,6 +322,14 @@ class MelanoProject:
 	def is_local(self, mod:ast.Module) -> bool:
 		'''Return true if the module should be translated, false if bridged to.'''
 		return mod.modtype == MelanoModule.PROJECT and self.limit.match(mod.filename) is not None
+
+
+	def get_module_at_filename(self, filename):
+		return self.modules_by_path[filename]
+
+
+	def get_module_at_dottedname(self, dottedname):
+		return self.modules_by_absname[dottedname]
 
 
 	def get_file_ast(self, filename):

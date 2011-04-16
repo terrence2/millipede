@@ -19,9 +19,9 @@ def main():
 		stdlib = ['/usr/lib/python3.1', '/usr/lib/python3.1/lib-dynload']
 		extensions = ['/usr/lib/python3.1/site-packages']
 
-	project = MelanoProject('melano', programs=['run'], roots=[os.path.expanduser('~/Projects/melano')])
+	project = MelanoProject('melano', programs=['run'], roots=[os.path.realpath('.')])
 	project.configure(stdlib=stdlib, extensions=extensions)
-	project.build('melano.c')
+	project.build_all()
 
 	#app = MelanoApplication(project, sys.argv)
 	#signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c
