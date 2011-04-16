@@ -864,12 +864,6 @@ class Py2C(ASTVisitor):
 					idinst = self.visit(arg)
 					idinst = idinst.as_pyobject(self.context)
 					args_insts.append(idinst)
-				for idinst in args_insts:
-					# pytuple pack will steal the ref, but we want to be able to cleanup the node later
-					# note: do this after visiting all other nodes to minimize our probability of leaking the extra ref
-					#FIXME: make it possible for a failure in the tuple packing to free these refs?  Or is this a bad idea
-					#		because a failure halfway through would end up with us double-freeing half of our refs?
-					idinst.incref(self.context)
 
 			# Note: we always need to pass a tuple as args, even if there is nothing in it
 			if not node.starargs:
