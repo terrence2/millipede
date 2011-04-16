@@ -21,16 +21,16 @@ class Linker(ASTVisitor):
 		super().__init__()
 		self.project = project
 		self.module = module
-		self.context = self.module
+		self.scope = self.module
 
 
 	@contextmanager
-	def scope(self, ctx):
+	def push_scope(self, ctx):
 		# push a new scope
-		prior = self.context
-		self.context = ctx
+		prior = self.scope
+		self.scope = ctx
 		yield
-		self.context = prior
+		self.scope = prior
 
 
 	def visit_Attribute(self, node):
@@ -75,7 +75,7 @@ class Linker(ASTVisitor):
 		self.visit_nodelist(node.keywords)
 		self.visit(node.starargs)
 		self.visit(node.kwargs)
-		with self.scope(node.hl):
+		with self.push_scope(node.hl):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
 
@@ -86,7 +86,7 @@ class Linker(ASTVisitor):
 
 
 	def visit_DictComp(self, node):
-		with self.scope(node.hl):
+		with self.push_scope(node.hl):
 			self.visit_nodelist(node.generators)
 			self.visit(node.key)
 			self.visit(node.value)
@@ -101,7 +101,7 @@ class Linker(ASTVisitor):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
-		with self.scope(node.hl):
+		with self.push_scope(node.hl):
 			# arg name defs are inside the func
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)
@@ -114,7 +114,7 @@ class Linker(ASTVisitor):
 
 
 	def visit_GeneratorExp(self, node):
-		with self.scope(node.hl):
+		with self.push_scope(node.hl):
 			self.visit_nodelist(node.generators)
 			self.visit(node.elt)
 
@@ -122,7 +122,7 @@ class Linker(ASTVisitor):
 	def visit_Lambda(self, node):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
-		with self.scope(node.hl):
+		with self.push_scope(node.hl):
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)
 			self.visit_nodelist_field(node.args.kwonlyargs, 'arg')
@@ -140,20 +140,20 @@ class Linker(ASTVisitor):
 
 
 	def visit_ListComp(self, node):
-		with self.scope(node.hl):
+		with self.push_scope(node.hl):
 			self.visit_nodelist(node.generators)
 			self.visit(node.elt)
 
 
 	def visit_Name(self, node):
 		if node.ctx in [py.Load, py.Del]:
-			sym = self.context.lookup(str(node))
-			ref = self.context.add_reference(sym)
+			sym = self.scope.lookup(str(node))
+			ref = self.scope.add_reference(sym)
 			node.hl = ref
 
 
 	def visit_SetComp(self, node):
-		with self.scope(node.hl):
+		with self.push_scope(node.hl):
 			self.visit_nodelist(node.generators)
 			self.visit(node.elt)
 
@@ -179,12 +179,12 @@ class Linker(ASTVisitor):
 		for handler in node.handlers:
 			if isinstance(handler.type, py.Tuple):
 				for name in handler.type.elts:
-					sym = self.context.lookup(str(name))
-					ref = self.context.add_reference(sym)
+					sym = self.scope.lookup(str(name))
+					ref = self.scope.add_reference(sym)
 					name.hl = ref
 			elif isinstance(handler.type, py.Name):
-				sym = self.context.lookup(str(handler.type))
-				ref = self.context.add_reference(sym)
+				sym = self.scope.lookup(str(handler.type))
+				ref = self.scope.add_reference(sym)
 				handler.type.hl = ref
 			else:
 				assert handler is node.handlers[-1], "default 'except' must be last"

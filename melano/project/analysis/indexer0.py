@@ -34,7 +34,7 @@ class Indexer0(ASTVisitor):
 		super().__init__()
 		self.project = project
 		self.module = module
-		self.context = self.module
+		self.scope = self.module
 
 		# anon scopes need to be unique
 		self.anon_count = itertools.count()
@@ -48,27 +48,29 @@ class Indexer0(ASTVisitor):
 		# NOTE: since we can repeatedly visit index to find names defined later, we need
 		#		to not overwrite existing symbols dicts
 		if node.hl:
-			prior = self.context
-			self.context = node.hl
+			prior = self.scope
+			self.scope = node.hl
 			yield
-			self.context = prior
+			self.scope = prior
 			return
 
 		if name is None:
 			name = str(node.name)
 
 		# insert node into parent scope
-		sym = self.context.add_symbol(name)
+		sym = self.scope.add_symbol(name)
 		sym.scope = scope_ty(sym)
 		node.hl = sym.scope
+
+		# if we have a name node, also set the sym on it
 		try: node.name.hl = sym
 		except: pass
 
 		# push a new scope
-		prior = self.context
-		self.context = sym.scope
+		prior = self.scope
+		self.scope = sym.scope
 		yield
-		self.context = prior
+		self.scope = prior
 
 
 	def find_nearest_function(self, base):
@@ -125,8 +127,8 @@ class Indexer0(ASTVisitor):
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
 		with self.new_scope(node, scope_ty=MelanoFunction):
-			if self.find_nearest_function(self.context.owner.parent):
-				self.context.set_needs_closure()
+			if self.find_nearest_function(self.scope.owner.parent):
+				self.scope.set_needs_closure()
 
 			# args
 			self.visit_nodelist_field(node.args.args, 'arg')
@@ -145,9 +147,9 @@ class Indexer0(ASTVisitor):
 		node.name = py.Name(name, py.Store, None)
 		self.visit(node.name)
 		with self.new_scope(node, scope_ty=MelanoFunction, name=name):
-			self.context.is_generator = True
-			self.context.is_anonymous = True
-			self.context.set_needs_closure()
+			self.scope.is_generator = True
+			self.scope.is_anonymous = True
+			self.scope.set_needs_closure()
 			self.visit(node.elt)
 			self.visit_nodelist(node.generators)
 
@@ -159,7 +161,7 @@ class Indexer0(ASTVisitor):
 			if name not in self.module.symbols:
 				self.module.add_symbol(name)
 			sym = self.module.lookup(name)
-			ref = self.context.set_reference(sym)
+			ref = self.scope.set_reference(sym)
 			ref.is_global = True
 
 
@@ -191,10 +193,10 @@ class Indexer0(ASTVisitor):
 						logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
 						self.missing.add(pkg_or_mod_name + '.*')
 						return
-					if not self.context.has_symbol(name):
+					if not self.scope.has_symbol(name):
 						ref = NameRef(mod.lookup(name))
-						ref.parent = self.context
-						self.context.add_symbol(name, ref)
+						ref.parent = self.scope
+						self.scope.add_symbol(name, ref)
 				continue
 
 			# Note: the queried name may be in the given module (maybe an __init__), or 
@@ -221,16 +223,16 @@ class Indexer0(ASTVisitor):
 				continue
 
 			ref = NameRef(sym)
-			ref.parent = self.context
+			ref.parent = self.scope
 
 			if alias.asname:
 				#self.visit(alias.asname)
-				self.context.add_symbol(str(alias.asname), ref)
+				self.scope.add_symbol(str(alias.asname), ref)
 				alias.asname.hl = ref
 				alias.name.hl = ref
 			else:
 				#self.visit(alias.name)
-				self.context.add_symbol(str(alias.name), ref)
+				self.scope.add_symbol(str(alias.name), ref)
 				alias.name.hl = ref
 	'''
 
@@ -243,9 +245,9 @@ class Indexer0(ASTVisitor):
 		node.name = py.Name(name, py.Store, None)
 		self.visit(node.name)
 		with self.new_scope(node, scope_ty=MelanoFunction):
-			if self.find_nearest_function(self.context.owner.parent):
-				self.context.set_needs_closure()
-			self.context.is_anonymous = True
+			if self.find_nearest_function(self.scope.owner.parent):
+				self.scope.set_needs_closure()
+			self.scope.is_anonymous = True
 			# args
 			self.visit_nodelist_field(node.args.args, 'arg')
 			self.visit(node.args.vararg)
@@ -278,26 +280,26 @@ class Indexer0(ASTVisitor):
 			#NOTE: store to global/nonlocal will have already visited the global/nonlocal node and created
 			#		this name as a ref, thus preventing us from doing the (incorrect) lookup here
 			name = str(node)
-			if name not in self.context.symbols:
-				sym = self.context.add_symbol(name)
+			if name not in self.scope.symbols:
+				sym = self.scope.add_symbol(name)
 				node.hl = sym
 
 			# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
 			if not node.hl:
-				node.hl = self.context.lookup(name)
+				node.hl = self.scope.lookup(name)
 
 
 	def visit_Nonlocal(self, node):
-		assert self.context.has_closure
+		assert self.scope.has_closure
 
 		for name in node.names:
 			try:
 				# look up-scope for the name
-				sym = self.context.get_next_scope().lookup(name)
+				sym = self.scope.get_next_scope().lookup(name)
 			except KeyError:
 				self.missing.add(name)
 				return
-			ref = self.context.set_reference(sym)
+			ref = self.scope.set_reference(sym)
 			ref.is_nonlocal = True
 
 
@@ -331,12 +333,12 @@ class Indexer0(ASTVisitor):
 		for handler in node.handlers:
 			if handler.name:
 				name = str(handler.name)
-				if name not in self.context.symbols:
-					sym = self.context.add_symbol(name)
+				if name not in self.scope.symbols:
+					sym = self.scope.add_symbol(name)
 					handler.name.hl = sym
 				# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
 				if not handler.name.hl:
-					handler.name.hl = self.context.lookup(name)
+					handler.name.hl = self.scope.lookup(name)
 			#NOTE: don't bother visiting the exception type, because we know it is a Load
 			self.visit_nodelist(handler.body)
 		self.visit_nodelist(node.orelse)
@@ -348,6 +350,6 @@ class Indexer0(ASTVisitor):
 
 
 	def visit_Yield(self, node):
-		assert isinstance(self.context, MelanoFunction), 'Yield in non-function scope'
-		self.context.is_generator = True
+		assert isinstance(self.scope, MelanoFunction), 'Yield in non-function scope'
+		self.scope.is_generator = True
 		self.visit(node.value)
