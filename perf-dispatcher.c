@@ -28,14 +28,17 @@ int dispatch(char *name, char *dir, char **argv) {
 	int rv = 1;
 	char *tmp = NULL;
 
-	if(0 == strcmp(name, "performance/bm_float.py")) {
+	if(0 == strcmp(name, "performance/bm_float.py"))
 		tmp = join(dir, "build/bm_float");
-		argv[0] = tmp;
-	} else {
+	else if(0 == strcmp(name, "performance/bm_pidigits.py"))
+		tmp = join(dir, "build/bm_pidigits");
+	else {
 		fprintf(stderr, "Unknown test named: %s\n", name);
 		return 2;
 	}
 
+	assert(tmp != NULL);
+	argv[0] = tmp;
 	rv = execv(tmp, (char *const *)argv);
 	free(tmp);
 	if(rv)
@@ -49,8 +52,8 @@ char **build_second_args(int argc, char **argv) {
 	int cnt = -2 + 1 + argc + 1;
 	int i;
 	assert(cnt > 0);
-	
-	out = (char **)calloc(1, sizeof(char*));
+
+	out = (char **)calloc(cnt, sizeof(char*));
 	for(i = 2; i < argc; ++i) {
 		out[i - 1] = argv[i];
 	}
@@ -69,7 +72,7 @@ int main(int argc, char **argv) {
 	basedir = dirname(argv[0]);
 	args = build_second_args(argc, argv);
 	rv = dispatch(argv[1], basedir, args);
-	//free(basedir);
-	//free((void *)args);
+	free(basedir);
+	free((void *)args);
 	return rv;
 }
