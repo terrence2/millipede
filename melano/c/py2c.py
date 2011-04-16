@@ -824,7 +824,7 @@ class Py2C(ASTVisitor):
 	def visit_Break(self, node):
 		self.comment('break')
 		def break_handler(label): # the next break is our ultimate target
-			self.context.add(c.FuncCall(c.ID('__err_clear__'), c.ExprList()))
+			self.clear_exception()
 			self.context.add(c.Goto(label))
 			return True
 		self.handle_flowcontrol(
@@ -1889,7 +1889,7 @@ class Py2C(ASTVisitor):
 		with self.new_context(restore_if.iftrue):
 			self.maybe_restore_exception_normalized_exit(exc_cookie)
 		with self.new_context(restore_if.iffalse):
-			self.context.add(c.FuncCall(c.ID('__err_clear__'), c.ExprList()))
+			self.clear_exception()
 
 			# NOTE: just clearing an error isn't enough here: our flowcontrol handler will assume an exception will raise out
 			#		of this context, so we need to also stop ourself from jumping out of this context.  Since the error is squashed
