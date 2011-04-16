@@ -13,11 +13,13 @@ class PyListLL(PyObjectLL):
 		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyList_New'), c.ExprList(c.Constant('integer', 0)))))
 
 
-	def append(self, ctx, inst):
-		tmp = CIntegerLL(None, self.visitor)
-		tmp.declare(self.visitor.scope.context, name='_append_rv')
-		ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyList_Append'), c.ExprList(c.ID(self.name), c.ID(inst.name)))))
-		self.fail_if_nonzero(ctx, tmp.name)
+	def append(self, ctx, inst, out_inst=None):
+		if not out_inst:
+			out_inst = CIntegerLL(None, self.visitor)
+			out_inst.declare(self.visitor.scope.context, name='_append_rv')
+		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyList_Append'), c.ExprList(c.ID(self.name), c.ID(inst.name)))))
+		self.fail_if_nonzero(ctx, out_inst.name)
+		return out_inst
 
 
 	def pack(self, ctx, *to_pack):
