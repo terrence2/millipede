@@ -1,4 +1,3 @@
-
 /* Method object interface */
 
 #ifndef Py_MELANOFUNCOBJECT_H

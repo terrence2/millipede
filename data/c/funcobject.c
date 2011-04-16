@@ -21,6 +21,8 @@ MelanoLocals_Create(Py_ssize_t cnt) {
 
 void
 MelanoLocals_Destroy(MelanoLocals **stack, Py_ssize_t level) {
+    if(!stack[level])
+        return;
     stack[level]->refcnt -= 1;
     if(stack[level]->refcnt == 0) {
         if(stack[level]->locals)
@@ -79,7 +81,7 @@ PyMelanoFunction_New(const char *name,
     op->m_annotations = NULL;
     op->m_defaults = NULL;
     op->m_kwdefaults = NULL;
-    _PyObject_GC_TRACK(op);
+    PyObject_GC_Track(op);
     return (PyObject *)op;
 }
 
@@ -132,10 +134,10 @@ PyMelanoFunction_Call(PyObject *func, PyObject *arg, PyObject *kw)
 static void
 meth_dealloc(PyMelanoFunctionObject *m)
 {
+    PyObject_GC_UnTrack(m);
     if(m->m_stack) {
         MelanoStack_Destroy(m->m_stack, m->m_stacksize);
     }
-    _PyObject_GC_UNTRACK(m);
     PyObject_GC_Del(m);
 }
 
@@ -246,6 +248,9 @@ meth_set__kwdefaults__(PyMelanoFunctionObject *m, PyObject *value)
 static int
 meth_traverse(PyMelanoFunctionObject *m, visitproc visit, void *arg)
 {
+    Py_VISIT(m->m_annotations);
+    Py_VISIT(m->m_defaults);
+    Py_VISIT(m->m_kwdefaults);
     return 0;
 }
 
