@@ -1,5 +1,9 @@
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTreeWidget, QTreeWidgetItem, QIcon
+from melano.hl.class_ import MelanoClass
+from melano.hl.function import MelanoFunction
+from melano.hl.module import MelanoModule
+from melano.hl.name import Name
 import os.path
 
 
@@ -13,6 +17,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		self.project = QCoreApplication.instance().project
 
 		# load icon paths
+		#self.ICONS = {
 		self.icon_package = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-package.svg"))
 		self.icon_module = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-module.svg"))
 		self.icon_class = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-class.svg"))
@@ -21,6 +26,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		self.icon_import = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-import.svg"))
 		self.icon_symbol = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-symbol.svg"))
 		self.icon_parameter = QIcon(os.path.join(QCoreApplication.instance().icons_dir, "ide-parameter.svg"))
+		#}
 
 		self.setColumnCount(1)
 		self.setHeaderLabel('Name')
@@ -30,32 +36,49 @@ class MelanoProjectTreeWidget(QTreeWidget):
 
 		self._setup()
 
+	def _select_icon(self, sym):
+		import pdb; pdb.set_trace()
+		print('sym:', sym)
+		if sym.scope:
+			print("scope: ", type(sym.scope))
+			if isinstance(sym.scope, MelanoClass):
+				return self.icon_class
+			elif isinstance(sym.scope, MelanoModule):
+				if sym.filename.endswith('__init__.py'):
+					return self.icon_package
+				else:
+					return self.icon_module
+			elif isinstance(sym.scope, MelanoFunction):
+				return self.icon_function
+		return QIcon.fromTheme("emblem-unreadable")
+
 	def _setup(self):
 		seen = set()
 		def _add_children(item, mod):
 			for ref in mod.refs:
-				childMod = self.project.find_module(ref, None)
+				childMod = self.project.get_module_at_filename(ref)
 				child = QTreeWidgetItem(item)
 				child.setText(0, ref)
-				icon = QIcon.fromTheme("package-x-generic")
-				child.setIcon(0, icon)
+				child.setIcon(0, self._select_icon(childMod.owner))
 				child.setData(0, self.TYPE_MODULE, childMod)
 				child.setData(0, self.TYPE_NODE, None)
 				item.addChild(child)
 				_add_children(child, childMod)
-			for name in mod.names:
+			for name, sym in mod.symbols.items():
+				if not isinstance(sym, Name): continue
 				child = QTreeWidgetItem(item)
 				child.setText(0, name)
+				child.setIcon(0, self._select_icon(sym))
 				child.setData(0, self.TYPE_MODULE, mod)
-				child.setData(0, self.TYPE_NODE, mod.names[name])
+				child.setData(0, self.TYPE_NODE, mod.symbols[name])
 				item.addChild(child)
 
 
 		for prog in self.project.programs:
-			mod = self.project.find_module(prog, None)
+			mod = self.project.get_module_at_dottedname(prog)
 			item = QTreeWidgetItem(self)
 			item.setText(0, prog)
-			item.setIcon(0, QIcon.fromTheme("package-x-generic"))
+			item.setIcon(0, self._select_icon(mod.owner))
 			item.setData(0, self.TYPE_MODULE, mod)
 			item.setData(0, self.TYPE_NODE, None)
 			self.addTopLevelItem(item)

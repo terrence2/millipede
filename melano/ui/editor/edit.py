@@ -1,7 +1,7 @@
 from .document import MelanoCodeDocument
 from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor, QTextFormat, QColor, QToolTip
 from PyQt4.QtCore import QEvent
-from melano.project.variable import MelanoVariable
+from melano.hl.name import Name
 #from melano.code.symbols.symbol import Symbol
 #from melano.code.symbols.function import Function
 
@@ -30,7 +30,7 @@ class MelanoCodeEdit(QTextEdit):
 		return super().event(e)
 
 
-	def show_symbol(self, symbol:MelanoVariable):
+	def show_symbol(self, symbol:Name):
 		if not symbol: return
 
 		node = symbol.node

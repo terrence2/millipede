@@ -2,7 +2,7 @@ from .editor.document import MelanoCodeDocument
 from .main import MelanoMainWindow
 from PyQt4.QtGui import QApplication
 from melano.hl.module import MelanoModule
-from melano.project.variable import MelanoVariable
+from melano.hl.name import Name
 import base64
 import os.path
 #from melano.config.config import MelanoConfig
@@ -68,7 +68,7 @@ class MelanoApplication(QApplication):
 		del self.documents[filename]
 
 
-	def show_symbol(self, module:MelanoModule, node:MelanoVariable):
+	def show_symbol(self, module:MelanoModule, node:Name):
 		doc = self.load_document(module)
 		view = self.window.show_document(doc)
 		view.edit.show_symbol(node)
