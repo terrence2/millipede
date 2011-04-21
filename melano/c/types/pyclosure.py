@@ -181,7 +181,7 @@ class PyClosureLL(PyFunctionLL):
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
 		val = val.as_pyobject()
-		self.v.ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(val.name))))
+		val.incref()
 		self.v.ctx.add(c.Assignment('=', ref, c.ID(val.name)))
 
 
@@ -190,6 +190,7 @@ class PyClosureLL(PyFunctionLL):
 		outvar.xdecref()
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		self.v.ctx.add(c.Assignment('=', c.ID(outvar.name), ref))
-		self.v.ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID(outvar.name))))
+		self.except_if_null(outvar.name, 'PyExc_UnboundLocalError', "local variable '{}' referenced before assignment".format(attrname))
+		outvar.incref()
 
 
