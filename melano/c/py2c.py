@@ -149,7 +149,6 @@ class Py2C(ASTVisitor):
 		self.opt_static_defaults = kwargs.get('static_defaults', False)
 
 		# the python hl walker context
-		self.globals = None
 		self.scopes = []
 
 		# There are a number of constructs that change the flow of control in python in ways that are not directly
@@ -173,15 +172,15 @@ class Py2C(ASTVisitor):
 		self.tu.add_include(c.Include('env.h', False))
 		self.tu.add_include(c.Include('funcobject.h', False))
 		self.tu.add_include(c.Include('genobject.h', False))
-
+		
 		# add common names
 		self.builtins = PyObjectLL(None, self)
-		self.builtins.declare(self.tu, quals=['static'], name='builtins')
+		self.builtins.declare(is_global=True, quals=['static'], name='builtins')
 		self.none = PyObjectLL(None, self)
-		self.none.declare(self.tu, quals=['static'], name='None')
+		self.none.declare(is_global=True, quals=['static'], name='None')
 
 		# the main function -- handles init, cleanup, and error printing at top level
-		self.tu.reserve_name('main')
+		self.tu.reserve_global_name('main')
 		self.main = c.FuncDef(
 			c.Decl('__melano_main__',
 				c.FuncDecl(c.ParamList(
@@ -202,8 +201,7 @@ class Py2C(ASTVisitor):
 		self.tu.add(self.main)
 
 		# the low-level statment emission context... e.g. the Compound for functions, ifs, etc.
-		self.context = self.main.body
-		self.context.visitor = self
+		self.ctx = self.main.body
 
 		# the module we are currently processing
 		self.module = None
@@ -215,21 +213,28 @@ class Py2C(ASTVisitor):
 
 
 	@contextmanager
-	def global_scope(self, mod, ctx):
-		assert self.globals is None
+	def main_scope(self):
+		class _FakeScope: pass
 		assert self.scopes == []
-		self.globals = mod
-		self.scopes = [self.globals]
-		self.globals.context = ctx
+		self.scopes = [_FakeScope()]
+		self.scope.ctx = self.main.body
 		yield
 		self.scopes = []
-		self.globals = None
+	
+
+	@contextmanager
+	def module_scope(self, mod, ctx):
+		assert self.scopes == []
+		self.scopes = [mod]
+		self.scope.ctx = ctx
+		yield
+		self.scopes = []
 
 
 	@contextmanager
 	def new_scope(self, scope, ctx):
 		self.scopes.append(scope)
-		scope.context = ctx # set the scope's low-level context
+		scope.ctx = ctx # set the scope's low-level context
 		with self.new_label('end'):
 			with self.new_context(ctx):
 				yield
@@ -239,25 +244,10 @@ class Py2C(ASTVisitor):
 	@contextmanager
 	def new_context(self, ctx):
 		'''Sets a new context (e.g. C-level {}), without adjusting the python scope or the c scope-context'''
-		prior = self.context
-		self.context = ctx
-		self.context.visitor = self
+		prior = self.ctx
+		self.ctx = ctx
 		yield
-		self.context = prior
-
-
-	@contextmanager
-	def module_scope(self):
-		'''Set the scope and context as the module scope/context, no matter what function we are processing.
-			We use this to declare functions, classes etc all at module build time, even nested function/classes.'''
-		prior_scopes = self.scopes
-		prior_context = self.context
-		self.scopes = [self.hl_module]
-		self.context = self.ll_module.c_builder_func.body
-		self.context.visitor = self
-		yield
-		self.scopes = prior_scopes
-		self.context = prior_context
+		self.ctx = prior
 
 
 	@contextmanager
@@ -275,7 +265,7 @@ class Py2C(ASTVisitor):
 	def comment(self, cmt):
 		'''Optionally add a comment node to the source at the current location.'''
 		if self.debug:
-			self.context.add(c.Comment(cmt))
+			self.ctx.add(c.Comment(cmt))
 
 
 	def split_docstring(self, nodes:[py.AST]) -> (Nonable(str), [py.AST]):
@@ -319,33 +309,34 @@ class Py2C(ASTVisitor):
 
 	### Exception Handling ###
 	def declare_jump_context(self):
-		if not self.scope.context.has_name('__jmp_ctx__'):
-			self.scope.context.names.add('__jmp_ctx__')
-			self.scope.context.add_variable(c.Decl('__jmp_ctx__', c.PtrDecl(c.TypeDecl('__jmp_ctx__', c.IdentifierType('void'))), init=c.ID('NULL')), False)
+		if not self.scope.ctx.has_name('__jmp_ctx__'):
+			self.scope.ctx.names.add('__jmp_ctx__')
+			self.scope.ctx.add_variable(c.Decl('__jmp_ctx__', c.PtrDecl(c.TypeDecl('__jmp_ctx__', c.IdentifierType('void'))), init=c.ID('NULL')), False)
 
 
 	def set_exception(self, ty_inst, inst):
 		c_inst = c.ID(inst.name) if inst else c.ID('NULL')
-		self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(ty_inst.name), c_inst)))
+		self.ctx.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(ty_inst.name), c_inst)))
 
 
 	def set_exception_str(self, type_name, message):
 		if isinstance(message, str):
-			self.context.add(c.FuncCall(c.ID('PyErr_SetString'), c.ExprList(c.ID(type_name),
+			self.ctx.add(c.FuncCall(c.ID('PyErr_SetString'), c.ExprList(c.ID(type_name),
 																c.Constant('string', PyStringLL.escape_c_string(message)))))
 		elif isinstance(message, PyObjectLL):
-			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(type_name), c.ID(message.name))))
+			self.ctx.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(type_name), c.ID(message.name))))
 		else:
-			self.context.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(type_name), c.ID('NULL'))))
+			self.ctx.add(c.FuncCall(c.ID('PyErr_SetObject'), c.ExprList(c.ID(type_name), c.ID('NULL'))))
+
 
 	def set_exception_format(self, type_name, message, *insts):
 		assert isinstance(message, str)
 		ids = [c.ID(inst.name) for inst in insts]
-		self.context.add(c.FuncCall(c.ID('PyErr_Format'), c.ExprList(c.ID(type_name), c.Constant('string', message), *ids)))
+		self.ctx.add(c.FuncCall(c.ID('PyErr_Format'), c.ExprList(c.ID(type_name), c.Constant('string', message), *ids)))
 
 
 	def clear_exception(self):
-		self.context.add(c.FuncCall(c.ID('__err_clear__'), c.ExprList()))
+		self.ctx.add(c.FuncCall(c.ID('__err_clear__'), c.ExprList()))
 
 
 	def capture_error(self):
@@ -363,7 +354,7 @@ class Py2C(ASTVisitor):
 			src = self.hl_module.get_source_line(st[0]) + ' => (+{},{})'.format(end[0] - st[0], end[1])
 			rng = (st[1], len(src))
 
-		self.context.add(
+		self.ctx.add(
 					c.FuncCall(c.ID('__err_capture__'), c.ExprList(
 						c.Constant('string', PyStringLL.escape_c_string(filename)),
 						c.Constant('integer', st[0]), c.ID('__LINE__'),
@@ -385,7 +376,7 @@ class Py2C(ASTVisitor):
 	def maybe_save_exception(self):
 		'''Like save_exception, but checks if an exception is set before saving/restoring.'''
 		# if we have an exception set, store it asside during finally processing
-		check_err = self.context.add(c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), None))
+		check_err = self.ctx.add(c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), None))
 		with self.new_context(check_err.iftrue):
 			exc_cookie = self.fetch_exception()
 
@@ -393,7 +384,7 @@ class Py2C(ASTVisitor):
 
 		# if we stored an exception, restore it
 		check_restore = c.If(c.ID(exc_cookie[0].name), c.Compound(), None)
-		self.context.add(check_restore)
+		self.ctx.add(check_restore)
 		with self.new_context(check_restore.iftrue):
 			self.restore_exception(exc_cookie)
 
@@ -402,27 +393,27 @@ class Py2C(ASTVisitor):
 		'''Like maybe_save_exception, but normalizes the cookie and packing it into a tuple before handing 
 			it back to the yielded block.'''
 		vec = PyTupleLL(None, self)
-		vec.declare(self.scope.context)
+		vec.declare()
 
 		# if we have an exception set, store it aside during finally processing
-		check_err = self.context.add(c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), c.Compound()))
+		check_err = self.ctx.add(c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), c.Compound()))
 		with self.new_context(check_err.iftrue):
 			exc_cookie = self.fetch_exception()
 			self.normalize_exception_full(exc_cookie)
-			vec.new(self.context, 3)
-			exc_cookie[0].incref(self.context)
-			vec.set_item_unchecked(self.context, 0, exc_cookie[0])
-			exc_cookie[1].incref(self.context)
-			vec.set_item_unchecked(self.context, 1, exc_cookie[1])
-			self.none.incref(self.context)
-			vec.set_item_unchecked(self.context, 2, self.none)
+			vec.new(3)
+			exc_cookie[0].incref()
+			vec.set_item_unchecked(0, exc_cookie[0])
+			exc_cookie[1].incref()
+			vec.set_item_unchecked(1, exc_cookie[1])
+			self.none.incref()
+			vec.set_item_unchecked(2, self.none)
 		with self.new_context(check_err.iffalse):
-			vec.pack(self.context, None, None, None)
+			vec.pack(None, None, None)
 		return vec, exc_cookie
 
 	def maybe_restore_exception_normalized_exit(self, exc_cookie):
 		# if we stored an exception, restore it
-		check_restore = self.context.add(c.If(c.ID(exc_cookie[0].name), c.Compound(), None))
+		check_restore = self.ctx.add(c.If(c.ID(exc_cookie[0].name), c.Compound(), None))
 		with self.new_context(check_restore.iftrue):
 			self.restore_exception(exc_cookie)
 
@@ -431,41 +422,41 @@ class Py2C(ASTVisitor):
 		exc_cookie = (PyObjectLL(None, self), PyObjectLL(None, self), PyObjectLL(None, self))
 		self.exc_cookie_stack.append(exc_cookie) #NOTE: this must be matched by a restore
 		for part in exc_cookie:
-			part.declare(self.scope.context)
-		self.context.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
+			part.declare()
+		self.ctx.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
 																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
 		# NOTE: if we have a real exception here that we are replacing, then restore will decref it, but fetch doesn't incref it for us
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
+		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
+		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
+		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
 		return exc_cookie
 
 
 	def normalize_exception_full(self, exc_cookie):
 		'''Returns the full, normalized exception vector.'''
-		self.context.add(c.FuncCall(c.ID('PyErr_NormalizeException'), c.ExprList(
+		self.ctx.add(c.FuncCall(c.ID('PyErr_NormalizeException'), c.ExprList(
 																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
-		self.context.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
+		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
+		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
+		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
 
 
 	def normalize_exception(self, exc_cookie):
 		'''Extract and return the real exception value (rather than the type, which is returned by PyErr_Occurred and
 			which gets used for matching.'''
 		self.normalize_exception_full(exc_cookie)
-		exc_cookie[1].incref(self.context)
+		exc_cookie[1].incref()
 		return exc_cookie[1]
 
 
 	def restore_exception(self, exc_cookie:Nonable((PyObjectLL,) * 3)):
 		top_cookie = self.exc_cookie_stack.pop()
 		assert top_cookie is exc_cookie
-		self.context.add(c.FuncCall(c.ID('PyErr_Restore'), c.ExprList(
+		self.ctx.add(c.FuncCall(c.ID('PyErr_Restore'), c.ExprList(
 													c.ID(exc_cookie[0].name), c.ID(exc_cookie[1].name), c.ID(exc_cookie[2].name))))
 
 
@@ -520,57 +511,57 @@ class Py2C(ASTVisitor):
 
 
 	def _end_flowcontrol(self, label):
-		self.context.add(c.Goto(label))
+		self.ctx.add(c.Goto(label))
 		return True
 
 
 	def _except_flowcontrol(self, label):
-		self.context.add(c.Goto(label))
+		self.ctx.add(c.Goto(label))
 		return True
 
 
 	def _finally_flowcontrol(self, label):
 		ret_label = self.scope.get_label('return_from_finally')
 		self.declare_jump_context()
-		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
-		self.context.add(c.Goto(label))
-		self.context.add(c.Label(ret_label))
-		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.ID('NULL')))
+		self.ctx.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
+		self.ctx.add(c.Goto(label))
+		self.ctx.add(c.Label(ret_label))
+		self.ctx.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.ID('NULL')))
 		return False
 
 
 	def _contextmanager_flowcontrol(self, label):
 		ret_label = self.scope.get_label('return_from_exit')
 		self.declare_jump_context()
-		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
-		self.context.add(c.Goto(label))
-		self.context.add(c.Label(ret_label))
-		self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.ID('NULL')))
+		self.ctx.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.UnaryOp('&&', c.ID(ret_label))))
+		self.ctx.add(c.Goto(label))
+		self.ctx.add(c.Label(ret_label))
+		self.ctx.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.ID('NULL')))
 		return False
 
 
 	def _delete_name(self, target):
 		assert isinstance(target, py.Name)
 		scope = target.hl.parent
-		scope.ll.del_attr_string(self.context, str(target))
+		scope.ll.del_attr_string(str(target))
 
 
 	def _store_any(self, node, src_inst):
 		if isinstance(node, py.Attribute):
 			o = self.visit(node.value)
-			o.set_attr_string(self.context, str(node.attr), src_inst)
+			o.set_attr_string(str(node.attr), src_inst)
 		elif isinstance(node, py.Subscript):
 			o = self.visit(node.value)
 			i = self.visit(node.slice)
-			o.set_item(self.context, i, src_inst)
+			o.set_item(i, src_inst)
 		elif isinstance(node, py.Name):
 			self._store_name(node, src_inst)
 		elif isinstance(node, py.Tuple):
 			key = PyIntegerLL(None, self)
-			key.declare(self.scope.context)
+			key.declare()
 			for i, elt in enumerate(node.elts):
-				key.set_constant(self.context, i)
-				tmp = src_inst.get_item(self.context, key)
+				key.set_constant(i)
+				tmp = src_inst.get_item(key)
 				self._store_any(elt, tmp)
 		else:
 			raise NotImplementedError("Don't know how to assign to type: {}".format(type(node)))
@@ -582,7 +573,7 @@ class Py2C(ASTVisitor):
 		elif isinstance(source, py.Subscript):
 			o = self.visit(source.value)
 			i = self.visit(source.slice)
-			tgt_inst = o.get_item(self.context, i)
+			tgt_inst = o.get_item(i)
 		else:
 			tgt_inst = self.visit(source)
 
@@ -603,7 +594,7 @@ class Py2C(ASTVisitor):
 
 		# NOTE: the hl Name or Ref will always be parented under the right scope
 		scope = target.hl.parent
-		scope.ll.set_attr_string(self.context, str(target), val)
+		scope.ll.set_attr_string(str(target), val)
 
 		# Note: some nodes do not get a visit_Name pass, since we don't have any preceding rhs for the assignment
 		#		where we can correctly or easily get the type, 'as' or 'class', etc.  In these cases, we can just retrofit the
@@ -619,22 +610,22 @@ class Py2C(ASTVisitor):
 		source - the underlying name reference that we need to provide access to
 		'''
 		tmp = PyObjectLL(None, self)
-		tmp.declare(self.scope.context)
+		tmp.declare()
 
 		# if we have a scope, load from it
 		if source.hl.parent.ll:
-			source.hl.parent.ll.get_attr_string(self.context, str(source), tmp)
+			source.hl.parent.ll.get_attr_string(str(source), tmp)
 		# otherwise, load from the global scope
 		else:
-			self.ll_module.get_attr_string(self.context, str(source), tmp)
+			self.ll_module.get_attr_string(str(source), tmp)
 		return tmp
 
 
 
 	def visit_Assert(self, node):
 		inst = self.visit(node.test)
-		istrue_inst = inst.is_true(self.context)
-		check = self.context.add(c.If(c.UnaryOp('!', c.ID(istrue_inst.name)), c.Compound(), None))
+		istrue_inst = inst.is_true()
+		check = self.ctx.add(c.If(c.UnaryOp('!', c.ID(istrue_inst.name)), c.Compound(), None))
 		with self.new_context(check.iftrue):
 			if not node.msg:
 				s = None
@@ -642,7 +633,7 @@ class Py2C(ASTVisitor):
 				s = PyStringType.dequote(node.msg.s)
 			else:
 				inst = self.visit(node.msg)
-				s = inst.str(self.context)
+				s = inst.str()
 			self.set_exception_str('PyExc_AssertionError', s)
 			self.capture_error()
 			self.exit_with_exception()
@@ -660,7 +651,7 @@ class Py2C(ASTVisitor):
 			inst = node.hl.ll
 		else:
 			inst = self.create_ll_instance(node.hl)
-			inst.declare(self.scope.context)
+			inst.declare()
 
 		self.comment('Load Attribute "{}.{}"'.format(str(node.value), str(node.attr)))
 		if node.ctx == py.Store or node.ctx == py.Aug:
@@ -671,7 +662,7 @@ class Py2C(ASTVisitor):
 				lhs = self.visit(node.value)
 
 			# load the attr off of the lhs, for use as a storage target
-			lhs.get_attr_string(self.context, str(node.attr), inst)
+			lhs.get_attr_string(str(node.attr), inst)
 			return inst
 
 		elif node.ctx == py.Load:
@@ -682,7 +673,7 @@ class Py2C(ASTVisitor):
 				lhs = self.visit(node.value)
 
 			# store the attr value into a local tmp variable
-			lhs.get_attr_string(self.context, str(node.attr), inst)
+			lhs.get_attr_string(str(node.attr), inst)
 			return inst
 
 		else:
@@ -696,33 +687,33 @@ class Py2C(ASTVisitor):
 
 		# get the intermediate instance
 		out_inst = self.create_ll_instance(node.hl)
-		out_inst.declare(self.scope.context)
+		out_inst.declare()
 
 		# perform the op, either returning a copy or getting a new instance
 		if node.op == py.BitOr:
-			tgt_inst.inplace_bitor(self.context, val_inst, out_inst)
+			tgt_inst.inplace_bitor(val_inst, out_inst)
 		elif node.op == py.BitXor:
-			tgt_inst.inplace_bitxor(self.context, val_inst, out_inst)
+			tgt_inst.inplace_bitxor(val_inst, out_inst)
 		elif node.op == py.BitAnd:
-			tgt_inst.inplace_bitand(self.context, val_inst, out_inst)
+			tgt_inst.inplace_bitand(val_inst, out_inst)
 		elif node.op == py.LShift:
-			tgt_inst.inplace_lshift(self.context, val_inst, out_inst)
+			tgt_inst.inplace_lshift(val_inst, out_inst)
 		elif node.op == py.RShift:
-			tgt_inst.inplace_rshift(self.context, val_inst, out_inst)
+			tgt_inst.inplace_rshift(val_inst, out_inst)
 		elif node.op == py.Add:
-			tgt_inst.inplace_add(self.context, val_inst, out_inst)
+			tgt_inst.inplace_add(val_inst, out_inst)
 		elif node.op == py.Sub:
-			tgt_inst.inplace_subtract(self.context, val_inst, out_inst)
+			tgt_inst.inplace_subtract(val_inst, out_inst)
 		elif node.op == py.Mult:
-			tgt_inst.inplace_multiply(self.context, val_inst, out_inst)
+			tgt_inst.inplace_multiply(val_inst, out_inst)
 		elif node.op == py.Div:
-			tgt_inst.inplace_divide(self.context, val_inst, out_inst)
+			tgt_inst.inplace_divide(val_inst, out_inst)
 		elif node.op == py.FloorDiv:
-			tgt_inst.inplace_floor_divide(self.context, val_inst, out_inst)
+			tgt_inst.inplace_floor_divide(val_inst, out_inst)
 		elif node.op == py.Mod:
-			tgt_inst.inplace_modulus(self.context, val_inst, out_inst)
+			tgt_inst.inplace_modulus(val_inst, out_inst)
 		elif node.op == py.Pow:
-			tgt_inst.inplace_power(self.context, val_inst, out_inst)
+			tgt_inst.inplace_power(val_inst, out_inst)
 
 		self._store_any(node.target, out_inst)
 		return out_inst
@@ -733,34 +724,34 @@ class Py2C(ASTVisitor):
 		r = self.visit(node.right)
 
 		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.scope.context)
+		inst.declare()
 
 		#TODO: python detects str + str at runtime and skips dispatch through PyNumber_Add, so we can 
 		#		assume that would be faster
 		if node.op == py.BitOr:
-			l.bitor(self.context, r, inst)
+			l.bitor(r, inst)
 		elif node.op == py.BitXor:
-			l.bitxor(self.context, r, inst)
+			l.bitxor(r, inst)
 		elif node.op == py.BitAnd:
-			l.bitand(self.context, r, inst)
+			l.bitand(r, inst)
 		elif node.op == py.LShift:
-			l.lshift(self.context, r, inst)
+			l.lshift(r, inst)
 		elif node.op == py.RShift:
-			l.rshift(self.context, r, inst)
+			l.rshift(r, inst)
 		elif node.op == py.Add:
-			l.add(self.context, r, inst)
+			l.add(r, inst)
 		elif node.op == py.Sub:
-			l.subtract(self.context, r, inst)
+			l.subtract(r, inst)
 		elif node.op == py.Mult:
-			l.multiply(self.context, r, inst)
+			l.multiply(r, inst)
 		elif node.op == py.Div:
-			l.divide(self.context, r, inst)
+			l.divide(r, inst)
 		elif node.op == py.FloorDiv:
-			l.floor_divide(self.context, r, inst)
+			l.floor_divide(r, inst)
 		elif node.op == py.Mod:
-			l.modulus(self.context, r, inst)
+			l.modulus(r, inst)
 		elif node.op == py.Pow:
-			l.power(self.context, r, inst)
+			l.power(r, inst)
 		else:
 			raise NotImplementedError("BinOp({})".format(node.op))
 
@@ -771,53 +762,53 @@ class Py2C(ASTVisitor):
 		self.comment('Boolop {}'.format((' ' + self.BOOLOPS_PRETTY[node.op] + ' ').join([str(v) for v in node.values])))
 
 		out = PyObjectLL(None, self)
-		out.declare(self.scope.context, name="_boolop_res")
+		out.declare(name="_boolop_res")
 
 		tmp = CIntegerLL(None, self, is_a_bool=True)
-		tmp.declare(self.scope.context, init=0)
+		tmp.declare(init=0)
 		# Note: need to re-initialize manually so that use in a loop starts with a default of 0 every time
-		self.context.add(c.Assignment('=', c.ID(tmp.name), c.Constant('integer', 0)))
+		self.ctx.add(c.Assignment('=', c.ID(tmp.name), c.Constant('integer', 0)))
 
 		# store base context, for restore, since we can't use with stmts here
-		base_context = self.context
+		base_context = self.ctx
 
 		# visit each value in order... nest so that we will automatically fall out on failure
 		for value in node.values:
 			val_inst = self.visit(value)
-			val_inst.is_true(self.context, tmp)
+			val_inst.is_true(tmp)
 
 			# Note: our last output is our actual result for both And and Or, since we only get to the last
 			#		op if all of our others have been True or False respectively.
 			if value is not node.values[-1]:
 				# continue to next only if we are False
 				if node.op == py.Or:
-					ifstmt = self.context.add(c.If(c.UnaryOp('!', c.ID(tmp.name)), c.Compound(), c.Compound()))
+					ifstmt = self.ctx.add(c.If(c.UnaryOp('!', c.ID(tmp.name)), c.Compound(), c.Compound()))
 
 				# continue to next only if we are True
 				elif node.op == py.And:
-					ifstmt = self.context.add(c.If(c.ID(tmp.name), c.Compound(), c.Compound()))
+					ifstmt = self.ctx.add(c.If(c.ID(tmp.name), c.Compound(), c.Compound()))
 
 				# start next comparision in this (failed) context
-				self.context = ifstmt.iftrue
+				self.ctx = ifstmt.iftrue
 
 				# if we are not continuing (the stmt is false) then assign our output
 				with self.new_context(ifstmt.iffalse):
-					val_inst = val_inst.as_pyobject(self.context)
-					out.assign_name(self.context, val_inst)
+					val_inst = val_inst.as_pyobject()
+					out.assign_name(val_inst)
 			else:
-				val_inst = val_inst.as_pyobject(self.context)
-				out.assign_name(self.context, val_inst)
+				val_inst = val_inst.as_pyobject()
+				out.assign_name(val_inst)
 
 		# restore prior context
-		self.context = base_context
+		self.ctx = base_context
 
 		return out
 
 
 	def visit_Bytes(self, node):
 		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.scope.context)
-		inst.new(self.context, PyStringType.dequote(node.s))
+		inst.declare()
+		inst.new(PyStringType.dequote(node.s))
 		return inst
 
 
@@ -825,7 +816,7 @@ class Py2C(ASTVisitor):
 		self.comment('break')
 		def break_handler(label): # the next break is our ultimate target
 			self.clear_exception()
-			self.context.add(c.Goto(label))
+			self.ctx.add(c.Goto(label))
 			return True
 		self.handle_flowcontrol(
 							break_handler=break_handler,
@@ -844,13 +835,13 @@ class Py2C(ASTVisitor):
 			fn = self.find_nearest_method_scope(err='super must be called in a method context: {}'.format(node.start))
 
 			args = PyTupleLL(None, self)
-			args.declare(self.scope.context, name='__auto_super_call_args')
-			args.pack(self.context, cls.ll.c_obj, fn.ll.get_self_accessor())
+			args.declare(name='__auto_super_call_args')
+			args.pack(cls.ll.c_obj, fn.ll.get_self_accessor())
 
 			# do the actual call
 			rv = PyObjectLL(None, self)
-			rv.declare(self.scope.context)
-			funcinst.call(self.context, args, None, rv)
+			rv.declare()
+			funcinst.call(args, None, rv)
 			return rv
 
 
@@ -864,23 +855,23 @@ class Py2C(ASTVisitor):
 			if node.args:
 				for arg in node.args:
 					idinst = self.visit(arg)
-					idinst = idinst.as_pyobject(self.context)
+					idinst = idinst.as_pyobject()
 					args_insts.append(idinst)
 
 			# Note: we always need to pass a tuple as args, even if there is nothing in it
 			if not node.starargs:
 				args1 = PyTupleLL(None, self)
-				args1.declare(self.scope.context, name='args')
-				args1.pack(self.context, *args_insts)
+				args1.declare(name='args')
+				args1.pack(*args_insts)
 			else:
 				args0 = PyListLL(None, self)
-				args0.declare(self.scope.context)
-				args0.pack(self.context, *args_insts)
+				args0.declare()
+				args0.pack(*args_insts)
 				va_inst = self.visit(node.starargs)
-				args0_0 = args0.sequence_inplace_concat(self.context, va_inst)
-				args0.clear(self.context)
-				args1 = args0_0.sequence_as_tuple(self.context)
-				args0_0.clear(self.context)
+				args0_0 = args0.sequence_inplace_concat(va_inst)
+				args0.clear()
+				args1 = args0_0.sequence_as_tuple()
+				args0_0.clear()
 
 			# build the keyword dict
 			args2 = None
@@ -888,30 +879,30 @@ class Py2C(ASTVisitor):
 			if node.keywords or node.kwargs:
 				for kw in node.keywords:
 					valinst = self.visit(kw.value)
-					valinst = valinst.as_pyobject(self.context)
+					valinst = valinst.as_pyobject()
 					kw_insts.append((str(kw.keyword), valinst))
 				if kw_insts or node.kwargs:
 					args2 = PyDictLL(None, self)
-					args2.declare(self.scope.context)
-					args2.new(self.context)
+					args2.declare()
+					args2.new()
 					if kw_insts:
 						for keyname, valinst in kw_insts:
-							args2.set_item_string(self.context, keyname, valinst)
+							args2.set_item_string(keyname, valinst)
 					if node.kwargs:
 						kwargs_inst = self.visit(node.kwargs)
-						args2.update(self.context, kwargs_inst)
+						args2.update(kwargs_inst)
 
 			# begin call output
 			self.comment('do call "{}"'.format(str(node.func)))
 
 			# make the call
 			rv = PyObjectLL(None, self)
-			rv.declare(self.scope.context)
-			funcinst.call(self.context, args1, args2, rv)
+			rv.declare()
+			funcinst.call(args1, args2, rv)
 
 			# cleanup the args
-			args1.clear(self.context)
-			if args2: args2.clear(self.context)
+			args1.clear()
+			if args2: args2.clear()
 
 			return rv
 
@@ -931,7 +922,7 @@ class Py2C(ASTVisitor):
 		#	return _call_local(self, node, funcinst)
 		#else:
 		#	return _call_remote(self, node, funcinst)
-		with self.scope.ll.maybe_recursive_call(self.context):
+		with self.scope.ll.maybe_recursive_call():
 			rv = _call_remote(self, node, funcinst)
 
 		return rv
@@ -941,35 +932,32 @@ class Py2C(ASTVisitor):
 		# declare
 		docstring, body = self.split_docstring(node.body)
 		inst = self.create_ll_instance(node.hl)
-		inst.create_builderfunc(self.tu)
-		pyclass_inst = inst.declare_pyclass(self.tu)
+		inst.create_builderfunc()
+		pyclass_inst = inst.declare_pyclass()
 
 		# build the class setup -- this has the side-effect of building all other module-level stuff before
 		#	we do the class setup
 		with self.new_scope(node.hl, inst.c_builder_func.body):
 			# TODO: we should reserve these names in the LL builder
-			self.context.reserve_name('self')
 			self_inst = PyObjectLL(None, self)
-			self_inst.name = 'self'
-			self.context.reserve_name('args')
+			self_inst.name = self.scope.ctx.reserve_name('self', self.tu)
 			args_tuple = PyTupleLL(None, self)
-			args_tuple.name = 'args'
-			self.context.reserve_name('kwargs')
+			args_tuple.name = self.scope.ctx.reserve_name('args', self.tu)
 			kwargs_dict = PyDictLL(None, self)
-			kwargs_dict.name = 'kwargs'
+			kwargs_dict.name = self.scope.ctx.reserve_name('kwargs', self.tu)
 
 			# unpack the namespace dict that we will be writing to
 			namespace_inst = PyDictLL(None, self)
-			namespace_inst.declare(self.scope.context, name='namespace')
-			args_tuple.get_unchecked(self.context, 0, namespace_inst)
-			namespace_inst.fail_if_null(self.context, namespace_inst.name)
-			namespace_inst.incref(self.context)
+			namespace_inst.declare(name='namespace')
+			args_tuple.get_unchecked(0, namespace_inst)
+			namespace_inst.fail_if_null(namespace_inst.name)
+			namespace_inst.incref()
 
 			inst.set_namespace(namespace_inst)
 
-			inst.intro(self.context, docstring, '__main__' if self.hl_module.is_main else self.hl_module.owner.python_name)
+			inst.intro(docstring, '__main__' if self.hl_module.is_main else self.hl_module.owner.python_name)
 			self.visit_nodelist(body)
-			inst.outro(self.context)
+			inst.outro()
 
 		# visit any decorators (e.g. calls decorators with args before defining the class)
 		deco_fn_insts = []
@@ -983,14 +971,14 @@ class Py2C(ASTVisitor):
 
 		# create the name ref string
 		c_name_str = PyStringLL(None, self)
-		c_name_str.declare(self.scope.context, name=str(node.name) + '_name')
-		c_name_str.new(self.context, str(node.name))
+		c_name_str.declare(name=str(node.name) + '_name')
+		c_name_str.new(str(node.name))
 
-		pyfunc = inst.create_builder_funcdef(self.context, self.tu)
+		pyfunc = inst.create_builder_funcdef()
 
 		build_class_inst = PyObjectLL(None, self)
-		build_class_inst.declare(self.scope.context)
-		self.builtins.get_attr_string(self.context, '__build_class__', build_class_inst)
+		build_class_inst.declare()
+		self.builtins.get_attr_string('__build_class__', build_class_inst)
 
 		base_insts = []
 		if node.bases:
@@ -998,16 +986,16 @@ class Py2C(ASTVisitor):
 				base_insts.append(self.visit(b))
 
 		args = PyTupleLL(None, self)
-		args.declare(self.scope.context)
-		args.pack(self.context, pyfunc, c_name_str, *base_insts)
-		build_class_inst.call(self.context, args, node.kwargs, pyclass_inst)
+		args.declare()
+		args.pack(pyfunc, c_name_str, *base_insts)
+		build_class_inst.call(args, node.kwargs, pyclass_inst)
 
 		# apply decorators to the class
 		for decoinst in deco_fn_insts:
 			decoargs = PyTupleLL(None, self)
-			decoargs.declare(self.scope.context)
-			decoargs.pack(self.context, pyclass_inst)
-			decoinst.call(self.context, decoargs, None, pyclass_inst)
+			decoargs.declare()
+			decoargs.pack(pyclass_inst)
+			decoinst.call(decoargs, None, pyclass_inst)
 
 		# store the name in the scope where we are "created"
 		self._store_name(node.name, pyclass_inst)
@@ -1022,50 +1010,49 @@ class Py2C(ASTVisitor):
 
 		# initialize new tmp variable with default value of false
 		out = CIntegerLL(None, self, is_a_bool=True)
-		out.declare(self.scope.context, init=0)
+		out.declare(init=0)
 
 		# Note: we need to initialize the output variable to 0 before the compare since compare can be
 		#		used in, for instance, loops, where we need to re-do the comparison correctly every time.
-		self.context.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 0)))
+		self.ctx.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 0)))
 
 		# store this because when we bail we will come all the way back to our starting context at once
-		base_context = self.context
+		base_context = self.ctx
 
 		# make each comparison in order
 		a = self.visit(node.left)
-		a = a.as_pyobject(self.context)
+		a = a.as_pyobject()
 		for op, b in zip(node.ops, node.comparators):
 			b = self.visit(b)
-			b = b.as_pyobject(self.context)
+			b = b.as_pyobject()
 
 			# do one compare; only continue to next scope if we succeed
 			if op in self.COMPARATORS_RICH:
-				rv = a.rich_compare_bool(self.context, b, self.COMPARATORS_RICH[op])
+				rv = a.rich_compare_bool(b, self.COMPARATORS_RICH[op])
 			elif op == py.In:
-				rv = b.sequence_contains(self.context, a)
+				rv = b.sequence_contains(a)
 			elif op == py.NotIn:
-				rv = b.sequence_contains(self.context, a)
-				rv = rv.not_(self.context)
+				rv = b.sequence_contains(a)
+				rv = rv.not_()
 			elif op == py.Is:
-				rv = a.is_(self.context, b)
+				rv = a.is_(b)
 			elif op == py.IsNot:
-				rv = a.is_(self.context, b)
-				rv = rv.not_(self.context)
+				rv = a.is_(b)
+				rv = rv.not_()
 			else:
 				raise NotImplementedError("unimplemented comparator in visit_compare: {}".format(op))
 			stmt = c.If(c.ID(rv.name), c.Compound(), None)
-			self.context.add(stmt)
-			self.context = stmt.iftrue
-			self.context.visitor = self
+			self.ctx.add(stmt)
+			self.ctx = stmt.iftrue
 
 			# next lhs is current rhs
 			a = b
 
 		# we are in our deepest nested context now, where all prior statements have been true
-		self.context.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 1)))
+		self.ctx.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 1)))
 
 		# reset the context
-		self.context = base_context
+		self.ctx = base_context
 
 		return out
 
@@ -1073,7 +1060,7 @@ class Py2C(ASTVisitor):
 	def visit_Continue(self, node):
 		self.comment('continue')
 		def loop_handler(label):
-			self.context.add(c.Goto(label))
+			self.ctx.add(c.Goto(label))
 			return True
 		self.handle_flowcontrol(
 							continue_handler=loop_handler,
@@ -1083,37 +1070,39 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Delete(self, node):
+		#FIXME: move to _del_any?
 		for target in node.targets:
 			if isinstance(target, py.Name):
 				self._delete_name(target)
 			elif isinstance(target, py.Attribute):
 				inst = self.visit(target.value)
-				inst.del_attr_string(self.context, str(target.attr))
+				inst.del_attr_string(str(target.attr))
 			elif isinstance(target, py.Subscript):
 				ovalue = self.visit(target.value)
 				if isinstance(target.slice, py.Slice):
 					start_inst, end_inst, step_inst = self.visit(target.slice)
-					ovalue.sequence_del_slice(self.context, start_inst, end_inst, step_inst)
+					ovalue.sequence_del_slice(start_inst, end_inst, step_inst)
 				else:
 					kvalue = self.visit(target.slice)
-					ovalue.del_item(self.context, kvalue)
+					ovalue.del_item(kvalue)
 			else:
 				raise NotImplementedError("Unknown deletion type")
 
 
 	def visit_Dict(self, node):
 		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.scope.context)
-		inst.new(self.context)
+		inst.declare()
+		inst.new()
 		if node.keys and node.values:
 			for k, v in zip(node.keys, node.values):
 				kinst = self.visit(k)
 				vinst = self.visit(v)
-				inst.set_item(self.context, kinst, vinst)
+				inst.set_item(kinst, vinst)
 		return inst
 
 
 	def visit_Ellipsis(self, node):
+		#FIXME: get a ref to the ellipsis object at startup and incref and return it here
 		raise NotImplementedError
 
 
@@ -1122,6 +1111,7 @@ class Py2C(ASTVisitor):
 
 
 	def visit_ExtSlice(self, node):
+		#FIXME: figure out what these are exactly... 
 		raise NotImplementedError
 
 
@@ -1136,26 +1126,26 @@ class Py2C(ASTVisitor):
 		# get the PyIter for the iteration object
 		iter_obj = self.visit(node.iter)
 		iter = PyObjectLL(None, self)
-		iter.declare(self.scope.context)
-		iter_obj.get_iter(self.context, iter)
+		iter.declare()
+		iter_obj.get_iter(iter)
 
 		# the gets the object locally inside of the while expr; we do the full assignment inside the body
 		tmp = PyObjectLL(None, self)
-		tmp.declare(self.scope.context)
-		stmt = self.context.add(c.While(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound()))
+		tmp.declare()
+		stmt = self.ctx.add(c.While(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound()))
 		with self.new_context(stmt.stmt):
 			with self.new_label(break_label), self.new_label(continue_label):
 				self._store_any(node.target, tmp)
 				self.visit_nodelist(node.body)
-			self.context.add(c.Label(continue_label))
-			tmp.decref(self.context)
+			self.ctx.add(c.Label(continue_label))
+			tmp.decref()
 
 		# handle the no-break case: else
 		# if we don't jump to forloop, then we need to just run the else block
 		self.visit_nodelist(node.orelse)
 
 		# after else, we get the break target
-		self.context.add(c.Label(break_label))
+		self.ctx.add(c.Label(break_label))
 
 
 	def visit_FunctionDef(self, node):
@@ -1166,20 +1156,20 @@ class Py2C(ASTVisitor):
 		docstring, body = self.split_docstring(node.body)
 		inst = self.create_ll_instance(node.hl)
 		inst.prepare()
-		inst.create_pystubfunc(self.tu)
-		inst.create_runnerfunc(self.tu, *full_args)
+		inst.create_pystubfunc()
+		inst.create_runnerfunc(*full_args)
 
 		self.comment("Build function {}".format(str(node.name)))
-		pycfunc = inst.declare_function_object(self.context, self.tu, docstring)
+		pycfunc = inst.declare_function_object(docstring)
 
 		# enumerate and attach defaults and keyword defaults
-		inst.attach_defaults(self.context,
+		inst.attach_defaults(
 							[self.visit(default) for default in (node.args.defaults or [])],
 					 		[(str(arg.arg), self.visit(kwdefault)) for arg, kwdefault in \
 									(zip(node.args.kwonlyargs, node.args.kw_defaults))] \
 									if node.args.kw_defaults else [])
 		# attach annotations to the pycfunction instance
-		inst.attach_annotations(self.context, self.visit(node.returns) if hasattr(node, 'returns') else None,
+		inst.attach_annotations(self.visit(node.returns) if hasattr(node, 'returns') else None,
 							[(str(a.arg), self.visit(a.annotation)) for a in node.args.args] if node.args.args else [],
 							str(node.args.vararg), self.visit(node.args.varargannotation),
 							[(str(a.arg), self.visit(a.annotation)) for a in node.args.kwonlyargs] if node.args.kwonlyargs else [],
@@ -1191,47 +1181,46 @@ class Py2C(ASTVisitor):
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
 			self.comment('Python interface stub function "{}"'.format(str(node.name)))
-			inst.stub_intro(self.context)
+			inst.stub_intro()
 
 			# Attach all parameters and names into the local namespace
 			# We can't know the convention the caller used, so we need to handle all 
 			#  possiblities -- local callers do their own setup and just call the runner.
-			inst.stub_load_args(self.context,
-										node.args.args or [], node.args.defaults or [],
-										node.args.vararg,
-										node.args.kwonlyargs or [], node.args.kw_defaults or [],
-										node.args.kwarg)
+			inst.stub_load_args(node.args.args or [], node.args.defaults or [],
+								node.args.vararg,
+								node.args.kwonlyargs or [], node.args.kw_defaults or [],
+								node.args.kwarg)
 
 			# call the low-level runner function from the stub
-			inst.transfer_to_runnerfunc(self.context, *full_args)
+			inst.transfer_to_runnerfunc(*full_args)
 
 			# emit cleanup and return code
-			inst.stub_outro(self.context)
+			inst.stub_outro()
 
 		# build the actual runner function
 		with self.new_scope(node.hl, inst.c_runner_func.body):
-			inst.runner_intro(self.context)
-			inst.runner_load_args(self.context, *full_args)
-			inst.runner_load_locals(self.context)
+			inst.runner_intro()
+			inst.runner_load_args(*full_args)
+			inst.runner_load_locals()
 			self.comment('body')
 			self.visit_nodelist(body)
-			inst.runner_outro(self.context)
+			inst.runner_outro()
 
 		# apply any decorators
 		tmp = pycfunc
 		if deco_fn_insts:
 			self.comment('decorate {}'.format(str(node.name)))
 			tmp = PyObjectLL(None, self)
-			tmp.declare(self.scope.context)
-			tmp.assign_name(self.context, pycfunc)
+			tmp.declare()
+			tmp.assign_name(pycfunc)
 			for decoinst in deco_fn_insts:
 				#NOTE: We need to use a tmp var for these so that the returned function does not overwrite the
 				#		global pycfunc pointer because, even if the @wraps is used, we lose the __defaults__ and __kwdefaults__
 				#		and cannot load them correctly later in the stub.
 				decoargs = PyTupleLL(None, self)
-				decoargs.declare(self.scope.context)
-				decoargs.pack(self.context, tmp)
-				decoinst.call(self.context, decoargs, None, tmp)
+				decoargs.declare()
+				decoargs.pack(tmp)
+				decoinst.call(decoargs, None, tmp)
 
 		# store the resulting function into the scope where it's defined
 		if not node.hl.is_anonymous:
@@ -1251,32 +1240,32 @@ class Py2C(ASTVisitor):
 		# prepare the lowlevel
 		inst = self.create_ll_instance(node.hl)
 		inst.prepare()
-		inst.create_pystubfunc(self.tu)
-		inst.create_runnerfunc(self.tu, *full_args)
+		inst.create_pystubfunc()
+		inst.create_runnerfunc(*full_args)
 
 		self.comment("Build function {}".format(str(node.name)))
-		pycfunc = inst.declare_function_object(self.context, self.tu, docstring)
+		pycfunc = inst.declare_function_object(docstring)
 		# NOTE: we don't really care about the generator _function_, we just want the underlying generator
-		pycfunc.call(self.context, None, None, pycfunc)
+		pycfunc.call(None, None, pycfunc)
 
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
 			self.comment('Python interface stub function "{}"'.format(str(node.name)))
-			inst.stub_intro(self.context)
-			inst.transfer_to_runnerfunc(self.context, *full_args)
-			inst.stub_outro(self.context)
+			inst.stub_intro()
+			inst.transfer_to_runnerfunc(*full_args)
+			inst.stub_outro()
 
 		# build the actual runner function
 		with self.new_scope(node.hl, inst.c_runner_func.body):
-			inst.runner_intro(self.context)
-			inst.runner_load_args(self.context, *full_args)
-			inst.runner_load_locals(self.context)
+			inst.runner_intro()
+			inst.runner_load_args(*full_args)
+			inst.runner_load_locals()
 			self.comment('body')
 			def _set():
 				obj = self.visit(node.elt)
-				self.scope.ll.do_yield(self.context, obj)
+				self.scope.ll.do_yield(obj)
 			self.visit_comp_generators(node.generators, _set)
-			inst.runner_outro(self.context)
+			inst.runner_outro()
 
 		# store the resulting function into the scope where it's defined
 		if not node.hl.is_anonymous:
@@ -1294,14 +1283,14 @@ class Py2C(ASTVisitor):
 	def visit_If(self, node):
 		inst = self.visit(node.test)
 		if isinstance(inst, PyObjectLL):
-			tmpvar = inst.is_true(self.context)
+			tmpvar = inst.is_true()
 			test = c.BinaryOp('==', c.Constant('integer', 1), c.ID(tmpvar.name))
 		elif isinstance(inst, CIntegerLL):
 			test = c.ID(inst.name)
 		else:
 			raise NotImplementedError('Non-pyobject as value for If test')
 
-		stmt = self.context.add(c.If(test, c.Compound(), c.Compound() if node.orelse else None))
+		stmt = self.ctx.add(c.If(test, c.Compound(), c.Compound() if node.orelse else None))
 		with self.new_context(stmt.iftrue):
 			self.visit_nodelist(node.body)
 		if node.orelse:
@@ -1311,35 +1300,35 @@ class Py2C(ASTVisitor):
 
 	def visit_IfExp(self, node):
 		out_inst = PyObjectLL(None, self)
-		out_inst.declare(self.scope.context, name="_ifexp_rv")
+		out_inst.declare(name="_ifexp_rv")
 
 		tst_inst = self.visit(node.test)
-		tst_is_true = tst_inst.is_true(self.context)
-		ifstmt = self.context.add(c.If(c.ID(tst_is_true.name), c.Compound(), c.Compound()))
+		tst_is_true = tst_inst.is_true()
+		ifstmt = self.ctx.add(c.If(c.ID(tst_is_true.name), c.Compound(), c.Compound()))
 		with self.new_context(ifstmt.iftrue):
 			inst = self.visit(node.body)
-			out_inst.assign_name(self.context, inst)
+			out_inst.assign_name(inst)
 		with self.new_context(ifstmt.iffalse):
 			inst = self.visit(node.orelse)
-			out_inst.assign_name(self.context, inst)
+			out_inst.assign_name(inst)
 
 		return out_inst
 
 
 	def _import_module(self, module, fullname):
 		tmp = PyObjectLL(None, self)
-		tmp.declare(self.scope.context)
+		tmp.declare()
 		if module.modtype == MelanoModule.PROJECT:
 			# call the builder function to construct or access the module
 			self.comment("Import local module {}".format(str(module.python_name)))
-			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(module.ll.c_builder_name), c.ExprList())))
+			self.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(module.ll.c_builder_name), c.ExprList())))
 		else:
 			# import the module at the c level
 			self.comment("Import external module {}".format(str(module.python_name)))
-			self.context.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
+			self.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(
 																												c.Constant('string', fullname)))))
-		tmp.fail_if_null(self.context, tmp.name)
-		tmp.incref(self.context)
+		tmp.fail_if_null(tmp.name)
+		tmp.incref()
 		return tmp
 
 
@@ -1377,7 +1366,7 @@ class Py2C(ASTVisitor):
 				if name is attr.first():
 					self._store_name(name, tmp)
 				else:
-					prior.set_attr_string(self.context, str(name), tmp)
+					prior.set_attr_string(str(name), tmp)
 
 				prior = tmp
 
@@ -1399,9 +1388,9 @@ class Py2C(ASTVisitor):
 		def _import_name(name, from_module_inst):
 			# load the name off of the module
 			val = PyObjectLL(None, self)
-			val.declare(self.scope.context)
-			from_module_inst.get_attr_string(self.context, PyStringLL.name_to_c_string(str(name)), val)
-			val.fail_if_null(self.context, val.name)
+			val.declare()
+			from_module_inst.get_attr_string(PyStringLL.name_to_c_string(str(name)), val)
+			val.fail_if_null(val.name)
 			return val
 
 		for alias in node.names:
@@ -1435,7 +1424,7 @@ class Py2C(ASTVisitor):
 
 
 	#def visit_Lambda(self, node):
-	#	raise NotImplementedError
+	#	See visit_FunctionDef for actual implementation
 
 
 	#def visit_List(self, node):
@@ -1454,41 +1443,43 @@ class Py2C(ASTVisitor):
 		self.ll_module = self.hl_module.ll
 
 		# setup the module
-		self.ll_module.declare(self.tu)
+		self.ll_module.declare()
 
 		# set the initial context
 		with self.new_context(self.ll_module.c_builder_func.body):
-			with self.new_label('end'):
-				with self.global_scope(self.hl_module, self.context):
+			with self.module_scope(self.hl_module, self.ctx):
+				with self.new_label('end'):
 					# setup the module
-					self.ll_module.return_existing(self.context)
-					self.ll_module.new(self.context)
-					self.ll_module.intro(self.context)
+					self.ll_module.return_existing()
+					self.ll_module.new()
+					self.ll_module.intro()
 
 					# visit all children
 					# load and attach special attributes to the module dict
-					self.ll_module.set_initial_string_attribute(self.context, '__file__', self.hl_module.filename)
+					self.ll_module.set_initial_string_attribute('__file__', self.hl_module.filename)
 					docstring, body = self.split_docstring(node.body)
-					self.ll_module.set_initial_string_attribute(self.context, '__doc__', docstring)
+					self.ll_module.set_initial_string_attribute('__doc__', docstring)
 
 					# record the top-level context in the scope, so we can declare toplevel variables when in a sub-contexts
-					self.scope.context = self.context
+					self.scope.ctx = self.ctx
 
 					# visit all children
 					self.visit_nodelist(body)
 
-			# cleanup and return
-			self.ll_module.outro(self.context)
+				# cleanup and return
+				self.ll_module.outro()
 
 		# the only module we want to load automatically at runtime is the main module
 		if self.hl_module.is_main:
-			tmp = self.main.body.tmp_pyobject()
-			self.main.body.add(c.Assignment('=', c.ID(tmp), c.FuncCall(c.ID(self.ll_module.c_builder_name), c.ExprList())))
-			self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp)), c.Compound(
-									c.FuncCall(c.ID('__err_show_traceback__'), c.ExprList()),
-									c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
-									c.Return(c.Constant('integer', 1),
-								)), None))
+			with self.main_scope():
+				tmp = PyObjectLL(None, self)
+				tmp.declare(name="_main_")
+				self.main.body.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(self.ll_module.c_builder_name), c.ExprList())))
+				self.main.body.add(c.If(c.UnaryOp('!', c.ID(tmp.name)), c.Compound(
+										c.FuncCall(c.ID('__err_show_traceback__'), c.ExprList()),
+										c.FuncCall(c.ID('PyErr_Print'), c.ExprList()),
+										c.Return(c.Constant('integer', 1),
+									)), None))
 
 		return self.ll_module
 
@@ -1498,7 +1489,7 @@ class Py2C(ASTVisitor):
 		if node.ctx in [py.Store, py.Param, py.Aug]:
 			if not node.hl.ll:
 				inst = self.create_ll_instance(node.hl)
-				inst.declare(self.scope.context)
+				inst.declare()
 			return node.hl.ll
 
 		# if we are loading a name, we have to search for the name's location
@@ -1516,11 +1507,11 @@ class Py2C(ASTVisitor):
 	def visit_Num(self, node):
 		if not node.hl.ll:
 			inst = self.create_ll_instance(node.hl)
-			inst.declare(self.scope.context)
+			inst.declare()
 		else:
 			inst = node.hl.ll
-			inst.decref(self.context)
-		inst.new(self.context, node.n)
+			inst.decref()
+		inst.new(node.n)
 		return inst
 
 
@@ -1554,15 +1545,15 @@ class Py2C(ASTVisitor):
 		}
 		goto end;
 		'''
-		is_a_type = inst.is_instance(self.context, PyTypeLL)
-		if_stmt = c.If(c.ID(is_a_type.name), c.Compound(), c.Compound())
-		self.context.add(if_stmt)
+		is_a_type = inst.is_instance(PyTypeLL)
+		if_stmt = self.ctx.add(c.If(c.ID(is_a_type.name), c.Compound(), c.Compound()))
 		with self.new_context(if_stmt.iftrue):
 			self.set_exception(inst, None)
 		with self.new_context(if_stmt.iffalse):
+			#TODO: move into get_type
 			ty_inst = PyTypeLL(None, self)
-			ty_inst.declare(self.scope.context)
-			inst.get_type(self.context, ty_inst)
+			ty_inst.declare()
+			inst.get_type(ty_inst)
 			self.set_exception(ty_inst, inst)
 		self.capture_error()
 		self.exit_with_exception()
@@ -1579,11 +1570,11 @@ class Py2C(ASTVisitor):
 		# get the return value for when we exit
 		if node.value:
 			inst = self.visit(node.value)
-			inst = inst.as_pyobject(self.context)
-			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
+			inst = inst.as_pyobject()
+			self.ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(inst.name)))
 		else:
-			self.context.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.none.name)))
-		self.context.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID('__return_value__'))))
+			self.ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.none.name)))
+		self.ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID('__return_value__'))))
 
 		# do exit flowcontrol to handle finally blocks
 		self.handle_flowcontrol(
@@ -1594,11 +1585,11 @@ class Py2C(ASTVisitor):
 
 	def visit_Set(self, node):
 		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.scope.context)
-		inst.new(self.context, None)
+		inst.declare()
+		inst.new(None)
 		for v in node.elts:
 			vinst = self.visit(v)
-			inst.add(self.context, vinst)
+			inst.add(vinst)
 		return inst
 
 
@@ -1607,19 +1598,19 @@ class Py2C(ASTVisitor):
 
 		if node.lower:
 			start = self.visit(node.lower)
-			start = start.as_ssize(self.context)
+			start = start.as_ssize()
 		else:
 			start = 0
 
 		if node.upper:
 			end = self.visit(node.upper)
-			end = end.as_ssize(self.context)
+			end = end.as_ssize()
 		else:
 			end = CIntegerLL.MAX
 
 		if node.step:
 			step = self.visit(node.step)
-			step = step.as_ssize(self.context)
+			step = step.as_ssize()
 		else:
 			step = 1
 
@@ -1627,13 +1618,14 @@ class Py2C(ASTVisitor):
 
 
 	def visit_Starred(self, node):
+		#FIXME: we probably want to handle this up in _store_any for tuples, mostly
 		raise NotImplementedError
 
 
 	def visit_Str(self, node):
 		inst = self.create_ll_instance(node.hl)
-		inst.declare(self.scope.context)
-		inst.new(self.context, PyStringType.dequote(node.s))
+		inst.declare()
+		inst.new(PyStringType.dequote(node.s))
 		return inst
 
 
@@ -1644,13 +1636,13 @@ class Py2C(ASTVisitor):
 			tgtinst = self.visit(node.value)
 			if isinstance(node.slice, py.Slice):
 				start_inst, end_inst, step_inst = self.visit(node.slice)
-				out = tgtinst.sequence_get_slice(self.context, start_inst, end_inst, step_inst)
+				out = tgtinst.sequence_get_slice(start_inst, end_inst, step_inst)
 				return out
 			else:
 				kinst = self.visit(node.slice)
 				tmp = PyObjectLL(None, self)
-				tmp.declare(self.scope.context)
-				tgtinst.get_item(self.context, kinst, tmp)
+				tmp.declare()
+				tgtinst.get_item(kinst, tmp)
 				return tmp
 		else:
 			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
@@ -1667,18 +1659,18 @@ class Py2C(ASTVisitor):
 			self.visit_nodelist(node.body)
 
 		# if we get to the end of the try block without failing, jump past the except block 
-		self.context.add(c.Goto(tryend_label))
+		self.ctx.add(c.Goto(tryend_label))
 
 		# branch target for jumping to this exception
-		self.context.add(c.Label(except_label))
+		self.ctx.add(c.Label(except_label))
 
 		### exception dispatch logic
 		## Check if there was actually an exception -- raise if not
 		exc_type_inst = PyObjectLL(None, self)
-		exc_type_inst.declare(self.scope.context)
-		self.context.add(c.Assignment('=', c.ID(exc_type_inst.name), c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList())))
-		exc_type_inst.fail_if_null(self.context, exc_type_inst.name)
-		exc_type_inst.incref(self.context)
+		exc_type_inst.declare()
+		self.ctx.add(c.Assignment('=', c.ID(exc_type_inst.name), c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList())))
+		exc_type_inst.fail_if_null(exc_type_inst.name)
+		exc_type_inst.incref()
 		## Store the exception during exception processing
 		with self.save_exception() as exc_cookie:
 			## check the exception handles against the exception that occurred
@@ -1739,18 +1731,18 @@ class Py2C(ASTVisitor):
 									end_handler=self._end_flowcontrol)
 
 			## add the if-chain to the body
-			self.context.add(parts[0])
+			self.ctx.add(parts[0])
 
 		# if we fall off the end of the exception handler, we are considered cleared
 		self.clear_exception()
-		self.context.add(c.Goto(tryelseend_label))
+		self.ctx.add(c.Goto(tryelseend_label))
 
 		# if we finish, successfully, jump here to skip the exeption handling and run the else block
-		self.context.add(c.Label(tryend_label))
+		self.ctx.add(c.Label(tryend_label))
 		self.visit_nodelist(node.orelse)
 
 		# if we reach the end of the except block, don't run the else block
-		self.context.add(c.Label(tryelseend_label))
+		self.ctx.add(c.Label(tryelseend_label))
 
 
 	def visit_TryFinally(self, node):
@@ -1762,26 +1754,26 @@ class Py2C(ASTVisitor):
 			self.visit_nodelist(node.body)
 
 		# branch target for jumping to a finally clause
-		self.context.add(c.Label(label))
+		self.ctx.add(c.Label(label))
 
 		# handle the final stmt
 		with self.maybe_save_exception():
 			self.visit_nodelist(node.finalbody)
 
 		# if the top-level needs control back to complete, it will set __jmp_ctx__
-		self.context.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
+		self.ctx.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
 
 
 	def visit_Tuple(self, node):
 		if node.ctx in [py.Load, py.Aug]:
 			inst = self.create_ll_instance(node.hl)
-			inst.declare(self.scope.context)
+			inst.declare()
 			to_pack = [self.visit(n) for n in node.elts] if node.elts else []
-			inst.pack(self.context, *to_pack)
+			inst.pack(*to_pack)
 			return node.hl.ll
 		else:
 			tpl_inst = self.create_ll_instance(node.hl)
-			tpl_inst.declare(self.scope.context)
+			tpl_inst.declare()
 
 
 	visit_List = visit_Tuple
@@ -1795,7 +1787,7 @@ class Py2C(ASTVisitor):
 		# Note: we use a do{}while(1) with manual break, instead of the more direct while(){}, so that we only
 		#		have to visit/emit the test code once, rather than once outside and once at the end of the loop.
 		dowhile = c.DoWhile(c.Constant('integer', 1), c.Compound())
-		self.context.add(dowhile)
+		self.ctx.add(dowhile)
 		with self.new_context(dowhile.stmt):
 			with self.new_label(break_label), self.new_label(continue_label):
 				# perform the test
@@ -1803,7 +1795,7 @@ class Py2C(ASTVisitor):
 				#TODO: short circuit this somehow... make is_true for CIntegerLL perhaps?
 				#			also fix in visit_If if we do work it out
 				if isinstance(test_inst, PyObjectLL):
-					tmpvar = test_inst.is_true(self.context)
+					tmpvar = test_inst.is_true()
 					test = c.BinaryOp('==', c.Constant('integer', 0), c.ID(tmpvar.name))
 				elif isinstance(test_inst, CIntegerLL):
 					test = c.UnaryOp('!', c.ID(test_inst.name))
@@ -1811,17 +1803,17 @@ class Py2C(ASTVisitor):
 					raise NotImplementedError('Non-pyobject as value for If test')
 
 				# exit if our test failed
-				self.context.add(c.If(test, c.Compound(c.Break()), None))
+				self.ctx.add(c.If(test, c.Compound(c.Break()), None))
 
 				# do loop actions
 				self.visit_nodelist(node.body)
 
 			# continue on to immediately before test for continue
-			self.context.add(c.Label(continue_label))
+			self.ctx.add(c.Label(continue_label))
 
 		# add the non-break (at the python level, not the c level) case for else
 		self.visit_nodelist(node.orelse)
-		self.context.add(c.Label(break_label))
+		self.ctx.add(c.Label(break_label))
 
 
 	def visit_With(self, node):
@@ -1829,20 +1821,20 @@ class Py2C(ASTVisitor):
 
 		# load enter and exit
 		enter_fn_inst = PyObjectLL(None, self)
-		enter_fn_inst.declare(self.scope.context)
-		ctx.get_attr_string(self.context, '__enter__', enter_fn_inst)
+		enter_fn_inst.declare()
+		ctx.get_attr_string('__enter__', enter_fn_inst)
 		exit_fn_inst = PyObjectLL(None, self)
-		exit_fn_inst.declare(self.scope.context)
-		ctx.get_attr_string(self.context, '__exit__', exit_fn_inst)
+		exit_fn_inst.declare()
+		ctx.get_attr_string('__exit__', exit_fn_inst)
 
 		tmp = PyObjectLL(None, self)
-		tmp.declare(self.scope.context)
+		tmp.declare()
 
 		# call enter
 		args = PyTupleLL(None, self)
-		args.declare(self.scope.context)
-		args.pack(self.context)
-		enter_fn_inst.call(self.context, args, None, tmp)
+		args.declare()
+		args.pack()
+		enter_fn_inst.call(args, None, tmp)
 
 		# if we provide the result in the namespace, set it
 		if node.optional_vars:
@@ -1862,20 +1854,20 @@ class Py2C(ASTVisitor):
 				self.visit(node.body)
 
 		# mark exit as a finally target
-		self.context.add(c.Label(exit_label))
+		self.ctx.add(c.Label(exit_label))
 
 		# query for a possibly set exception
 		argvec, exc_cookie = self.maybe_save_exception_normalized_enter()
 
 		# do the __exit__ call
 		out_var = PyObjectLL(None, self)
-		out_var.declare(self.scope.context)
-		exit_fn_inst.call(self.context, argvec, None, out_var)
-		argvec.clear(self.context)
+		out_var.declare()
+		exit_fn_inst.call(argvec, None, out_var)
+		argvec.clear()
 
 		# raise the exception if the output is False, otherwise supress
-		suppress_inst = out_var.is_true(self.context)
-		restore_if = self.context.add(c.If(c.UnaryOp('!', c.ID(suppress_inst.name)), c.Compound(), c.Compound()))
+		suppress_inst = out_var.is_true()
+		restore_if = self.ctx.add(c.If(c.UnaryOp('!', c.ID(suppress_inst.name)), c.Compound(), c.Compound()))
 		with self.new_context(restore_if.iftrue):
 			self.maybe_restore_exception_normalized_exit(exc_cookie)
 		with self.new_context(restore_if.iffalse):
@@ -1884,28 +1876,28 @@ class Py2C(ASTVisitor):
 			# NOTE: just clearing an error isn't enough here: our flowcontrol handler will assume an exception will raise out
 			#		of this context, so we need to also stop ourself from jumping out of this context.  Since the error is squashed
 			#		we can just continue on our way.
-			self.context.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.ID('NULL')))
+			self.ctx.add(c.Assignment('=', c.ID('__jmp_ctx__'), c.ID('NULL')))
 
 		# if the top-level needs control back to complete, it will set __jmp_ctx__
 		self.declare_jump_context()
-		self.context.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
+		self.ctx.add(c.If(c.ID('__jmp_ctx__'), c.Compound(c.Goto(c.UnaryOp('*', c.ID('__jmp_ctx__')))), None))
 
 
 	def visit_UnaryOp(self, node):
 		o = self.visit(node.operand)
 
 		inst = PyObjectLL(None, self)
-		inst.declare(self.scope.context)
+		inst.declare()
 
 		if node.op == py.Invert:
-			o.invert(self.context, inst)
+			o.invert(inst)
 		elif node.op == py.Not:
-			tmp = o.not_(self.context)
-			inst.assign_name(self.context, tmp.as_pyobject(self.context))
+			tmp = o.not_()
+			inst.assign_name(tmp.as_pyobject())
 		elif node.op == py.UAdd:
-			o.positive(self.context, inst)
+			o.positive(inst)
 		elif node.op == py.USub:
-			o.negative(self.context, inst)
+			o.negative(inst)
 		else:
 			raise NotImplementedError("UnaryOp({})".format(node.op))
 
@@ -1915,7 +1907,7 @@ class Py2C(ASTVisitor):
 	def visit_Yield(self, node):
 		# get the returned instance
 		rv_inst = self.visit(node.value)
-		self.scope.ll.do_yield(self.context, rv_inst)
+		self.scope.ll.do_yield(rv_inst)
 
 
 
@@ -1927,13 +1919,13 @@ class Py2C(ASTVisitor):
 
 		# get the PyIter for the iteration object
 		iter = PyObjectLL(None, self)
-		iter.declare(self.scope.context)
-		iter_obj.get_iter(self.context, iter)
+		iter.declare()
+		iter_obj.get_iter(iter)
 
 		# the gets the object locally inside of the while expr; we do the full assignment inside the body
 		tmp = PyObjectLL(None, self)
-		tmp.declare(self.scope.context)
-		stmt = self.context.add(c.While(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound()))
+		tmp.declare()
+		stmt = self.ctx.add(c.While(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound()))
 		with self.new_context(stmt.stmt):
 			# set this loops variable
 			self._store_any(node.target, tmp)
@@ -1941,13 +1933,13 @@ class Py2C(ASTVisitor):
 			# if we have selectors on this generator, visit them recursively
 			if node.ifs:
 				rv = self.visit_comp_ifs(generators, 0, setter)
-				tmp.decref(self.context)
+				tmp.decref()
 				return rv
 
 			# if we have more generators, visit them, otherwise set our targets
 			if len(generators) > 1:
 				rv = self.visit_comp_generators(generators[1:], setter)
-				tmp.decref(self.context)
+				tmp.decref()
 				return rv
 
 			# if out of generators, go to setting our result
@@ -1962,7 +1954,7 @@ class Py2C(ASTVisitor):
 		# get our truth value for the test
 		inst = self.visit(node)
 		if isinstance(inst, PyObjectLL):
-			tmpvar = inst.is_true(self.context)
+			tmpvar = inst.is_true()
 			test = c.BinaryOp('==', c.Constant('integer', 1), c.ID(tmpvar.name))
 		elif isinstance(inst, CIntegerLL):
 			test = c.ID(inst.name)
@@ -1970,7 +1962,7 @@ class Py2C(ASTVisitor):
 			raise NotImplementedError('Non-pyobject as value for If test')
 
 		# create the if stmt
-		stmt = self.context.add(c.If(test, c.Compound(), None))
+		stmt = self.ctx.add(c.If(test, c.Compound(), None))
 		with self.new_context(stmt.iftrue):
 			# if we have more ifs to visit, then go there
 			if offset < len(generators[0].ifs):
@@ -1986,16 +1978,16 @@ class Py2C(ASTVisitor):
 
 	def visit_DictComp(self, node):
 		dict_inst = self.create_ll_instance(node.hl)
-		dict_inst.prepare_locals(self.scope.context)
+		dict_inst.prepare_locals()
 
 		out = PyDictLL(None, self)
-		out.declare(self.scope.context, name="_dictcomp_")
-		out.new(self.context)
+		out.declare(name="_dictcomp_")
+		out.new()
 
 		def _set():
 			k_inst = self.visit(node.key)
 			v_inst = self.visit(node.value)
-			out.set_item(self.context, k_inst, v_inst)
+			out.set_item(k_inst, v_inst)
 		self.visit_comp_generators(node.generators, _set)
 
 		return out
@@ -2003,15 +1995,15 @@ class Py2C(ASTVisitor):
 
 	def visit_ListComp(self, node):
 		list_inst = self.create_ll_instance(node.hl)
-		list_inst.prepare_locals(self.scope.context)
+		list_inst.prepare_locals()
 
 		out_inst = PyListLL(None, self)
-		out_inst.declare(self.scope.context, name="_listcomp_")
-		out_inst.new(self.context)
+		out_inst.declare(name="_listcomp_")
+		out_inst.new()
 
 		def _set():
 			obj = self.visit(node.elt)
-			out_inst.append(self.context, obj)
+			out_inst.append(obj)
 		self.visit_comp_generators(node.generators, _set)
 
 		return out_inst
@@ -2019,15 +2011,15 @@ class Py2C(ASTVisitor):
 
 	def visit_SetComp(self, node):
 		set_inst = self.create_ll_instance(node.hl)
-		set_inst.prepare_locals(self.scope.context)
+		set_inst.prepare_locals()
 
 		out = PySetLL(None, self)
-		out.declare(self.scope.context, name="_setcomp_")
-		out.new(self.context)
+		out.declare(name="_setcomp_")
+		out.new()
 
 		def _set():
 			obj = self.visit(node.elt)
-			out.add(self.context, obj)
+			out.add(obj)
 		self.visit_comp_generators(node.generators, _set)
 
 		return out

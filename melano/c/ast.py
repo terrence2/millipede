@@ -77,22 +77,12 @@ class Compound(AST):
 		# counter for tmp items
 		self.tmpcount = itertools.count()
 
-		# track the underlying converter visitor, so we can get to high-level state
-		self.visitor = None
+
+	def tmpname(self, tu):
+		return self.reserve_name('tmp' + str(next(self.tmpcount)), tu)
 
 
-	def tmp_pyobject(self):
-		'''Reserve a tmp name and declare it as a pyobject.  Return name name.'''
-		n = self.tmpname()
-		self.add_variable(Decl(n, PtrDecl(TypeDecl(n, IdentifierType('PyObject'))), init=ID('NULL')), True)
-		return n
-
-
-	def tmpname(self):
-		return self.reserve_name('tmp' + str(next(self.tmpcount)))
-
-
-	def reserve_name(self, name):
+	def reserve_name(self, name, tu):
 		'''
 		Try to ensure uniqueness in the local scope and against the global scope.  We _should_ only
 		ever care about names in the global scope that we use in the local scope, so if someone
@@ -101,7 +91,6 @@ class Compound(AST):
 		global name, only the local one we are aliasing.  This, of course, breaks down if we happen
 		to alias with one of our internal names, which is why we have this particular indirection.
 		'''
-		tu = self.visitor.tu
 		cnt = 0
 		nm = name
 		while nm in self.names or (tu and nm in tu.names) or nm in C_KEYWORDS:
@@ -349,7 +338,7 @@ class TranslationUnit(AST):
 		# note: need to allow declare to check ourself as well
 		self.tu = self
 
-	def reserve_name(self, name):
+	def reserve_global_name(self, name):
 		cnt = 0
 		if name.startswith('__'):
 			nm = '__mg_' + name[2:]

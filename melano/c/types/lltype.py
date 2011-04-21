@@ -8,66 +8,77 @@ from melano.c import ast as c
 class LLType:
 	def __init__(self, hlnode, visitor):
 		super().__init__()
-		self.visitor = visitor
+		self.v = visitor
 		self.hlnode = hlnode
 		self.hltype = hlnode.get_type() if hlnode else None
 		self.name = None #set when we declare
 
 
-	def declare(self, ctx, quals=[], name=None):
-		assert isinstance(ctx, c.TranslationUnit) or not self.visitor.scopes or self.visitor.scope.context == ctx, \
-					'Somebody called declare() with a context, rather than a scope.context!'
+	def declare(self, *, is_global=False, quals=[], name=None):
 		assert self.name is None # we can only declare once
+		if is_global:
+			fn = self.v.tu.reserve_global_name
+			args = ()
+		else:
+			fn = self.v.scope.ctx.reserve_name
+			args = (self.v.tu,)
 		if name:
-			self.name = ctx.reserve_name(name)
+			self.name = fn(name, *args)
 		else:
 			if self.hlnode and hasattr(self.hlnode, 'name'):
-				self.name = ctx.reserve_name(self.hlnode.name)
+				self.name = fn(self.hlnode.name, *args)
 			else:
-				self.name = ctx.tmpname()
+				assert not is_global
+				self.name = self.v.scope.ctx.tmpname(self.v.tu)
 
 
 	def fail(self, typename, error):
-		self.visitor.set_exception_str(typename, error)
-		self.visitor.capture_error()
-		self.visitor.exit_with_exception()
+		self.v.set_exception_str(typename, error)
+		self.v.capture_error()
+		self.v.exit_with_exception()
+
 
 	def fail_formatted(self, typename, error, *insts):
-		self.visitor.set_exception_format(typename, error, *insts)
-		self.visitor.capture_error()
-		self.visitor.exit_with_exception()
+		self.v.set_exception_format(typename, error, *insts)
+		self.v.capture_error()
+		self.v.exit_with_exception()
 
 
-	def fail_if_null(self, ctx, name):
-		check = ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None))
-		with self.visitor.new_context(check.iftrue):
-			self.visitor.capture_error()
-			self.visitor.exit_with_exception()
+	def fail_if_null(self, name):
+		check = self.v.ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None))
+		with self.v.new_context(check.iftrue):
+			self.v.capture_error()
+			self.v.exit_with_exception()
 
 
-	def except_if_null(self, ctx, name, exc_name, exc_str=None):
-		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None)
-		ctx.add(check)
-		with self.visitor.new_context(check.iftrue):
+	def fail_if_error_occurred(self):
+		check = self.v.ctx.add(c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), None))
+		with self.v.new_context(check.iftrue):
+			self.v.capture_error()
+			self.v.exit_with_exception()
+
+
+	def except_if_null(self, name, exc_name, exc_str=None):
+		check = self.v.ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.UnaryOp('!', c.ID(name)))), c.Compound(), None))
+		with self.v.new_context(check.iftrue):
 			if exc_str:
-				self.visitor.context.add(c.FuncCall(c.ID('PyErr_SetString'), c.ExprList(c.ID(exc_name), c.Constant('string', exc_str))))
+				self.v.ctx.add(c.FuncCall(c.ID('PyErr_SetString'), c.ExprList(c.ID(exc_name), c.Constant('string', exc_str))))
 			else:
-				self.visitor.context.add(c.FuncCall(c.ID('PyErr_SetNone'), c.ExprList(c.ID(exc_name))))
-			self.visitor.capture_error()
-			self.visitor.exit_with_exception()
+				self.v.ctx.add(c.FuncCall(c.ID('PyErr_SetNone'), c.ExprList(c.ID(exc_name))))
+			self.v.capture_error()
+			self.v.exit_with_exception()
 
 
-	def fail_if_nonzero(self, ctx, name):
-		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(name)))), c.Compound(), None)
-		ctx.add(check)
-		with self.visitor.new_context(check.iftrue):
-			self.visitor.capture_error()
-			self.visitor.exit_with_exception()
+	def fail_if_nonzero(self, name):
+		check = self.v.ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('!=', c.Constant('integer', 0), c.ID(name)))), c.Compound(), None))
+		with self.v.new_context(check.iftrue):
+			self.v.capture_error()
+			self.v.exit_with_exception()
 
 
-	def fail_if_negative(self, ctx, name):
-		check = c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('>', c.Constant('integer', 0), c.ID(name)))), c.Compound(), None)
-		ctx.add(check)
-		with self.visitor.new_context(check.iftrue):
-			self.visitor.capture_error()
-			self.visitor.exit_with_exception()
+	def fail_if_negative(self, name):
+		check = self.v.ctx.add(c.If(c.FuncCall(c.ID('unlikely'), c.ExprList(c.BinaryOp('>', c.Constant('integer', 0), c.ID(name)))), c.Compound(), None))
+		with self.v.new_context(check.iftrue):
+			self.v.capture_error()
+			self.v.exit_with_exception()
+

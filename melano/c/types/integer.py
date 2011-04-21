@@ -18,45 +18,46 @@ class CIntegerLL(LLType):
 		self.is_a_bool = self.hltype.is_a_bool if self.hltype else is_a_bool
 
 
-	def declare(self, ctx, quals=[], init=0, name=None):
-		super().declare(ctx, quals, name)
+	def declare(self, *, quals=[], init=0, name=None, **kwargs):
+		super().declare(quals=quals, name=name, **kwargs)
 		#TODO: specialize for signed and sized ints
-		ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=quals, init=c.Constant('integer', init)), False)
+		self.v.ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=quals, init=c.Constant('integer', init)), False)
 
 
-	def as_pyobject(self, ctx):
+	def as_pyobject(self):
 		if self.is_a_bool:
-			out = PyBoolLL(None, self.visitor)
-			out.declare(self.visitor.scope.context)
-			out._new_from_long(ctx, c.ID(self.name))
+			out = PyBoolLL(None, self.v)
+			out.declare()
+			out._new_from_long(c.ID(self.name))
 			return out
 		else:
-			out = PyIntegerLL(None, self.visitor)
-			out.declare(self.visitor.scope.context)
-			out._new_from_long(ctx, c.ID(self.name))
+			out = PyIntegerLL(None, self.v)
+			out.declare()
+			out._new_from_long(c.ID(self.name))
 			return out
 
 
-	def as_ssize(self, ctx):
+	def as_ssize(self):
 		return self
 
 
-	def not_(self, ctx, out=None):
-		if not out:
-			out = CIntegerLL(None, self.visitor)
-			out.declare(self.visitor.scope.context, name="_inv_rv")
-		ctx.add(c.Assignment('=', c.ID(out.name), c.UnaryOp('!', c.ID(self.name))))
-		return out
+	def not_(self, out_inst=None):
+		if not out_inst:
+			out_inst = CIntegerLL(None, self.v)
+			out_inst.declare(name="_inv_rv")
+		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.UnaryOp('!', c.ID(self.name))))
+		return out_inst
 
 
-	def is_true(self, ctx, out_inst=None):
+	def is_true(self, out_inst=None):
 		if out_inst:
-			ctx.add(c.Assignment('=', c.ID(out_inst.name), c.ID(self.name)))
+			self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.ID(self.name)))
 		return self
 
 
-	def set_constant(self, ctx, i):
-		ctx.add(c.Assignment('=', c.ID(self.name), c.Constant('integer', i)))
+	def set_constant(self, i):
+		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.Constant('integer', i)))
+
 
 from melano.c.types.pybool import PyBoolLL
 from melano.c.types.pyinteger import PyIntegerLL

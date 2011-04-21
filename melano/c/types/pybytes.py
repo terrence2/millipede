@@ -20,12 +20,14 @@ class PyBytesLL(PyObjectLL):
 		return len(b)
 
 
-	def new(self, ctx, py_init):
+	def new(self, py_init):
 		init = self.bytes2c(py_init)
 		strlen = self.strlen(init)
 		assert all(map(lambda x: ord(x) < 256 and ord(x) >= 0, init)), 'Out of range character for char in: {}'.format(init)
-		self.xdecref(ctx)
-		ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyBytes_FromStringAndSize'), c.ExprList(
+		self.xdecref()
+		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyBytes_FromStringAndSize'), c.ExprList(
 											c.Constant('string', init),
 											c.Constant('integer', strlen)))))
-		self.fail_if_null(ctx, self.name)
+		self.fail_if_null(self.name)
+
+

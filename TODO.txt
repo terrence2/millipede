@@ -10,3 +10,4 @@ py2c:
 
 CLEANUPS:
 * rename PyMelanoFunction to MgFunction or MpFunction or _anything_ else
+ensure result of reserve_name is never discarded

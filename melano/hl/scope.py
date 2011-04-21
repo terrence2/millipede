@@ -25,7 +25,7 @@ class Scope:
 
 		# Records the scope's local "context" -- e.g. the lowlevel variable scope.
 		# Set in visit_FuncDef during the time we visit our children.
-		self.context = None
+		self.ctx = None
 
 		# Keep track of how many labels we have used per prefix, so that we can
 		#		ensure that each label we create is unique.

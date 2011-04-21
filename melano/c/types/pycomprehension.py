@@ -14,26 +14,28 @@ class PyComprehensionLL(LLType):
 		self.locals_map = {} # {str: inst}
 
 
-	def declare(self, ctx, quals=[], name=None):
-		super().declare(ctx, quals, name)
-		ctx.add_variable(c.Decl(self.name, PyObjectLL.typedecl(self.name), quals=quals, init=c.ID('NULL')), True)
+	def declare(self, *, quals=[], name=None):
+		super().declare(quals=quals, name=name)
+		self.v.scope.ctx.add_variable(c.Decl(self.name, PyObjectLL.typedecl(self.name), quals=quals, init=c.ID('NULL')), True)
 
 
-	def prepare_locals(self, context):
+	def prepare_locals(self):
 		for name, sym in self.hlnode.symbols.items():
 			if isinstance(sym, NameRef): continue # skip refs, only create names created here
-			self.locals_map[name] = self.visitor.create_ll_instance(sym)
-			self.locals_map[name].declare(self.visitor.scope.context)
+			self.locals_map[name] = self.v.create_ll_instance(sym)
+			self.locals_map[name].declare()
 
 
-	def set_attr_string(self, ctx, attrname, val_inst):
-		self.locals_map[attrname].xdecref(ctx)
-		val_inst = val_inst.as_pyobject(ctx)
-		val_inst.incref(ctx)
-		ctx.add(c.Assignment('=', c.ID(self.locals_map[attrname].name), c.ID(val_inst.name)))
+	def set_attr_string(self, attrname, val_inst):
+		self.locals_map[attrname].xdecref()
+		val_inst = val_inst.as_pyobject()
+		val_inst.incref()
+		self.v.ctx.add(c.Assignment('=', c.ID(self.locals_map[attrname].name), c.ID(val_inst.name)))
 
 
-	def get_attr_string(self, ctx, attrname, out_inst):
-		out_inst.xdecref(ctx)
-		ctx.add(c.Assignment('=', c.ID(out_inst.name), c.ID(self.locals_map[attrname].name)))
-		out_inst.incref(ctx)
+	def get_attr_string(self, attrname, out_inst):
+		out_inst.xdecref()
+		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.ID(self.locals_map[attrname].name)))
+		out_inst.incref()
+
+
