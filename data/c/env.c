@@ -4,7 +4,7 @@
 #include "genobject.h"
 
 extern int __melano_main__(int argc, wchar_t **argv);
-extern wchar_t* _Py_char2wchar(const char* arg, size_t *size);
+extern wchar_t* _Mp_char2wchar(const char* arg, size_t *size);
 
 
 void __err_capture__(char *file, int lineno, int clineno, char *context,
@@ -127,7 +127,7 @@ This is borrowed directly from python's sources.
    Conversion errors should never happen, unless there is a bug in the C
    library. */
 wchar_t*
-_Py_char2wchar(const char* arg, size_t *size)
+_Mp_char2wchar(const char* arg, size_t *size)
 {
     wchar_t *res;
 #ifdef HAVE_BROKEN_MBSTOWCS
@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
 #ifdef __APPLE__
         argv_copy[i] = _Py_DecodeUTF8_surrogateescape(argv[i], strlen(argv[i]));
 #else
-        argv_copy[i] = _Py_char2wchar(argv[i], NULL);
+        argv_copy[i] = _Mp_char2wchar(argv[i], NULL);
 #endif
         if (!argv_copy[i])
             return 1;
