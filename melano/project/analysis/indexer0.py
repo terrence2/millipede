@@ -166,6 +166,8 @@ class Indexer0(ASTVisitor):
 
 
 	def visit_Import(self, node):
+		'''Note: this is _only_ here to prevent normal visitation route of both name and asname, since we
+			need to only visit one of these.  It does not add any symbols.'''
 		for alias in node.names:
 			if alias.asname:
 				# Note: don't visit name if we have asname, since name is Load in this case, but it's not a Load on this module
@@ -173,68 +175,6 @@ class Indexer0(ASTVisitor):
 			else:
 				self.visit(alias.name)
 
-	'''
-	def visit_ImportFrom(self, node):
-		# query the module (keeping in mind that this may be a package we want)
-		pkg_or_mod_name = '.' * node.level + str(node.module)
-		mod = self.module.refs.get(pkg_or_mod_name, None)
-		node.module.hl = mod
-
-		if mod is None:
-			logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
-			self.missing.add(pkg_or_mod_name + '.*')
-			return
-
-		for alias in node.names:
-			if str(alias.name) == '*':
-				for name in mod.lookup_star():
-					# don't visit until we have already visited the parent
-					if mod not in self.visited:
-						logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
-						self.missing.add(pkg_or_mod_name + '.*')
-						return
-					if not self.scope.has_symbol(name):
-						ref = NameRef(mod.lookup(name))
-						ref.parent = self.scope
-						self.scope.add_symbol(name, ref)
-				continue
-
-			# Note: the queried name may be in the given module (maybe an __init__), or 
-			#		it may be a submodule in the package of that name
-			if mod.has_symbol(str(alias.name)):
-				sym = mod.lookup(str(alias.name))
-			elif mod.filename.endswith('__init__.py'):
-				# ensure we have actually visited the real target before we go looking for submodules --
-				# Note: if we _are_ '.' outself, then we can continue here without issues
-				if not self.module.filename.endswith('__init__.py') and mod not in self.visited:
-					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
-					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
-					return
-				real_filename = mod.filename[:-11] + str(alias.name).replace('.', '/') + '.py'
-				try:
-					sym = self.project.modules_by_path[real_filename]
-				except KeyError:
-					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
-					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
-					return
-			else:
-				logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
-				self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
-				continue
-
-			ref = NameRef(sym)
-			ref.parent = self.scope
-
-			if alias.asname:
-				#self.visit(alias.asname)
-				self.scope.add_symbol(str(alias.asname), ref)
-				alias.asname.hl = ref
-				alias.name.hl = ref
-			else:
-				#self.visit(alias.name)
-				self.scope.add_symbol(str(alias.name), ref)
-				alias.name.hl = ref
-	'''
 
 	def visit_Lambda(self, node):
 		#defaults
