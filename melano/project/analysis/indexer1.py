@@ -147,7 +147,7 @@ class Indexer1(ASTVisitor):
 				sym = mod.lookup(str(alias.name))
 			elif mod.filename.endswith('__init__.py'):
 				# ensure we have actually visited the real target before we go looking for submodules --
-				# Note: if we _are_ '.' outself, then we can continue here without issues
+				# Note: if we _are_ '.' ourself, then we can continue here without issues
 				if not self.module.filename.endswith('__init__.py') and mod not in self.visited:
 					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
 					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
