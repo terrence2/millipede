@@ -135,6 +135,8 @@ class Indexer1(ASTVisitor):
 		mod = self.module.refs.get(pkg_or_mod_name, None)
 		node.module.hl = mod
 
+
+		# if we have not visited the target module, skip it until we have
 		if mod is None:
 			logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
 			self.missing.add(pkg_or_mod_name + '.*')
