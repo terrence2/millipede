@@ -117,6 +117,19 @@ class Indexer1(ASTVisitor):
 
 
 	def visit_ImportFrom(self, node):
+		def _handle_star(alias):
+			for name in mod.lookup_star():
+				# don't visit until we have already collected all possible symbols in the parent
+				if mod not in self.visited:
+					logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
+					self.missing.add(pkg_or_mod_name + '.*')
+					return
+				# only add if we have not yet added it
+				if not self.context.has_symbol(name):
+					ref = NameRef(mod.lookup(name))
+					ref.parent = self.context
+					self.context.add_symbol(name, ref)
+
 		# query the module (keeping in mind that this may be a package we want)
 		pkg_or_mod_name = '.' * node.level + str(node.module)
 		mod = self.module.refs.get(pkg_or_mod_name, None)
@@ -129,16 +142,7 @@ class Indexer1(ASTVisitor):
 
 		for alias in node.names:
 			if str(alias.name) == '*':
-				for name in mod.lookup_star():
-					# don't visit until we have already visited the parent
-					if mod not in self.visited:
-						logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
-						self.missing.add(pkg_or_mod_name + '.*')
-						return
-					if not self.context.has_symbol(name):
-						ref = NameRef(mod.lookup(name))
-						ref.parent = self.context
-						self.context.add_symbol(name, ref)
+				_handle_star(alias)
 				continue
 
 			# Note: the queried name may be in the given module (maybe an __init__), or 
