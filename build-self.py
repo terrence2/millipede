@@ -8,7 +8,7 @@ import sys
 #from melano.ui.application import MelanoApplication
 
 def main():
-	logging.basicConfig(level=logging.DEBUG)
+	logging.basicConfig(level=logging.INFO)
 
 	if '3.3' in sys.argv:
 		logging.info("Building against Python3.3")
@@ -19,8 +19,8 @@ def main():
 		stdlib = ['/usr/lib/python3.1', '/usr/lib/python3.1/lib-dynload']
 		extensions = ['/usr/lib/python3.1/site-packages']
 
-	project = MelanoProject('melano', programs=['run'], roots=[os.path.realpath('.')])
-	project.configure(stdlib=stdlib, extensions=extensions)
+	project = MelanoProject('melano')
+	project.configure(programs=['run'], roots=[os.path.realpath('.')], stdlib=stdlib, extensions=extensions)
 	project.build_all()
 
 	#app = MelanoApplication(project, sys.argv)
