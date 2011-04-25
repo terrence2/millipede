@@ -1,0 +1,1 @@
+class ImmutableSet(set): pass
