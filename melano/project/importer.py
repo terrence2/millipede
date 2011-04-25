@@ -184,12 +184,17 @@ class Importer:
 
 	def find_best_path_for_modname(self, initial_modname):
 		try:
-			# find the modname on the filesystem
-			absolute_modfile, base_location, module_type = self.find_best_path_for_absolute_modname(initial_modname)
-		except NoSuchModuleError:
-			# if not in the filesystem, look for a module renamed into the parent's dict
-			absolute_modfile, base_location, module_type = self.find_best_path_for_relocated_modname(initial_modname)
-		return absolute_modfile, base_location, module_type
+			absolute_modfile, base_location, module_type = self.project.cache.get_module_path(initial_modname)
+			return absolute_modfile, base_location, module_type
+		except KeyError:
+			try:
+				# find the modname on the filesystem
+				absolute_modfile, base_location, module_type = self.find_best_path_for_absolute_modname(initial_modname)
+			except NoSuchModuleError:
+				# if not in the filesystem, look for a module renamed into the parent's dict
+				absolute_modfile, base_location, module_type = self.find_best_path_for_relocated_modname(initial_modname)
+			self.project.cache.add_module_location(initial_modname, absolute_modfile, base_location, module_type)
+			return absolute_modfile, base_location, module_type
 
 
 	def find_best_path_for_absolute_modname(self, modname):

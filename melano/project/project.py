@@ -16,6 +16,7 @@ from melano.project.analysis.indexer0 import Indexer0
 from melano.project.analysis.indexer1 import Indexer1
 from melano.project.analysis.linker import Linker
 from melano.project.analysis.typer import Typer
+from melano.project.cache import Cache
 from melano.project.importer import Importer
 from melano.py.driver import PythonParserDriver
 import hashlib
@@ -42,7 +43,7 @@ class MelanoProject:
 	query the sources to build an information database about a project.
 	'''
 
-	def __init__(self, name:str, programs:[str], roots:[str], build_dir:str='./build'):
+	def __init__(self, name:str, build_dir:str='./build', cache_dir:str='./cache'):
 		'''
 		The project root(s) is the filesystem path(s) where we should
 		start searching for modules in import statements.
@@ -51,8 +52,6 @@ class MelanoProject:
 		the project's "main" entry points.
 		'''
 		self.name = name
-		self.programs = {p: None for p in programs}
-		self.roots = roots
 		self.build_dir = os.path.realpath(build_dir)
 		self.data_dir = os.path.join(os.path.realpath('.'), 'data')
 
@@ -69,10 +68,6 @@ class MelanoProject:
 		self.modules_by_absname = {} # {str: MelanoModule}
 		self.order = [] # depth first traversal order
 
-		# map module names to their path and type, so we don't have to hit the fs repeatedly 
-		#self.name_to_path = {} # {str: str}
-		#self.name_to_type = {} # {str: int}
-
 		# the core parser infrastructure
 		self.parser_driver = PythonParserDriver('data/grammar/python-3.1')
 
@@ -86,6 +81,7 @@ class MelanoProject:
 			os.makedirs(self.build_dir)
 
 		# list our currently cached entries for fast lookup later
+		self.cache = Cache(name, build_dir, cache_dir)
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
 
 		# build a 'scope' for our builtins
@@ -94,7 +90,7 @@ class MelanoProject:
 			self.builtins_scope.add_symbol(n)
 
 
-	def configure(self, *, stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[], builddir='./build',
+	def configure(self, *, programs:[str], roots:[str], stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[],
 				limit='.*', verbose=False):
 		'''
 		Set up this project.
@@ -102,13 +98,16 @@ class MelanoProject:
 		builddir : the target build directory
 		limit : only files matching this regex as part of the program set
 		'''
+		self.programs = programs
+		self.roots = roots
 		self.stdlib = stdlib + self.stdlib
 		self.extensions = extensions + self.extensions
 		self.builtins = builtins + self.builtins
 		self.override = override + self.override
 
-		self.build_dir = os.path.realpath(builddir)
 		self.limit = re.compile(limit)
+
+		self.cache.prepare(programs, roots, stdlib, extensions, builtins, override)
 
 		self.verbose = verbose
 		if verbose:
@@ -214,6 +213,8 @@ class MelanoProject:
 					records[fn] = indexer.missing
 					if 0 == missing[fn]:
 						visited.add(mod)
+
+				assert self.modules_by_path[fn] in visited or missing[fn] > 0
 
 
 		logging.info("Indexing: Phase 1, {} files".format(len(self.order)))
