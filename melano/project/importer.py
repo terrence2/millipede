@@ -72,7 +72,10 @@ class Importer:
 		for imp in visitor.imports:
 			for alias in imp.names:
 				for modname in self.__import_name_parts(alias.name):
-					last = self.trace_import_tree(modname)
+					try:
+						last = self.trace_import_tree(modname)
+					except NoSuchModuleError as ex:
+						logging.critical("Failed to find module: {}".format(str(ex)))
 					assert last is not None
 					visitor.ref_paths[modname] = last
 
