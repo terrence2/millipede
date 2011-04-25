@@ -155,6 +155,7 @@ class Indexer1(ASTVisitor):
 			#		it may be a submodule in the package of that name
 			if mod.has_symbol(str(alias.name)):
 				sym = mod.lookup(str(alias.name))
+
 			elif mod.filename.endswith('__init__.py'):
 				# ensure we have actually visited the real target before we go looking for submodules --
 				# Note: if we _are_ '.' ourself, then we can continue here without issues
@@ -162,13 +163,19 @@ class Indexer1(ASTVisitor):
 					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
 					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
 					return
-				real_filename = mod.filename[:-11] + str(alias.name).replace('.', '/') + '.py'
+
+				# filename will be one of either (1) mod/name.py or (2) mod/name/__init__.py
+				real_filename_1 = mod.filename[:-11] + str(alias.name).replace('.', '/') + '.py'
+				real_filename_2 = mod.filename[:-11] + str(alias.name).replace('.', '/') + '/' + '__init__.py'
 				try:
-					sym = self.project.modules_by_path[real_filename]
+					sym = self.project.modules_by_path[real_filename_1]
 				except KeyError:
-					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
-					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
-					return
+					try:
+						sym = self.project.modules_by_path[real_filename_2]
+					except KeyError:
+						logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
+						self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
+						return
 			else:
 				logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
 				self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
