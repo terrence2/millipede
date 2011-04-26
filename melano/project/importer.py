@@ -4,10 +4,11 @@ All rights reserved.
 '''
 from melano.hl.module import MelanoModule
 from melano.project.analysis.find_links import FindLinks
-import melano.py.ast as py
 import logging
+import melano.py.ast as py
 import os
 import pdb
+import pickle
 
 
 class NoSuchModuleError(Exception):
@@ -79,12 +80,14 @@ class Importer:
 		ref_paths = {}
 		ast = self.project.get_file_ast(absolute_modfile)
 
-		#imports, importfroms, renames = self.project.global_cache.query_file_links(absolute_modfile)
-		#if imports is None:
-		visitor = FindLinks()
-		visitor.visit(ast)
-		imports, importfroms, renames = visitor.imports, visitor.importfroms, visitor.renames
-		#self.project.global_cache.update_file_links(absolute_modfile, imports, importfroms)
+		data = self.project.global_cache.query_file_links(absolute_modfile)
+		if data is None:
+			visitor = FindLinks()
+			visitor.visit(ast)
+			imports, importfroms, renames = visitor.imports, visitor.importfroms, visitor.renames
+			self.project.global_cache.update_file_links(absolute_modfile, pickle.dumps((imports, importfroms, renames)))
+		else:
+			imports, importfroms, renames = pickle.loads(data)
 
 		for alias_name in imports:
 			for modname in self.__import_name_parts(alias_name):

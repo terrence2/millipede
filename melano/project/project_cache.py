@@ -20,6 +20,7 @@ class Configuration(SQLBase):
 	value = Column(Unicode)
 
 	def __init__(self, key, value, order=0):
+		super().__init__()
 		self.order = order
 		self.key = key
 		self.value = value
@@ -45,18 +46,11 @@ class ModuleLocation(SQLBase):
 	unique_rows = UniqueConstraint('name', 'type', 'path', 'location')
 
 	def __init__(self, name, type, path, location):
+		super().__init__()
 		self.name = name
 		self.type = type
 		self.path = path
 		self.location = location
-
-
-#foo = Foo()
-#session.add(foo)
-#thing = Thing(name='thing1', description='some thing')
-#thing.foo = foo  # also adds Thing to session
-#session.commit()
-
 
 
 class ProjectCache:

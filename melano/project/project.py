@@ -186,6 +186,7 @@ class MelanoProject:
 		logging.info("Indexing: Phase 0, {} files".format(len(self.order)))
 		for fn in self.order:
 			mod = self.modules_by_path[fn]
+
 			logging.info("Indexing0: {}".format(mod.filename))
 			indexer = Indexer0(self, mod)
 			indexer.visit(mod.ast)
@@ -351,35 +352,3 @@ class MelanoProject:
 			ast = self.parser_driver.parse_string(source)
 			self.global_cache.update_ast_data(filename, checksum, pickle.dumps(ast))
 			return ast
-
-		'''
-		cachefile = os.path.join(self.cachedir, checksum)
-		if checksum in self.cached:
-			logging.debug("Cached: {} @ {}".format(filename, checksum))
-			with open(cachefile, 'rb') as fp:
-				ast = pickle.load(fp)
-		else:
-			logging.info("Parsing: {}".format(filename))
-			ast = self.parser_driver.parse_string(source)
-			with open(cachefile, 'wb') as fp:
-				pickle.dump(ast, fp, pickle.HIGHEST_PROTOCOL)
-				self.cached[checksum] = True
-		return ast
-		'''
-
-	def __load_ast(self, mod):
-		'''Find the ast for this module.'''
-		'''
-		cachefile = os.path.join(self.cachedir, mod.checksum)
-		if mod.checksum in self.cached:
-			logging.debug("Cached: {}".format(mod.filename))
-			with open(cachefile, 'rb') as fp:
-				mod.ast = pickle.load(fp)
-		else:
-			logging.info("Parsing: {}".format(mod.filename))
-			mod.ast = self.parser_driver.parse_string(mod.source)
-			with open(cachefile, 'wb') as fp:
-				pickle.dump(mod.ast, fp, pickle.HIGHEST_PROTOCOL)
-				self.cached[mod.checksum] = True
-		'''
-		raise NotImplementedError
