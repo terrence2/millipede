@@ -79,14 +79,14 @@ class Importer:
 		ref_paths = {}
 		ast = self.project.get_file_ast(absolute_modfile)
 
-		#imports, importfroms, renames, ref_paths = self.project.global_cache.query_file_links(absolute_modfile)
+		#imports, importfroms, renames = self.project.global_cache.query_file_links(absolute_modfile)
 		#if imports is None:
 		visitor = FindLinks()
 		visitor.visit(ast)
-		imports, importfroms = visitor.imports, visitor.importfroms
+		imports, importfroms, renames = visitor.imports, visitor.importfroms, visitor.renames
 		#self.project.global_cache.update_file_links(absolute_modfile, imports, importfroms)
 
-		for alias_name, _ in imports:
+		for alias_name in imports:
 			for modname in self.__import_name_parts(alias_name):
 				last = None
 				try:
@@ -96,7 +96,6 @@ class Importer:
 				assert last is not None
 				ref_paths[modname] = last
 
-		#for imp in visitor.importfroms:
 		for imp_level, imp_module, imp_names in importfroms:
 			# find absolute module name
 			rel_pkg_or_mod_name = '.' * imp_level + str(imp_module)
@@ -114,13 +113,13 @@ class Importer:
 			# Note: the names in the from . import <names> may be either names in the module we just added, 
 			#		or they may also be modules under the package, if it is a package we just imported
 			if last.endswith('__init__.py'):
-				for alias_name, _ in imp_names:
+				for alias_name in imp_names:
 					try:
 						self.trace_import_tree(abs_pkg_or_mod_name + '.' + str(alias_name))
 					except NoSuchModuleError:
 						logging.warning("Skipping module named: {} as possibly masked".format(abs_pkg_or_mod_name + '.' + str(alias_name)))
 
-		return visitor.renames, ref_paths, ast
+		return renames, ref_paths, ast
 
 
 	def find_absolute_modname(self, maybe_rel_modname, package_directory, base_dir):

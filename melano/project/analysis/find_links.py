@@ -11,25 +11,24 @@ class FindLinks(ASTVisitor):
 		self.importfroms = []
 		self.renames = {}
 
+
 	def visit_Import(self, node):
 		for alias in node.names:
 			v = str(alias.name)
-			k = None
 			if alias.asname:
 				k = str(alias.asname)
 				if k not in self.renames: self.renames[k] = []
 				if v not in self.renames[k]: self.renames[k].append(v)
-			self.imports.append((v, k))
+			self.imports.append(v)
 
 
 	def visit_ImportFrom(self, node):
 		names = []
 		for alias in node.names:
 			v = str(alias.name)
-			k = None
 			if alias.asname:
 				k = str(alias.asname)
 				if k not in self.renames: self.renames[k] = []
 				if v not in self.renames[k]: self.renames[k].append(v)
-			names.append((v, k))
+			names.append(v)
 		self.importfroms.append((node.level, node.module, names))
