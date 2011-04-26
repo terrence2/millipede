@@ -4,7 +4,6 @@ All rights reserved.
 '''
 from contextlib import contextmanager
 from melano.hl.coerce import Coerce
-from melano.hl.module import MelanoModule
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
 from melano.lang.visitor import ASTVisitor
