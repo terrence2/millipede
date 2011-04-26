@@ -3,7 +3,7 @@ CFLAGS=-DCORO_UCONTEXT
 CFLAGS_WARN=-Wall -Wno-unused-label -Wtrigraphs
 CFLAGS_OPT=-O0 -g
 CFLAGS_INCLUDE=-I/usr/local/include -I./data/c -I./data/c/libcoro
-POST33=dmu
+POST33=du
 
 EXTRA_SOURCES=data/c/env.c data/c/funcobject.c data/c/genobject.c data/c/libcoro/coro.c
 LIBS=-pthread
