@@ -53,7 +53,10 @@ class PyFunctionLL(PyObjectLL):
 			tmp.declare(name=self.hlnode.owner.name + "_kwdefaults")
 			tmp.new()
 			for name, inst in kwdefault_insts:
-				tmp.set_item_string(name, inst)
+				if inst is None:
+					tmp.set_item_string(name, self.v.none)
+				else:
+					tmp.set_item_string(name, inst)
 			self.c_obj.set_attr_string('__kwdefaults__', tmp)
 
 
