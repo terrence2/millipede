@@ -59,7 +59,7 @@ class ModuleLocation(SQLBase):
 
 
 
-class Cache:
+class ProjectCache:
 	def __init__(self, name, build_dir, cache_dir):
 		self.name = name
 		self.build_dir = build_dir
@@ -78,7 +78,7 @@ class Cache:
 
 		# create the sqlalchemy instances
 		self.engine = create_engine('sqlite:///' + self.cachefile)
-		SQLBase.metadata.create_all(self.engine)  # issues DDL to create tables
+		SQLBase.metadata.create_all(self.engine)
 		self.session = sessionmaker(bind=self.engine)()
 
 

@@ -60,49 +60,67 @@ class Importer:
 		logging.debug("Found file: {}".format(absolute_modfile))
 		if not absolute_modfile.endswith('.py'):
 			logging.debug("Opaque: {}".format(absolute_modfile))
-			self.out.append((initial_modname, absolute_modfile, module_type, {}))
+			self.out.append((initial_modname, absolute_modfile, module_type, {}, None))
 			return absolute_modfile
 
 		# visit and pull out refs and renames
+		renames, ref_paths, ast = self.find_links(initial_modname, absolute_modfile, package_directory, base_location)
+
+		# update our global output struct
+		self._renames[initial_modname] = renames
+		out = (initial_modname, absolute_modfile, module_type, ref_paths, ast)
+		self.out.append(out)
+
+		return absolute_modfile
+
+
+	def find_links(self, initial_modname, absolute_modfile, package_directory, base_location):
 		logging.info("Scanning: {} -> {}".format(initial_modname, absolute_modfile))
+		ref_paths = {}
 		ast = self.project.get_file_ast(absolute_modfile)
+
+		#imports, importfroms, renames, ref_paths = self.project.global_cache.query_file_links(absolute_modfile)
+		#if imports is None:
 		visitor = FindLinks()
 		visitor.visit(ast)
+		imports, importfroms = visitor.imports, visitor.importfroms
+		#self.project.global_cache.update_file_links(absolute_modfile, imports, importfroms)
 
-		for imp in visitor.imports:
-			for alias in imp.names:
-				for modname in self.__import_name_parts(alias.name):
-					try:
-						last = self.trace_import_tree(modname)
-					except NoSuchModuleError as ex:
-						logging.critical("Failed to find module: {}".format(str(ex)))
-					assert last is not None
-					visitor.ref_paths[modname] = last
+		for alias_name, _ in imports:
+			for modname in self.__import_name_parts(alias_name):
+				last = None
+				try:
+					last = self.trace_import_tree(modname)
+				except NoSuchModuleError as ex:
+					logging.critical("Failed to find module: {}".format(str(ex)))
+				assert last is not None
+				ref_paths[modname] = last
 
-		for imp in visitor.importfroms:
+		#for imp in visitor.importfroms:
+		for imp_level, imp_module, imp_names in importfroms:
 			# find absolute module name
-			rel_pkg_or_mod_name = '.' * imp.level + str(imp.module)
+			rel_pkg_or_mod_name = '.' * imp_level + str(imp_module)
 			abs_pkg_or_mod_name = self.find_absolute_modname(rel_pkg_or_mod_name, package_directory, base_location)
 
 			# fetch info on module and all children
-			last = self.trace_import_tree(abs_pkg_or_mod_name)
+			last = None
+			try:
+				last = self.trace_import_tree(abs_pkg_or_mod_name)
+			except NoSuchModuleError as ex:
+				logging.critical("Failed to find module: {}".format(str(ex)))
 			assert last is not None
-			visitor.ref_paths[rel_pkg_or_mod_name] = last
+			ref_paths[rel_pkg_or_mod_name] = last
 
 			# Note: the names in the from . import <names> may be either names in the module we just added, 
 			#		or they may also be modules under the package, if it is a package we just imported
 			if last.endswith('__init__.py'):
-				for alias in imp.names:
+				for alias_name, _ in imp_names:
 					try:
-						self.trace_import_tree(abs_pkg_or_mod_name + '.' + str(alias.name))
+						self.trace_import_tree(abs_pkg_or_mod_name + '.' + str(alias_name))
 					except NoSuchModuleError:
-						logging.warning("Skipping module named: {} as possibly masked".format(abs_pkg_or_mod_name + '.' + str(alias.name)))
+						logging.warning("Skipping module named: {} as possibly masked".format(abs_pkg_or_mod_name + '.' + str(alias_name)))
 
-		self._renames[initial_modname] = visitor.renames
-		out = (initial_modname, absolute_modfile, module_type, visitor.ref_paths)
-		self.out.append(out)
-
-		return absolute_modfile
+		return visitor.renames, ref_paths, ast
 
 
 	def find_absolute_modname(self, maybe_rel_modname, package_directory, base_dir):
@@ -149,13 +167,14 @@ class Importer:
 		need to get the module 'os' so that we can attach that module into the namespace.  This function
 		breaks appart attribute module names and yields each module we need to load.
 		'''
-		if isinstance(alias_name, py.Attribute):
+		if '.' in alias_name:
 			parts = []
-			for name in alias_name.get_names():
-				parts.append(str(name))
+			for name in alias_name.split('.'):
+				parts.append(name)
 				yield '.'.join(parts)
 		else:
-			yield str(alias_name)
+			yield alias_name
+
 
 	def __get_renamed_modname(self, parent_modname, target_modname):
 		# check the cache

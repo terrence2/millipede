@@ -16,8 +16,9 @@ from melano.project.analysis.indexer0 import Indexer0
 from melano.project.analysis.indexer1 import Indexer1
 from melano.project.analysis.linker import Linker
 from melano.project.analysis.typer import Typer
-from melano.project.cache import Cache
+from melano.project.global_cache import GlobalCache
 from melano.project.importer import Importer
+from melano.project.project_cache import ProjectCache
 from melano.py.driver import PythonParserDriver
 import hashlib
 import logging
@@ -81,7 +82,8 @@ class MelanoProject:
 			os.makedirs(self.build_dir)
 
 		# list our currently cached entries for fast lookup later
-		self.cache = Cache(name, build_dir, cache_dir)
+		self.cache = ProjectCache(name, build_dir, cache_dir)
+		self.global_cache = GlobalCache(cache_dir)
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
 
 		# build a 'scope' for our builtins
@@ -148,21 +150,23 @@ class MelanoProject:
 		# load all modules in depth-first order
 		for program in self.programs:
 			importer.trace_import_tree(program)
-			for modname, filename, modtype, ref_paths in reversed(importer.out):
+			for modname, filename, modtype, ref_paths, ast in reversed(importer.out):
 				if filename in self.modules_by_path:
 					continue
 				logging.info("mapping module: " + modname + ' -> ' + filename)
+
 				# create the module
 				mod = MelanoModule(modtype, filename, modname, self.builtins_scope)
+				mod.ast = ast
+				mod.ast.hl = mod
+
 				# add to order, in depth first order
 				self.order.append(filename)
+
 				# map the module by filename
 				self.modules_by_path[filename] = mod
 				self.modules_by_absname[modname] = mod
-				# load the (already cached) ast into the module struct and backref it
-				if filename.endswith('.py'):
-					self.__load_ast(mod)
-					mod.ast.hl = mod
+
 				# store aside the refmap for after we have loaded all modules
 				ref_paths_by_module[filename] = ref_paths
 
@@ -336,6 +340,19 @@ class MelanoProject:
 	def get_file_ast(self, filename):
 		source = MelanoModule._read_file(filename)
 		checksum = hashlib.sha1(source.encode('UTF-8')).hexdigest()
+		data = self.global_cache.query_ast_data(filename, checksum)
+
+		if data:
+			logging.debug("Cached: {} @ {}".format(filename, checksum))
+			return pickle.loads(data)
+
+		else:
+			logging.info("Parsing: {}".format(filename))
+			ast = self.parser_driver.parse_string(source)
+			self.global_cache.update_ast_data(filename, checksum, pickle.dumps(ast))
+			return ast
+
+		'''
 		cachefile = os.path.join(self.cachedir, checksum)
 		if checksum in self.cached:
 			logging.debug("Cached: {} @ {}".format(filename, checksum))
@@ -348,10 +365,11 @@ class MelanoProject:
 				pickle.dump(ast, fp, pickle.HIGHEST_PROTOCOL)
 				self.cached[checksum] = True
 		return ast
-
+		'''
 
 	def __load_ast(self, mod):
 		'''Find the ast for this module.'''
+		'''
 		cachefile = os.path.join(self.cachedir, mod.checksum)
 		if mod.checksum in self.cached:
 			logging.debug("Cached: {}".format(mod.filename))
@@ -363,3 +381,5 @@ class MelanoProject:
 			with open(cachefile, 'wb') as fp:
 				pickle.dump(mod.ast, fp, pickle.HIGHEST_PROTOCOL)
 				self.cached[mod.checksum] = True
+		'''
+		raise NotImplementedError

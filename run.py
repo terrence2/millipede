@@ -27,7 +27,7 @@ def main():
 	path = sys.argv[-1]
 	base = os.path.dirname(path)
 	fn = os.path.basename(path)
-	project = MelanoProject('test', build_dir='.')
+	project = MelanoProject('test-' + os.path.basename(path), build_dir='.')
 	project.configure(programs=[fn[:-3]], roots=[base], verbose=False, stdlib=stdlib, extensions=extensions)
 	project.build_one(fn[:-3], 'test.c')
 
