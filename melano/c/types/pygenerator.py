@@ -13,7 +13,10 @@ class PyGeneratorLL(PyFunctionLL):
 	SELF_INDEX = 0
 	GENERATOR_INDEX = 1
 	RETURN_INDEX = 2
-	ARGS_INDEX = 3
+	SEND_INDEX = 3
+	ARGS_INDEX = 4
+
+	N_EXTRA_PARAMS = 4
 
 	STACKSIZE = 1024 * 1024 * 1
 
@@ -57,8 +60,9 @@ class PyGeneratorLL(PyFunctionLL):
 		argsname = self.v.scope.ctx.reserve_name('gen_argslist', self.v.tu)
 		decl = c.Decl(argsname, c.PtrDecl(PyObjectLL.typedecl()), init=c.ID('NULL'))
 		self.v.scope.ctx.add_variable(decl, False)
-		self.v.ctx.add(c.Assignment('=', c.ID(argsname), c.FuncCall(c.ID('calloc'), c.ExprList(c.Constant('integer', len(self.stub_arg_insts) + 3),
-																					c.FuncCall(c.ID('sizeof'), c.ExprList(PyObjectLL.typedecl()))))))
+		self.v.ctx.add(c.Assignment('=', c.ID(argsname),
+						c.FuncCall(c.ID('calloc'), c.ExprList(c.Constant('integer', self.N_EXTRA_PARAMS + len(self.stub_arg_insts)),
+							c.FuncCall(c.ID('sizeof'), c.ExprList(PyObjectLL.typedecl()))))))
 		self.fail_if_null(argsname)
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', self.SELF_INDEX)), c.ID('self')))
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', self.GENERATOR_INDEX)), c.ID('NULL')))

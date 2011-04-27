@@ -8,6 +8,7 @@ static coro_context __main_coroutine__;
 
 #define GEN_CAPSULE_NAME "coroutine context"
 #define RETURN_INDEX 2
+#define SEND_INDEX 3
 
 #define DEBUG 0
 
