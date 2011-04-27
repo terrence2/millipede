@@ -172,7 +172,7 @@ class Py2C(ASTVisitor):
 		self.tu.add_include(c.Include('env.h', False))
 		self.tu.add_include(c.Include('funcobject.h', False))
 		self.tu.add_include(c.Include('genobject.h', False))
-		
+
 		# add common names
 		self.builtins = PyObjectLL(None, self)
 		self.builtins.declare(is_global=True, quals=['static'], name='builtins')
@@ -220,7 +220,7 @@ class Py2C(ASTVisitor):
 		self.scope.ctx = self.main.body
 		yield
 		self.scopes = []
-	
+
 
 	@contextmanager
 	def module_scope(self, mod, ctx):
