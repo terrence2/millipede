@@ -449,6 +449,7 @@ class Py2C(ASTVisitor):
 		'''Extract and return the real exception value (rather than the type, which is returned by PyErr_Occurred and
 			which gets used for matching.'''
 		self.normalize_exception_full(exc_cookie)
+		#TODO: is this incref correct... normalize_exception_full already does one xincref
 		exc_cookie[1].incref()
 		return exc_cookie[1]
 
