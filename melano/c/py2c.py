@@ -440,9 +440,9 @@ class Py2C(ASTVisitor):
 																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
-		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
-		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
-		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
+		exc_cookie[0].xincref()
+		exc_cookie[1].xincref()
+		exc_cookie[2].xincref()
 
 
 	def normalize_exception(self, exc_cookie):
