@@ -19,7 +19,6 @@ class Coerce(Entity):
 
 		self.coerce_type = coerce_type
 		self.children = children
-		#self.ll = None
 
 
 	def get_type(self) -> [type]:
