@@ -1242,6 +1242,8 @@ class Py2C(ASTVisitor):
 
 		self.comment("Build function {}".format(str(node.name)))
 		pycfunc = inst.declare_function_object(docstring)
+		# NOTE: doing the call here will xdecref the target (us) before assignment, so avoid freeing ourself
+		pycfunc.incref()
 		# NOTE: we don't really care about the generator _function_, we just want the underlying generator
 		pycfunc.call(None, None, pycfunc)
 
