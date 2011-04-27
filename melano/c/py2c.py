@@ -1262,7 +1262,8 @@ class Py2C(ASTVisitor):
 			self.comment('body')
 			def _set():
 				obj = self.visit(node.elt)
-				self.scope.ll.do_yield(obj)
+				with self.scope.ll.maybe_recursive_call():
+					self.scope.ll.do_yield(obj)
 			self.visit_comp_generators(node.generators, _set)
 			inst.runner_outro()
 
@@ -1891,7 +1892,8 @@ class Py2C(ASTVisitor):
 	def visit_Yield(self, node):
 		# get the returned instance
 		rv_inst = self.visit(node.value)
-		self.scope.ll.do_yield(rv_inst)
+		with self.scope.ll.maybe_recursive_call():
+			self.scope.ll.do_yield(rv_inst)
 
 
 
