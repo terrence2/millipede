@@ -463,27 +463,31 @@ class Py2C(ASTVisitor):
 
 	def exit_with_exception(self):
 		# exceptions need to follow proper flow control....
-		self.handle_flowcontrol(
-							except_handler=self._except_flowcontrol,
-							finally_handler=self._finally_flowcontrol,
-							ctxmgr_handler=self._contextmanager_flowcontrol,
-							end_handler=self._end_flowcontrol)
+		self.handle_flowcontrol(except_handler=self._except_flowcontrol)
 
 
 	def handle_flowcontrol(self, *, break_handler=None, continue_handler=None,
 						except_handler=None, finally_handler=None, ctxmgr_handler=None,
 						end_handler=None):
-		'''Flow control needs to perform special actions for each flow-control label that the flow-changing operation
+		'''Emits code that performs flow operations, e.g. from a loop or function exit, or when an exception
+			occurs.
+		
+			Flow control needs to perform special actions for each flow-control label that the flow-changing operation
 			see's under us.  For instance, if we are breaking out of a loop, inside of a try/finally, we need to first
 			run the finally, before ending the loop.  This function helps us to visit all possible labels correctly, without
 			mistyping or otherwise messing up a relatively complicated loop in each of the several flow-control stmts.
 			
 			This function accepts per-label processing in kwonly args.  The label processor should emit stmts, as needed
-			and return a boolean, False to continue processing labels, and True to finish processing now.
+			and return a boolean, False to continue processing labels, and True to finish processing now.  This allows some
+			flow control points to behave differently from others, e.g. we only want to go to break labels if our flow-control
+			operation is a break statement. 
 			
-			The caller must provide a handler for the 'end' label, as this closes a function and local flow control cannot
-			proceed after this point.  
+			Some of the handlers are required, as they are always obeyed, as per the language specs.  These are:
+				finally, ctxmgr, and end
 		'''
+		if not finally_handler: finally_handler = self._finally_flowcontrol
+		if not ctxmgr_handler: ctxmgr_handler = self._contextmanager_flowcontrol
+		if not end_handler: end_handler = self._end_flowcontrol
 		labelrules = {
 			'break': break_handler,
 			'continue': continue_handler,
@@ -819,11 +823,7 @@ class Py2C(ASTVisitor):
 			self.clear_exception()
 			self.ctx.add(c.Goto(label))
 			return True
-		self.handle_flowcontrol(
-							break_handler=break_handler,
-							finally_handler=self._finally_flowcontrol,
-							ctxmgr_handler=self._contextmanager_flowcontrol,
-							end_handler=self._end_flowcontrol)
+		self.handle_flowcontrol(break_handler=break_handler)
 
 
 
@@ -1063,11 +1063,7 @@ class Py2C(ASTVisitor):
 		def loop_handler(label):
 			self.ctx.add(c.Goto(label))
 			return True
-		self.handle_flowcontrol(
-							continue_handler=loop_handler,
-							finally_handler=self._finally_flowcontrol,
-							ctxmgr_handler=self._contextmanager_flowcontrol,
-							end_handler=self._end_flowcontrol)
+		self.handle_flowcontrol(continue_handler=loop_handler)
 
 
 	def visit_Delete(self, node):
@@ -1527,11 +1523,7 @@ class Py2C(ASTVisitor):
 			exc_cookie = self.exc_cookie_stack[-1]
 			self.restore_exception(exc_cookie)
 			self.exc_cookie_stack.append(exc_cookie)
-			self.handle_flowcontrol(
-								except_handler=self._except_flowcontrol,
-								finally_handler=self._finally_flowcontrol,
-								ctxmgr_handler=self._contextmanager_flowcontrol,
-								end_handler=self._end_flowcontrol)
+			self.handle_flowcontrol(except_handler=self._except_flowcontrol)
 			return
 
 		#FIXME: re-raise existing context if node.exc is not present
@@ -1560,11 +1552,7 @@ class Py2C(ASTVisitor):
 		self.exit_with_exception()
 
 		# do exception flow-control
-		self.handle_flowcontrol(
-							except_handler=self._except_flowcontrol,
-							finally_handler=self._finally_flowcontrol,
-							ctxmgr_handler=self._contextmanager_flowcontrol,
-							end_handler=self._end_flowcontrol)
+		self.handle_flowcontrol(except_handler=self._except_flowcontrol)
 
 
 	def visit_Return(self, node):
@@ -1578,10 +1566,7 @@ class Py2C(ASTVisitor):
 		self.ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID('__return_value__'))))
 
 		# do exit flowcontrol to handle finally blocks
-		self.handle_flowcontrol(
-							finally_handler=self._finally_flowcontrol,
-							ctxmgr_handler=self._contextmanager_flowcontrol,
-							end_handler=self._end_flowcontrol)
+		self.handle_flowcontrol()
 
 
 	def visit_Set(self, node):
@@ -1725,11 +1710,7 @@ class Py2C(ASTVisitor):
 				top_cookie = self.exc_cookie_stack[-1]
 				self.restore_exception(top_cookie)
 				self.exc_cookie_stack.append(top_cookie) # re-save so we can pop again at exit
-				self.handle_flowcontrol(
-									except_handler=self._except_flowcontrol,
-									finally_handler=self._finally_flowcontrol,
-									ctxmgr_handler=self._contextmanager_flowcontrol,
-									end_handler=self._end_flowcontrol)
+				self.handle_flowcontrol(except_handler=self._except_flowcontrol)
 
 			## add the if-chain to the body
 			self.ctx.add(parts[0])
