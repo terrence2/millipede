@@ -61,6 +61,13 @@ class MelanoProject:
 		self.builtins = [os.path.realpath('./data/builtins')]
 		self.override = [os.path.realpath('./data/override')]
 
+		# defines the c prefix to use when creating the makefile
+		self.c_prefix = '/usr'
+
+		# defines the python version postfix and pep3149 abi string that the link target python was built with
+		self.c_version = '3.1'
+		self.c_abi = ''
+
 		# limit 'local' modules to ones matching 'limit'
 		self.limit = re.compile('.*')
 
@@ -92,7 +99,9 @@ class MelanoProject:
 			self.builtins_scope.add_symbol(n)
 
 
-	def configure(self, *, programs:[str], roots:[str], stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[],
+	def configure(self, *, programs:[str], roots:[str],
+				stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[],
+				prefix:str='/usr', version:str='3.1', abi:str='',
 				limit='.*', verbose=False):
 		'''
 		Set up this project.
@@ -106,6 +115,10 @@ class MelanoProject:
 		self.extensions = extensions + self.extensions
 		self.builtins = builtins + self.builtins
 		self.override = override + self.override
+
+		self.c_prefix = prefix
+		self.c_version = version
+		self.c_abi = abi
 
 		self.limit = re.compile(limit)
 
@@ -256,7 +269,7 @@ class MelanoProject:
 
 
 	def transform_ll_c(self, programs=None, target=None, emit_makefile=True):
-		makefile = Makefile(os.path.join(self.build_dir, 'Makefile'), self.data_dir)
+		makefile = Makefile(os.path.join(self.build_dir, 'Makefile'), self.data_dir, prefix=self.c_prefix, version=self.c_version, abi=self.c_abi)
 
 		if not programs: programs = self.programs
 		for program in programs:
@@ -288,6 +301,7 @@ class MelanoProject:
 
 			# reset the lowlevel linkage to the now written C structure
 			self.reset_ll()
+			target = None
 
 		# write the makefile
 		if emit_makefile:

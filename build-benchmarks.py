@@ -25,17 +25,25 @@ def main():
 		logging.info("Building against Python3.3")
 		stdlib = base_stdlib + ['/usr/local/lib/python3.3', '/usr/local/lib/python3.3/lib-dynload']
 		extensions = ['/usr/lib/python3.3/site-packages']
+		prefix = '/usr/local'
+		version = '3.3'
+		abi = 'du'
 	else:
 		logging.info("Building against Python3.1")
 		stdlib = base_stdlib + ['/usr/lib/python3.1', '/usr/lib/python3.1/lib-dynload']
 		extensions = ['/usr/lib/python3.1/site-packages']
+		prefix = '/usr'
+		version = '3.1'
+		abi = ''
 
 	programs = ['bm_float', 'bm_pidigits']
 	if options.benchmarks:
 		programs = [p.strip() for p in options.benchmarks.split(',')]
 
-	project = MelanoProject('benchmarks', programs=programs, roots=[os.path.realpath('../py3benchmarks/performance')])
-	project.configure(stdlib=stdlib, extensions=extensions)
+	project = MelanoProject('benchmarks')
+	project.configure(programs=programs, roots=[os.path.realpath('../py3benchmarks/performance')],
+					stdlib=stdlib, extensions=extensions,
+					prefix=prefix, version=version, abi=abi)
 	project.build_all()
 
 	#app = MelanoApplication(project, sys.argv)
