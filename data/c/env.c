@@ -104,7 +104,7 @@ void
 __init__(int argc, wchar_t **argv) {
     Py_Initialize();
     PySys_SetArgv(argc, argv);
-    MelanoGen_Initialize();
+    MpGenerator_Initialize();
 }
 
 /*

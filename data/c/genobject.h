@@ -1,5 +1,9 @@
-#ifndef _MELANO_GEN_OBJECT_H_
-#define _MELANO_GEN_OBJECT_H_
+#ifndef _MP_GENERATOR_OBJECT_H_
+#define _MP_GENERATOR_OBJECT_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <Python.h>
 #include <coro.h>
 
@@ -29,15 +33,18 @@ typedef struct {
 
 	// set to 1 after we have reached the end of generation for the first time
 	int exhausted;
-} MelanoGenObject;
+} MpGeneratorObject;
 
-PyObject * MelanoGen_New(char *name, coro_func func, void *data, int stacksize);
-void MelanoGen_Yield(PyObject *self);
-coro_context * MelanoGen_GetContext(PyObject *self);
-coro_context * MelanoGen_GetSourceContext(PyObject *self);
+PyObject * MpGenerator_New(char *name, coro_func func, void *data, int stacksize);
+void MpGenerator_Yield(PyObject *self);
+coro_context * MpGenerator_GetContext(PyObject *self);
+coro_context * MpGenerator_GetSourceContext(PyObject *self);
 
-int MelanoGen_EnterContext(PyObject *obj);
-int MelanoGen_LeaveContext(PyObject *obj);
-void MelanoGen_Initialize();
+int MpGenerator_EnterContext(PyObject *obj);
+int MpGenerator_LeaveContext(PyObject *obj);
+void MpGenerator_Initialize();
 
-#endif // _MELANO_GEN_OBJECT_H_
+#ifdef __cplusplus
+}
+#endif
+#endif // _MP_GENERATOR_OBJECT_H_

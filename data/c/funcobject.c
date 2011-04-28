@@ -1,76 +1,18 @@
-
-/* Method object implementation */
+/* Millipede Function/Method object implementation */
 
 #include "Python.h"
 #include "funcobject.h"
 #include "structmember.h"
 
 
-MelanoLocals *
-MelanoLocals_Create(Py_ssize_t cnt) {
-    MelanoLocals *locals;
-    locals = (MelanoLocals *)malloc(sizeof(MelanoLocals));
-    locals->refcnt = 0;
-    if(cnt > 0) {
-        locals->locals = (PyObject **)calloc(cnt, sizeof(PyObject*));
-    } else {
-        locals->locals = NULL;
-    }
-    return locals;
-}
-
-void
-MelanoLocals_Destroy(MelanoLocals **stack, Py_ssize_t level) {
-    if(!stack[level])
-        return;
-    stack[level]->refcnt -= 1;
-    if(stack[level]->refcnt == 0) {
-        if(stack[level]->locals)
-            free(stack[level]->locals);
-        free(stack[level]);
-        stack[level] = NULL;
-    }
-}
-
-MelanoLocals **
-MelanoStack_Create(Py_ssize_t cnt) {
-    MelanoLocals** stack;
-    stack = calloc(cnt, sizeof(MelanoLocals*));
-    return stack;
-}
-
-void
-MelanoStack_SetLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *locals) {
-    stack[level] = locals;
-    locals->refcnt += 1;
-}
-
-MelanoLocals *
-MelanoStack_FetchLocals(MelanoLocals **stack, Py_ssize_t level) {
-    return stack[level];
-}
-
-void
-MelanoStack_RestoreLocals(MelanoLocals **stack, Py_ssize_t level, MelanoLocals *locals) {
-    stack[level] = locals;
-}
-
-void
-MelanoStack_Destroy(MelanoLocals **stack, Py_ssize_t cnt) {
-    Py_ssize_t i;
-    for(i = 0; i < cnt; i++ ) {
-        MelanoLocals_Destroy(stack, i);
-    }
-    free(stack);
-}
 
 PyObject *
-PyMelanoFunction_New(const char *name,
-                    PyMelanoFunction func,
+MpFunction_New(const char *name,
+                    MpFunction func,
                     const char *doc)
 {
-    PyMelanoFunctionObject *op;
-    op = PyObject_GC_New(PyMelanoFunctionObject, &PyMelanoFunction_Type);
+    MpFunctionObject *op;
+    op = PyObject_GC_New(MpFunctionObject, &MpFunction_Type);
     if (op == NULL)
         return NULL;
     op->m_name = name;
@@ -85,64 +27,64 @@ PyMelanoFunction_New(const char *name,
     return (PyObject *)op;
 }
 
-PyMelanoFunction
-PyMelanoFunction_GetFunction(PyObject *op)
+MpFunction
+MpFunction_GetFunction(PyObject *op)
 {
-    if (!PyMelanoFunction_Check(op)) {
+    if (!MpFunction_Check(op)) {
         PyErr_BadInternalCall();
         return NULL;
     }
-    return (PyMelanoFunction)((PyMelanoFunctionObject *)op) -> m_func;
+    return (MpFunction)((MpFunctionObject *)op) -> m_func;
 }
 
 
-MelanoLocals **
-PyMelanoFunction_GetStack(PyObject *op)
+MpStack *
+MpFunction_GetStack(PyObject *op)
 {
-    if (!PyMelanoFunction_Check(op)) {
+    if (!MpFunction_Check(op)) {
         PyErr_BadInternalCall();
         return NULL;
     }
-    PyMelanoFunctionObject *fn = (PyMelanoFunctionObject *)op;
+    MpFunctionObject *fn = (MpFunctionObject *)op;
     return fn->m_stack;
 }
 
 
 void
-PyMelanoFunction_SetStack(PyObject *op, MelanoLocals **stack, Py_ssize_t stacksize)
+MpFunction_SetStack(PyObject *op, MpStack *stack, Py_ssize_t stacksize)
 {
-    if (!PyMelanoFunction_Check(op)) {
+    if (!MpFunction_Check(op)) {
         PyErr_BadInternalCall();
         return;
     }
-    PyMelanoFunctionObject *fn = (PyMelanoFunctionObject *)op;
+    MpFunctionObject *fn = (MpFunctionObject *)op;
     fn->m_stack = stack;
     fn->m_stacksize = stacksize;
 }
 
 
 PyObject *
-PyMelanoFunction_Call(PyObject *func, PyObject *arg, PyObject *kw)
+MpFunction_Call(PyObject *func, PyObject *arg, PyObject *kw)
 {
-    PyMelanoFunctionObject* f = (PyMelanoFunctionObject*)func;
-    PyMelanoFunction meth = PyMelanoFunction_GET_FUNCTION(f);
+    MpFunctionObject* f = (MpFunctionObject*)func;
+    MpFunction meth = MpFunction_GET_FUNCTION(f);
     return (*meth)(func, arg, kw);
 }
 
 /* Methods (the standard built-in methods, that is) */
 
 static void
-meth_dealloc(PyMelanoFunctionObject *m)
+meth_dealloc(MpFunctionObject *m)
 {
     PyObject_GC_UnTrack(m);
     if(m->m_stack) {
-        MelanoStack_Destroy(m->m_stack, m->m_stacksize);
+        MpStack_Destroy(m->m_stack, m->m_stacksize);
     }
     PyObject_GC_Del(m);
 }
 
 static PyObject *
-meth_get__doc__(PyMelanoFunctionObject *m, void *closure)
+meth_get__doc__(MpFunctionObject *m, void *closure)
 {
     const char *doc = m->m_doc;
     if (doc != NULL)
@@ -152,13 +94,13 @@ meth_get__doc__(PyMelanoFunctionObject *m, void *closure)
 }
 
 static PyObject *
-meth_get__name__(PyMelanoFunctionObject *m, void *closure)
+meth_get__name__(MpFunctionObject *m, void *closure)
 {
     return PyUnicode_FromString(m->m_name);
 }
 
 static PyObject *
-meth_get__annotations__(PyMelanoFunctionObject *m, void *closure)
+meth_get__annotations__(MpFunctionObject *m, void *closure)
 {
     PyObject *out;
     if(!m->m_annotations)
@@ -170,7 +112,7 @@ meth_get__annotations__(PyMelanoFunctionObject *m, void *closure)
 }
 
 static int
-meth_set__annotations__(PyMelanoFunctionObject *m, PyObject *value)
+meth_set__annotations__(MpFunctionObject *m, PyObject *value)
 {
     PyObject *tmp;
 
@@ -188,7 +130,7 @@ meth_set__annotations__(PyMelanoFunctionObject *m, PyObject *value)
 
 
 static PyObject *
-meth_get__defaults__(PyMelanoFunctionObject *m, void *closure)
+meth_get__defaults__(MpFunctionObject *m, void *closure)
 {
     PyObject *out;
     if(!m->m_defaults)
@@ -200,7 +142,7 @@ meth_get__defaults__(PyMelanoFunctionObject *m, void *closure)
 }
 
 static int
-meth_set__defaults__(PyMelanoFunctionObject *m, PyObject *value)
+meth_set__defaults__(MpFunctionObject *m, PyObject *value)
 {
     PyObject *tmp;
 
@@ -218,7 +160,7 @@ meth_set__defaults__(PyMelanoFunctionObject *m, PyObject *value)
 
 
 static PyObject *
-meth_get__kwdefaults__(PyMelanoFunctionObject *m, void *closure)
+meth_get__kwdefaults__(MpFunctionObject *m, void *closure)
 {
     if(!m->m_kwdefaults) {
         Py_RETURN_NONE;
@@ -228,7 +170,7 @@ meth_get__kwdefaults__(PyMelanoFunctionObject *m, void *closure)
 }
 
 static int
-meth_set__kwdefaults__(PyMelanoFunctionObject *m, PyObject *value)
+meth_set__kwdefaults__(MpFunctionObject *m, PyObject *value)
 {
     PyObject *tmp;
 
@@ -246,7 +188,7 @@ meth_set__kwdefaults__(PyMelanoFunctionObject *m, PyObject *value)
 
 
 static int
-meth_traverse(PyMelanoFunctionObject *m, visitproc visit, void *arg)
+meth_traverse(MpFunctionObject *m, visitproc visit, void *arg)
 {
     Py_VISIT(m->m_annotations);
     Py_VISIT(m->m_defaults);
@@ -268,7 +210,7 @@ static PyMemberDef meth_members[] = {
 };
 
 static PyObject *
-meth_repr(PyMelanoFunctionObject *m)
+meth_repr(MpFunctionObject *m)
 {
     return PyUnicode_FromFormat("<melano function %s", m->m_name);
 }
@@ -276,19 +218,19 @@ meth_repr(PyMelanoFunctionObject *m)
 static PyObject *
 meth_richcompare(PyObject *self, PyObject *other, int op)
 {
-    PyMelanoFunctionObject *a, *b;
+    MpFunctionObject *a, *b;
     PyObject *res;
     int eq;
 
     if ((op != Py_EQ && op != Py_NE) ||
-        !PyMelanoFunction_Check(self) ||
-        !PyMelanoFunction_Check(other))
+        !MpFunction_Check(self) ||
+        !MpFunction_Check(other))
     {
         Py_INCREF(Py_NotImplemented);
         return Py_NotImplemented;
     }
-    a = (PyMelanoFunctionObject *)self;
-    b = (PyMelanoFunctionObject *)other;
+    a = (MpFunctionObject *)self;
+    b = (MpFunctionObject *)other;
     eq = a->m_func == b->m_func;
     if (op == Py_EQ)
         res = eq ? Py_True : Py_False;
@@ -299,7 +241,7 @@ meth_richcompare(PyObject *self, PyObject *other, int op)
 }
 
 static Py_ssize_t
-meth_hash(PyMelanoFunctionObject *a)
+meth_hash(MpFunctionObject *a)
 {
     Py_ssize_t x;
     x = _Py_HashPointer((void*)(a->m_func));
@@ -317,10 +259,10 @@ meth_descr_get(PyObject *func, PyObject *obj, PyObject *type)
     return PyMethod_New(func, obj);
 }
 
-PyTypeObject PyMelanoFunction_Type = {
+PyTypeObject MpFunction_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "function",
-    sizeof(PyMelanoFunctionObject),
+    sizeof(MpFunctionObject),
     0,
     (destructor)meth_dealloc,                   /* tp_dealloc */
     0,                                          /* tp_print */
@@ -332,7 +274,7 @@ PyTypeObject PyMelanoFunction_Type = {
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     (hashfunc)meth_hash,                        /* tp_hash */
-    PyMelanoFunction_Call,                      /* tp_call */
+    MpFunction_Call,                      /* tp_call */
     0,                                          /* tp_str */
     PyObject_GenericGetAttr,                    /* tp_getattro */
     PyObject_GenericSetAttr,                    /* tp_setattro */
@@ -355,6 +297,6 @@ PyTypeObject PyMelanoFunction_Type = {
 
 
 void
-PyMelanoFunction_Fini(void)
+MpFunction_Fini(void)
 {
 }

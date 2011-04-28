@@ -36,7 +36,7 @@ class Makefile:
 				CFLAGS_INCLUDE=-I{prefix}/include -I{data_dir}/c -I{data_dir}/c/libcoro
 				ABI={abi}
 				
-				EXTRA_SOURCES={data_dir}/c/env.c {data_dir}/c/funcobject.c {data_dir}/c/genobject.c {data_dir}/c/libcoro/coro.c
+				EXTRA_SOURCES={data_dir}/c/env.c {data_dir}/c/closure.c {data_dir}/c/funcobject.c {data_dir}/c/genobject.c {data_dir}/c/libcoro/coro.c
 				LIBS=-pthread -lm -ldl -lutil
 				
 			'''.format(data_dir=self.data_dir, prefix=self.prefix, abi=self.abi)))

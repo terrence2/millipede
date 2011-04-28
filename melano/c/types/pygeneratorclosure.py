@@ -16,7 +16,7 @@ class PyGeneratorClosureLL(PyClosureLL, PyGeneratorLL):
 	in the runner, where we need to copy into the frame from the gen_args pointer, rather than off the C stack.
 	'''
 	def runner_load_args(self, args, vararg, kwonlyargs, kwarg):
-		# put all args into the new MelanoLocals array, no further decl required for locals
+		# put all args into the new MpLocals array, no further decl required for locals
 		args = self._buildargs(args, vararg, kwonlyargs, kwarg)
 		for offset, arg in enumerate(args, self.ARGS_INDEX):
 			self.v.ctx.add(c.Comment("set arg '{}'".format(str(arg.arg))))

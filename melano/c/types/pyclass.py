@@ -49,7 +49,7 @@ class PyClassLL(PyObjectLL):
 		self.c_builder_obj.declare(name=self.hlnode.owner.name + "_builder_pycfunc")
 		self.c_builder_obj.xdecref()
 		c_name = c.Constant('string', PyStringLL.name_to_c_string(self.hlnode.owner.name))
-		self.v.ctx.add(c.Assignment('=', c.ID(self.c_builder_obj.name), c.FuncCall(c.ID('PyMelanoFunction_New'), c.ExprList(
+		self.v.ctx.add(c.Assignment('=', c.ID(self.c_builder_obj.name), c.FuncCall(c.ID('MpFunction_New'), c.ExprList(
 													c_name, c.ID(self.c_builder_func.decl.name), c.ID('NULL')))))
 		self.fail_if_null(self.c_builder_obj.name)
 

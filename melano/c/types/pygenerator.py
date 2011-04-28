@@ -71,7 +71,7 @@ class PyGeneratorLL(PyFunctionLL):
 			self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', i)), c.ID(arg_inst.name)))
 			self.v.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(arg_inst.name))))
 
-		self.v.ctx.add(c.Assignment('=', c.ID('__return_value__'), c.FuncCall(c.ID('MelanoGen_New'), c.ExprList(
+		self.v.ctx.add(c.Assignment('=', c.ID('__return_value__'), c.FuncCall(c.ID('MpGenerator_New'), c.ExprList(
 												c.FuncCall(c.ID('strdup'), c.ExprList(c.Constant('string', PyStringLL.name_to_c_string(self.hlnode.owner.name)))),
 												c.ID(self.c_runner_func.decl.name),
 												c.ID(argsname),
@@ -123,7 +123,7 @@ class PyGeneratorLL(PyFunctionLL):
 		self.v.ctx.add(c.Comment('mark us as in the generator'))
 		tmp = CIntegerLL(None, self.v)
 		tmp.declare()
-		self.v.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MelanoGen_EnterContext'), c.ExprList(c.ID(self.gen_inst.name)))))
+		self.v.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MpGenerator_EnterContext'), c.ExprList(c.ID(self.gen_inst.name)))))
 		self.fail_if_nonzero(tmp.name)
 
 
@@ -135,11 +135,11 @@ class PyGeneratorLL(PyFunctionLL):
 
 		tmp = CIntegerLL(None, self.v)
 		tmp.declare()
-		self.v.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name)))))
+		self.v.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MpGenerator_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name)))))
 		self.fail_if_nonzero(tmp.name)
 
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))
-		self.v.ctx.add(c.FuncCall(c.ID('MelanoGen_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
+		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
 
 
 	def do_yield(self, rv_inst):
@@ -150,9 +150,9 @@ class PyGeneratorLL(PyFunctionLL):
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID(rv_inst.name)))
 
 		# transfer control back to originator
-		self.v.ctx.add(c.FuncCall(c.ID('MelanoGen_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name))))
-		self.v.ctx.add(c.FuncCall(c.ID('MelanoGen_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
-		self.v.ctx.add(c.FuncCall(c.ID('MelanoGen_EnterContext'), c.ExprList(c.ID(self.gen_inst.name))))
+		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name))))
+		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
+		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_EnterContext'), c.ExprList(c.ID(self.gen_inst.name))))
 
 		# set yielded slot to null -- other context stole the ref
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))

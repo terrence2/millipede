@@ -96,7 +96,7 @@ class PyFunctionLL(PyObjectLL):
 		self.c_obj = PyObjectLL(self.hlnode, self.v)
 		self.c_obj.declare(is_global=True, quals=['static'], name=self.hlnode.owner.global_c_name + "_pycfunc")
 		self.c_obj.xdecref()
-		self.v.ctx.add(c.Assignment('=', c.ID(self.c_obj.name), c.FuncCall(c.ID('PyMelanoFunction_New'), c.ExprList(
+		self.v.ctx.add(c.Assignment('=', c.ID(self.c_obj.name), c.FuncCall(c.ID('MpFunction_New'), c.ExprList(
 													c_name, c.ID(self.c_pystub_func.decl.name), c_docstring))))
 		self.fail_if_null(self.c_obj.name)
 

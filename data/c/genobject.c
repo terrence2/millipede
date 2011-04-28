@@ -2,7 +2,7 @@
 	to provide values. */
 #include "genobject.h"
 
-// Initialized with MelanoGen_Initialize and used for returing from a coroutine
+// Initialized with MpGenerator_Initialize and used for returing from a coroutine
 //	to the main thread.
 static coro_context __main_coroutine__;
 
@@ -14,7 +14,7 @@ static coro_context __main_coroutine__;
 
 static void
 gen_del(PyObject *self) {
-	MelanoGenObject *gen = (MelanoGenObject *)self;
+	MpGeneratorObject *gen = (MpGeneratorObject *)self;
 	coro_destroy(&gen->coro);
 	free(gen->stack);
 	gen->stack = NULL;
@@ -29,7 +29,7 @@ gen_del(PyObject *self) {
 }
 
 static void
-gen_dealloc(MelanoGenObject *gen)
+gen_dealloc(MpGeneratorObject *gen)
 {
 	PyObject_Del(gen);
 }
@@ -37,7 +37,7 @@ gen_dealloc(MelanoGenObject *gen)
 static PyObject *
 gen_iter(PyObject *obj)
 {
-	MelanoGenObject *gen = (MelanoGenObject *)obj;
+	MpGeneratorObject *gen = (MpGeneratorObject *)obj;
 	PyObject *dict, *stack, *cap;
 
     // get the thread state dict
@@ -66,7 +66,7 @@ gen_iter(PyObject *obj)
 }
 
 static PyObject *
-gen_iternext(MelanoGenObject *gen)
+gen_iternext(MpGeneratorObject *gen)
 {
 	PyObject *rv;
 
@@ -98,13 +98,13 @@ gen_iternext(MelanoGenObject *gen)
 }
 
 static PyObject *
-gen_repr(MelanoGenObject *gen)
+gen_repr(MpGeneratorObject *gen)
 {
 	return PyUnicode_FromFormat("<generator object %s at %p>", gen->name, gen);
 }
 
 static PyObject *
-gen_get_name(MelanoGenObject *gen)
+gen_get_name(MpGeneratorObject *gen)
 {
 	PyObject *name = PyUnicode_FromString(gen->name);
 	return name;
@@ -121,10 +121,10 @@ static PyGetSetDef gen_getsetlist[] = {
 
 
 
-PyTypeObject MelanoGen_Type = {
+PyTypeObject MpGenerator_Type = {
 	PyVarObject_HEAD_INIT(&PyType_Type, 0)
 	"generator",                                /* tp_name */
-	sizeof(MelanoGenObject),                 /* tp_basicsize */
+	sizeof(MpGeneratorObject),                 /* tp_basicsize */
 	0,                                          /* tp_itemsize */
 	/* methods */
 	(destructor)gen_dealloc,                    /* tp_dealloc */
@@ -173,14 +173,14 @@ PyTypeObject MelanoGen_Type = {
 };
 
 PyObject *
-MelanoGen_New(char *name, coro_func func, void *data, int stacksize)
+MpGenerator_New(char *name, coro_func func, void *data, int stacksize)
 {
 	if(!name) {
 		PyErr_BadArgument();
 		return NULL;
 	}
 
-	MelanoGenObject *gen = PyObject_New(MelanoGenObject, &MelanoGen_Type);
+	MpGeneratorObject *gen = PyObject_New(MpGeneratorObject, &MpGenerator_Type);
 	if(!gen) {
 		return NULL;
 	}
@@ -205,20 +205,20 @@ MelanoGen_New(char *name, coro_func func, void *data, int stacksize)
 }
 
 coro_context *
-MelanoGen_GetContext(PyObject *self) {
-	MelanoGenObject *gen = (MelanoGenObject *)self;
+MpGenerator_GetContext(PyObject *self) {
+	MpGeneratorObject *gen = (MpGeneratorObject *)self;
 	return &gen->coro;
 }
 
 coro_context *
-MelanoGen_GetSourceContext(PyObject *self) {
-	MelanoGenObject *gen = (MelanoGenObject *)self;
+MpGenerator_GetSourceContext(PyObject *self) {
+	MpGeneratorObject *gen = (MpGeneratorObject *)self;
 	return gen->coro_source;
 }
 
 int
-MelanoGen_EnterContext(PyObject *obj) {
-	MelanoGenObject *gen = (MelanoGenObject *)obj;
+MpGenerator_EnterContext(PyObject *obj) {
+	MpGeneratorObject *gen = (MpGeneratorObject *)obj;
 	PyObject *dict, *stack, *cap;
 	int rv;
 
@@ -252,7 +252,7 @@ MelanoGen_EnterContext(PyObject *obj) {
 }
 
 int
-MelanoGen_LeaveContext(PyObject *obj) {
+MpGenerator_LeaveContext(PyObject *obj) {
 	PyObject *dict, *stack, *top0, *top1;
 	int rv;
 
@@ -288,8 +288,8 @@ MelanoGen_LeaveContext(PyObject *obj) {
 }
 
 void
-MelanoGen_Yield(PyObject *self) {
-	MelanoGenObject *gen = (MelanoGenObject *)self;
+MpGenerator_Yield(PyObject *self) {
+	MpGeneratorObject *gen = (MpGeneratorObject *)self;
 
 	if(DEBUG)
 		printf("(0)GenYld:%p -> %p", &gen->coro, gen->coro_source);
@@ -300,7 +300,7 @@ MelanoGen_Yield(PyObject *self) {
 
 
 void
-MelanoGen_Initialize()
+MpGenerator_Initialize()
 {
 	PyObject *dict, *stack, *cap;
 
