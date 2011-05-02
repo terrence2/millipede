@@ -103,19 +103,20 @@ class PyGeneratorLL(PyFunctionLL):
 		self.v.ctx.add(c.Assignment('=', c.ID(self.args_name), c.Cast(c.PtrDecl(PyObjectLL.typedecl()), c.ID('gen_args'))))
 		self.fail_if_null(self.args_name)
 
+		#NOTE: we should _not_ incref our __self__ or __gen__ since this function _is_ us -- if we keep this ref and don't 
+		#  fully drain, then we will never decref ourself and clean up the other references we're holding onto
+
 		self.v.ctx.add(c.Comment('get function instance'))
 		self.self_inst = PyObjectLL(None, self.v)
-		self.self_inst.declare(name='__self__')
+		self.self_inst.declare(name='__self__', need_cleanup=False)
 		self.v.ctx.add(c.Assignment('=', c.ID(self.self_inst.name), c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.SELF_INDEX))))
 		self.fail_if_null(self.self_inst.name)
-		self.self_inst.incref()
 
 		self.v.ctx.add(c.Comment('get generator instance'))
 		self.gen_inst = PyObjectLL(None, self.v)
-		self.gen_inst.declare(name='__gen__')
+		self.gen_inst.declare(name='__gen__', need_cleanup=False)
 		self.v.ctx.add(c.Assignment('=', c.ID(self.gen_inst.name), c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.GENERATOR_INDEX))))
 		self.fail_if_null(self.gen_inst.name)
-		self.gen_inst.incref()
 
 		super().runner_intro()
 
