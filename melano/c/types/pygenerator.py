@@ -78,7 +78,6 @@ class PyGeneratorLL(PyFunctionLL):
 												c.Constant('integer', self.STACKSIZE) #FIXME: try to discover and set a good size for the stack
 											))))
 		self.fail_if_null('__return_value__')
-		self.v.ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ExprList(c.ID('__return_value__'))))
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(argsname), c.Constant('integer', self.GENERATOR_INDEX)), c.ID('__return_value__')))
 
 
