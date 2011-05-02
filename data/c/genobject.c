@@ -308,10 +308,10 @@ MpGenerator_Yield(PyObject *self) {
 	MpGeneratorObject *gen = (MpGeneratorObject *)self;
 
 	if(DEBUG)
-		printf("(0)GenYld:%p -> %p", &gen->coro, gen->coro_source);
+		printf("(0)GenYld:%p -> %p\n", &gen->coro, gen->coro_source);
 	coro_transfer(&gen->coro, gen->coro_source);
 	if(DEBUG)
-		printf("(1)GenYld:%p -> %p", &gen->coro, gen->coro_source);
+		printf("(1)GenYld:%p -> %p\n", &gen->coro, gen->coro_source);
 }
 
 
