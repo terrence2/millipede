@@ -14,23 +14,39 @@ static coro_context __main_coroutine__;
 
 static void
 gen_del(PyObject *self) {
-	MpGeneratorObject *gen = (MpGeneratorObject *)self;
-	coro_destroy(&gen->coro);
-	free(gen->stack);
-	gen->stack = NULL;
-	if(gen->name) {
-		free(gen->name);
-		gen->name = NULL;
-	}
-	if(gen->data) {
-		free(gen->data);
-		gen->data = NULL;
-	}
+	//MpGeneratorObject *gen = (MpGeneratorObject *)self;
+	/*
+	  NOTE: the tp_del slot is called on 'foo' in response to a 'del foo'.
+	  CPython's generator implementation implements this and sometimes 
+	  resurrects the generator (increfing the object cancels the immediately 
+	  preceeding dealloc).  I'm not sure why and we may need to do something
+	  similar depending on what the purpose of that code is.
+	*/
+	if(DEBUG)
+		printf("GenDel:      %p\n", self);
 }
 
 static void
 gen_dealloc(MpGeneratorObject *gen)
 {
+	if(DEBUG)
+		printf("GenDealloc:  %p\n", gen->coro_source);
+
+	coro_destroy(&gen->coro);
+
+	free(gen->stack);
+	gen->stack = NULL;
+
+	if(gen->name) {
+		free(gen->name);
+		gen->name = NULL;
+	}
+
+	if(gen->data) {
+		free(gen->data);
+		gen->data = NULL;
+	}
+	
 	PyObject_Del(gen);
 }
 
