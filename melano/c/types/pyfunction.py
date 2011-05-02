@@ -398,11 +398,22 @@ class PyFunctionLL(PyObjectLL):
 
 
 	def runner_outro(self):
+		'''Toplevel interface to runner cleanup and exit, called by high-level users.  Internal overriders of function should
+			not override this method, but the lower-level methods instead.'''
+		self._runner_end()
+		self._runner_cleanup()
+		self._runner_leave()
+
+	def _runner_end(self):
 		self.v.none.incref()
 		self.v.ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.v.none.name)))
 		self.v.ctx.add(c.Label('end'))
+
+	def _runner_cleanup(self):
 		for name in reversed(self.v.ctx.cleanup):
 			self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+
+	def _runner_leave(self):
 		self.v.ctx.add(c.Return(c.ID('__return_value__')))
 
 

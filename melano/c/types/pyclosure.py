@@ -161,12 +161,18 @@ class PyClosureLL(PyFunctionLL):
 		return
 
 
-	def runner_outro(self):
-		rv = super().runner_outro()
-		fn_scopes = list(self.each_func_scope())
-		self.v.ctx.block_items.insert(-1, c.FuncCall(c.ID('MpLocals_Destroy'), c.ExprList(
-																					c.ID(self.stack_name), c.Constant('integer', len(fn_scopes) - 1))))
-		return rv
+	def _runner_cleanup(self):
+		super()._runner_cleanup()
+
+		# clean up all locals references when we leave this frame
+		for _, (i, j) in self.locals_map.items():
+			if i == self.own_scope_offset:
+				ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
+				self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
+
+		# clean up the locals holder
+		self.v.ctx.add(c.FuncCall(c.ID('MpLocals_Destroy'), c.ExprList(
+																					c.ID(self.stack_name), c.Constant('integer', self.own_scope_offset))))
 
 
 	def del_attr_string(self, attrname):

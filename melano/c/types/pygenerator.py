@@ -127,17 +127,14 @@ class PyGeneratorLL(PyFunctionLL):
 		self.fail_if_nonzero(tmp.name)
 
 
-	def runner_outro(self):
+	def _runner_cleanup(self):
+		'''Make sure to leave the __gen__ context before we decref it.'''
+		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name))))
+		super()._runner_cleanup()
+
+	def _runner_leave(self):
 		'''In order to leave a coroutine, we set the return context to NULL and transfer back.  The generator will
-			raise a StopError in the owning context for us.  We also need to pop our generator context.'''
-		super().runner_outro()
-		del self.v.ctx.block_items[-1]
-
-		tmp = CIntegerLL(None, self.v)
-		tmp.declare()
-		self.v.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MpGenerator_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name)))))
-		self.fail_if_nonzero(tmp.name)
-
+			raise a StopError in the owning context for us.'''
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))
 		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
 
