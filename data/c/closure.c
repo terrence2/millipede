@@ -21,8 +21,9 @@ MpLocals_Destroy(MpStack *stack, Py_ssize_t level) {
         return;
     stack[level]->refcnt -= 1;
     if(stack[level]->refcnt == 0) {
-        if(stack[level]->locals)
+        if(stack[level]->locals) {
             free(stack[level]->locals);
+        }
         free(stack[level]);
         stack[level] = NULL;
     }
