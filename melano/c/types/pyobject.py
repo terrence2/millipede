@@ -16,10 +16,10 @@ class PyObjectLL(LLType):
 		return c.PtrDecl(c.TypeDecl(name, c.IdentifierType('PyObject')))
 
 
-	def declare(self, *, is_global=False, quals=[], name=None, **kwargs):
+	def declare(self, *, is_global=False, quals=[], name=None, need_cleanup=True, **kwargs):
 		super().declare(is_global=is_global, quals=quals, name=name, **kwargs)
 		ctx = self.v.tu if is_global else self.v.scope.ctx
-		ctx.add_variable(c.Decl(self.name, self.typedecl(self.name), quals=quals, init=c.ID('NULL')), True)
+		ctx.add_variable(c.Decl(self.name, self.typedecl(self.name), quals=quals, init=c.ID('NULL')), need_cleanup=need_cleanup)
 
 
 	def clear(self):
@@ -85,7 +85,7 @@ class PyObjectLL(LLType):
 														c.ID(self.name), c.Constant('string', attrname)))))
 		self.fail_if_null(out_var.name)
 
-	
+
 	def get_attr_string_with_exception(self, attrname, out_var, exc_name, exc_str=None):
 		out_var.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(out_var.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(
@@ -99,7 +99,7 @@ class PyObjectLL(LLType):
 				self.v.ctx.add(c.FuncCall(c.ID('PyErr_SetNone'), c.ExprList(c.ID(exc_name))))
 			self.v.capture_error()
 			self.v.exit_with_exception()
-		
+
 
 	def set_attr_string(self, attrname, attrval):
 		tmp = CIntegerLL(None, self.v)
