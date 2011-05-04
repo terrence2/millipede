@@ -18,6 +18,8 @@ typedef struct {
 	//  - this must be present
 	//  - the first slot must be PyObject* which will point to the yielded
 	//	  value after every iteration.
+	//  - the second slot is a PyObject* which is the sent value (currently 
+	//	  we use this just as a bool).
 	//  - this will be freed on deletion, so pass a malloced pointer.
 	void *data;
 

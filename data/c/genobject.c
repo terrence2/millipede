@@ -32,6 +32,11 @@ gen_dealloc(MpGeneratorObject *gen)
 	if(DEBUG)
 		printf("GenDealloc:  %p\n", gen->coro_source);
 
+	if(!gen->exhausted) {
+		((PyObject **)(gen->data))[SEND_INDEX] = (PyObject *)1;
+		coro_transfer(gen->coro_source, &gen->coro);
+	}
+
 	coro_destroy(&gen->coro);
 
 	free(gen->stack);

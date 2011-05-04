@@ -146,12 +146,20 @@ class PyGeneratorLL(PyFunctionLL):
 		rv_inst.incref()
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID(rv_inst.name)))
 
-		# transfer control back to originator
-		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name))))
-		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
-		self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_EnterContext'), c.ExprList(c.ID(self.gen_inst.name))))
+		with self.v.scope.ll.maybe_recursive_call():
+			# transfer control back to originator
+			self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_LeaveContext'), c.ExprList(c.ID(self.gen_inst.name))))
+			self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
+			self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_EnterContext'), c.ExprList(c.ID(self.gen_inst.name))))
 
 		# set yielded slot to null -- other context stole the ref
 		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))
 
+		# check for dealloc and jump to cleanup
+		if_exhausted = self.v.ctx.add(c.If(
+				c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.SEND_INDEX)), 
+					c.Compound(), None))
+		with self.v.new_context(if_exhausted.iftrue):
+			self.v.ctx.add(c.Goto('end'))
+		
 
