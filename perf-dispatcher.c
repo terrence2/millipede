@@ -24,13 +24,32 @@ char * join(char *dir, char *name) {
 	return dst;
 }
 
+/**
+	Return non-zero if name matches the given testname.
+*/
+int
+matches(char *name, char *testname) {
+	int namelen = strlen(name);
+	int testlen = strlen(testname);
+	char *trailer;
+	int rv;
+	
+	if(testlen > namelen) 
+		return 0;
+	
+	trailer = &name[namelen - testlen];
+	rv = strcmp(trailer, testname);
+	
+	return 0 == rv;
+}
+
 int dispatch(char *name, char *dir, char **argv) {
 	int rv = 1;
 	char *tmp = NULL;
 
-	if(0 == strcmp(name, "performance/bm_float.py"))
+	if(matches(name, "bm_float.py"))
 		tmp = join(dir, "build/bm_float");
-	else if(0 == strcmp(name, "performance/bm_pidigits.py"))
+	else if(matches(name, "bm_pidigits.py"))
 		tmp = join(dir, "build/bm_pidigits");
 	else {
 		fprintf(stderr, "Unknown test named: %s\n", name);
