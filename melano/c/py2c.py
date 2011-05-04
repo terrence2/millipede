@@ -1526,7 +1526,6 @@ class Py2C(ASTVisitor):
 			inst.declare()
 		else:
 			inst = node.hl.ll
-			inst.decref()
 		inst.new(node.n)
 		return inst
 
