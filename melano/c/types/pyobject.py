@@ -410,21 +410,37 @@ class PyObjectLL(LLType):
 		return out_inst
 
 
-	def sequence_get_slice(self,
-						start:int or CIntegerLL,
-						end:int or CIntegerLL,
-						step:int or CIntegerLL,
-						out_inst=None):
-		if not out_inst:
-			out_inst = PyObjectLL(None, self.v)
-			out_inst.declare()
-		out_inst.xdecref()
-		_start = c.Constant('integer', start) if isinstance(start, int) else c.ID(start.name)
-		_end = c.Constant('integer', end) if isinstance(end, int) else c.ID(end.name)
-		if step != 1:
-			raise NotImplementedError("Slicing with a step size is not yet supported")
-		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_GetSlice'), c.ExprList(c.ID(self.name), _start, _end))))
-		self.fail_if_null(out_inst.name)
+	def sequence_get_slice(self, start, end, step, out_inst=None):
+		'''Extract a sequence from this sequence which is a slice of this sequence.'''
+		# Case 0: no step -> just call GetSlice with ints
+		if step is None:
+			if not out_inst:
+				out_inst = PyObjectLL(None, self.v)
+				out_inst.declare(name='_sliced')
+
+			if start is None: _start = c.Constant('integer', 0)
+			else: _start = c.ID(start.as_ssize().name)
+			if end is None: _end = c.Constant('integer', CIntegerLL.MAX)
+			else: _end = c.ID(end.as_ssize().name)
+
+			self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_GetSlice'), c.ExprList(c.ID(self.name), _start, _end))))
+			self.fail_if_null(out_inst.name)
+
+		# Case 1: have a step -> create a new Slice with PyObject's, use that to get item
+		else:
+			slice_inst = PySliceLL(None, self.v)
+			slice_inst.declare(name='_slice')
+
+			if start is None: _start = self.v.none; _start.incref()
+			else: _start = start.as_pyobject()
+			if end is None: _end = self.v.none; _end.incref()
+			else: _end = end.as_pyobject()
+			_step = step.as_pyobject()
+
+			slice_inst.new(_start, _end, _step)
+
+			out_inst = self.get_item(slice_inst, out_inst)
+
 		return out_inst
 
 
@@ -484,6 +500,7 @@ class PyObjectLL(LLType):
 
 
 from melano.c.types.integer import CIntegerLL
+from melano.c.types.pyslice import PySliceLL
 from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
 from melano.c.types.pytype import PyTypeLL

@@ -1599,25 +1599,12 @@ class Py2C(ASTVisitor):
 
 	def visit_Slice(self, node):
 		start = end = step = None
-
 		if node.lower:
 			start = self.visit(node.lower)
-			start = start.as_ssize()
-		else:
-			start = 0
-
 		if node.upper:
 			end = self.visit(node.upper)
-			end = end.as_ssize()
-		else:
-			end = CIntegerLL.MAX
-
 		if node.step:
 			step = self.visit(node.step)
-			step = step.as_ssize()
-		else:
-			step = 1
-
 		return start, end, step
 
 
@@ -1635,7 +1622,7 @@ class Py2C(ASTVisitor):
 
 	def visit_Subscript(self, node):
 		if node.ctx == py.Store:
-			raise NotImplementedError("Subscript store needs special casing at assignment site")
+			raise SystemError("Subscript store needs special casing at assignment site")
 		elif node.ctx in [py.Load, py.Aug]:
 			tgtinst = self.visit(node.value)
 			if isinstance(node.slice, py.Slice):
