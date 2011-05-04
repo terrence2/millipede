@@ -72,7 +72,6 @@ int main(int argc, char **argv) {
 	basedir = dirname(argv[0]);
 	args = build_second_args(argc, argv);
 	rv = dispatch(argv[1], basedir, args);
-	free(basedir);
-	free((void *)args);
+	free(args);
 	return rv;
 }
