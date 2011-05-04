@@ -562,7 +562,7 @@ class Py2C(ASTVisitor):
 			o.set_item(i, src_inst)
 		elif isinstance(node, py.Name):
 			self._store_name(node, src_inst)
-		elif isinstance(node, py.Tuple):
+		elif isinstance(node, (py.Tuple, py.List)):
 			key = PyIntegerLL(None, self)
 			key.declare()
 			for i, elt in enumerate(node.elts):

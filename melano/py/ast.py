@@ -533,6 +533,13 @@ class List(expr):
 		self.elts = elts
 		self.ctx = ctx
 
+	def set_context(self, ctx):
+		super().set_context(ctx)
+		if self.elts:
+			for elt in self.elts:
+				try: elt.set_context(ctx)
+				except AttributeError: pass
+
 #| ListComp(expr elt, comprehension* generators)
 class ListComp(expr):
 	_fields = ('elt', 'generators')
