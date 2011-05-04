@@ -414,3 +414,8 @@ class While(AST):
 		self.cond = cond
 		self.stmt = stmt
 
+
+class WhiteSpace(AST):
+	_fields = ()
+	def __init__(self, value):
+		self.value = value

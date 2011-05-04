@@ -74,7 +74,7 @@ class COut(ASTVisitor):
 				self.visit(item)
 
 				# not all elements require a closing ; 
-				if not isinstance(item, (c.Comment, c.Compound, c.For, c.If, c.Label, c.Switch, c.While)):
+				if not isinstance(item, (c.Comment, c.Compound, c.For, c.If, c.Label, c.Switch, c.While, c.WhiteSpace)):
 					self.fp.write(';')
 				if isinstance(item, c.Label) and item is node.block_items[-1]:
 					self.fp.write(';')
@@ -246,3 +246,6 @@ class COut(ASTVisitor):
 			self.visit(node.cond)
 		self.fp.write(')')
 		self.visit(node.stmt)
+
+	def visit_WhiteSpace(self, node):
+		self.fp.write(node.value);

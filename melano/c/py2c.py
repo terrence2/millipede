@@ -151,6 +151,9 @@ class Py2C(ASTVisitor):
 		# the python hl walker context
 		self.scopes = []
 
+		# track the current line so we can improve the output's look
+		self._current_line = 0
+
 		# There are a number of constructs that change the flow of control in python in ways that are not directly
 		# 		representable in c without goto.  We use the flow-control list to allow constructs that change the flow of
 		#		control to work together to create a correct goto-web.
@@ -267,6 +270,19 @@ class Py2C(ASTVisitor):
 		'''Optionally add a comment node to the source at the current location.'''
 		if self.debug:
 			self.ctx.add(c.Comment(cmt))
+
+
+	def line_for_node(self, node):
+		return node.start[0]
+
+
+	def visit(self, node):
+		if node:
+			ln = self.line_for_node(node)
+			if ln != self._current_line:
+				self._current_line = ln
+				self.ctx.add(c.WhiteSpace(''))
+		return super().visit(node)
 
 
 	def split_docstring(self, nodes:[py.AST]) -> (Nonable(str), [py.AST]):
