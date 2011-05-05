@@ -604,10 +604,13 @@ class PythonASTBuilder:
 			return self.handle_testlist(children[0])
 		elif children[1].type == self.tokens.NAME and children[1].value == 'for':
 			return self.handle_genexp(argument_node)
+		elif children[1].type == self.syms.comp_for:
+			return self.handle_genexp(argument_node)
 		elif children[1].type == self.tokens.EQUAL:
 			key = self.handle_testlist(children[0])
 			value = self.handle_testlist(children[2])
 			return ast.keyword(key, value, argument_node)
+		raise NotImplementedError("Unknown argument type")
 
 
 	def handle_decorated(self, decorated_node):
