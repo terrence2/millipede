@@ -11,6 +11,7 @@ import pdb
 
 class Typer(ASTVisitor):
 	def __init__(self, project, module):
+		super().__init__()
 		self.project = project
 		self.module = module
 

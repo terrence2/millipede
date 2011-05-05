@@ -7,6 +7,7 @@ from melano.lang.visitor import ASTVisitor
 
 class FindLinks(ASTVisitor):
 	def __init__(self):
+		super().__init__()
 		self.imports = []
 		self.importfroms = []
 		self.renames = {}
