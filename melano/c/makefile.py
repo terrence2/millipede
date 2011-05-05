@@ -33,6 +33,7 @@ class Makefile:
 				CFLAGS=-DCORO_UCONTEXT
 				CFLAGS_WARN=-Wall -Wno-unused-label -Wtrigraphs
 				CFLAGS_OPT=-O0 -g
+				CFLAGS_PROF=-fprofile-arcs -ftest-coverage -pg
 				CFLAGS_INCLUDE=-I{prefix}/include -I{data_dir}/c -I{data_dir}/c/libcoro
 				ABI={abi}
 				
@@ -41,10 +42,13 @@ class Makefile:
 				
 			'''.format(data_dir=self.data_dir, prefix=self.prefix, abi=self.abi)))
 
-			fp.write("all: {}".format(' '.join([target.name for target in self.targets])))
+			fp.write("all: {}\n".format(' '.join([target.name for target in self.targets])))
 			fp.write('\t\n\n')
 
-			fp.write("clean: {}".format(' '.join(['clean_' + target.name for target in self.targets])))
+			fp.write("prof: {}\n".format(' '.join([target.name + '-prof' for target in self.targets])))
+			fp.write('\t\n\n')
+
+			fp.write("clean: {}\n".format(' '.join(['clean_' + target.name for target in self.targets])))
 			fp.write('\t\n\n')
 
 			for target in self.targets:
@@ -52,7 +56,6 @@ class Makefile:
 
 
 	def _write_target(self, target, fp):
-		fp.write('{}: {}.c\n'.format(target.name, target.name))
 		config = {
 			'prefix': self.prefix,
 			'version': self.version,
@@ -64,9 +67,13 @@ class Makefile:
 			'output': target.name,
 			'source': target.source,
 		}
+		fp.write('{}: Makefile {}.c\n'.format(target.name, target.name))
 		fp.write(('\t${{GCC}} ${{CFLAGS}} ${{CFLAGS_WARN}} ${{CFLAGS_OPT}} ${{CFLAGS_INCLUDE}}' +
-				' {includes} -o {output} {source} ${{EXTRA_SOURCES}} {libs} ${{LIBS}}\n').format(**args))
-		fp.write('\n')
+				' {includes} -o {output} {source} ${{EXTRA_SOURCES}} {libs} ${{LIBS}}\n\n').format(**args))
+
+		fp.write('{}: Makefile {}.c\n'.format(target.name + '-prof', target.name))
+		fp.write(('\t${{GCC}} ${{CFLAGS}} ${{CFLAGS_WARN}} ${{CFLAGS_OPT}} ${{CFLAGS_PROF}} ${{CFLAGS_INCLUDE}}' +
+				' {includes} -o {output} {source} ${{EXTRA_SOURCES}} {libs} ${{LIBS}}\n\n').format(**args))
 
 		fp.write('clean_{}:\n'.format(target.name))
 		fp.write('\t-rm {}\n'.format(target.name))
