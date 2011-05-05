@@ -190,3 +190,9 @@ class Linker(ASTVisitor):
 			# NOTE: don't bother visiting the name, since we know it is a Store
 			self.visit_nodelist(handler.body)
 		self.visit_nodelist(node.orelse)
+
+
+	def visit_UnaryOp(self, node):
+		self.visit(node.operand)
+		node.hl = Coerce(Coerce.INPLACE, node.operand.hl)
+
