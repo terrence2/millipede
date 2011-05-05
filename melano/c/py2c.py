@@ -562,8 +562,12 @@ class Py2C(ASTVisitor):
 			o.set_attr_string(str(node.attr), src_inst)
 		elif isinstance(node, py.Subscript):
 			o = self.visit(node.value)
-			i = self.visit(node.slice)
-			o.set_item(i, src_inst)
+			if isinstance(node.slice, py.Slice):
+				start, end, step = self.visit(node.slice)
+				o.sequence_set_slice(start, end, step, src_inst)
+			else:
+				i = self.visit(node.slice)
+				o.set_item(i, src_inst)
 		elif isinstance(node, py.Name):
 			self._store_name(node, src_inst)
 		elif isinstance(node, (py.Tuple, py.List)):

@@ -444,6 +444,39 @@ class PyObjectLL(LLType):
 		return out_inst
 
 
+	def sequence_set_slice(self, start, end, step, src_inst):
+		'''Assign a sequence into a sliced sequence.'''
+		# Case 0: no step means we can use the fast sequence SetSlice
+		if step is None:
+			out_inst = CIntegerLL(None, self.v)
+			out_inst.declare(name='_rv_slice')
+
+			if start is None: _start = c.Constant('integer', 0)
+			else: _start = c.ID(start.as_ssize().name)
+			if end is None: _end = c.Constant('integer', CIntegerLL.MAX)
+			else: _end = c.ID(end.as_ssize().name)
+
+			self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PySequence_SetSlice'),
+																			c.ExprList(c.ID(self.name), _start, _end, c.ID(src_inst.name)))))
+			self.fail_if_negative(out_inst.name)
+
+		else:
+			slice_inst = PySliceLL(None, self.v)
+			slice_inst.declare(name='_slice')
+
+			if start is None: _start = self.v.none; _start.incref()
+			else: _start = start.as_pyobject()
+			if end is None: _end = self.v.none; _end.incref()
+			else: _end = end.as_pyobject()
+			_step = step.as_pyobject()
+
+			slice_inst.new(_start, _end, _step)
+
+			out_inst = self.set_item(slice_inst, src_inst)
+
+		return out_inst
+
+
 	def sequence_del_slice(self,
 						start:int or CIntegerLL,
 						end:int or CIntegerLL,
