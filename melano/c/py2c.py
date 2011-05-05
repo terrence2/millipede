@@ -838,6 +838,7 @@ class Py2C(ASTVisitor):
 
 	def visit_Call(self, node):
 		def _call_super(self, node, funcinst):
+			#FIXME: what if we call through a variable?
 			#FIXME: what happens if we write to __class__ at runtime?
 
 			# get the class type and the instance
@@ -916,8 +917,7 @@ class Py2C(ASTVisitor):
 
 			return rv
 
-
-		#TODO: direct calling, keywords calling, etc
+		#TODO: direct calling
 		#TODO: track "type" so we can dispatch to PyCFunction_Call or PyFunction_Call instead of PyObject_Call 
 		#TODO: track all call methods (callsite usage types) and see if we can't unpack into a direct c call
 
