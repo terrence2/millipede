@@ -47,10 +47,13 @@ int dispatch(char *name, char *dir, char **argv) {
 	int rv = 1;
 	char *tmp = NULL;
 
-	if(matches(name, "bm_float.py"))
-		tmp = join(dir, "build/bm_float");
-	else if(matches(name, "bm_pidigits.py"))
-		tmp = join(dir, "build/bm_pidigits");
+	if(matches(name, "bm_float.py")) 		tmp = join(dir, "build/bm_float");
+	else if(matches(name, "bm_json.py")) 		tmp = join(dir, "build/bm_json");
+	else if(matches(name, "bm_mako.py")) 		tmp = join(dir, "build/bm_mako");
+	else if(matches(name, "bm_nbody.py"))		tmp = join(dir, "build/bm_nbody");
+	else if(matches(name, "bm_nqueens.py"))		tmp = join(dir, "build/bm_nqueens");
+	else if(matches(name, "bm_pickle.py"))		tmp = join(dir, "build/bm_pickle");
+	else if(matches(name, "bm_pidigits.py"))	tmp = join(dir, "build/bm_pidigits");
 	else {
 		fprintf(stderr, "Unknown test named: %s\n", name);
 		return 2;

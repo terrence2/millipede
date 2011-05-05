@@ -36,7 +36,7 @@ def main():
 		version = '3.1'
 		abi = ''
 
-	programs = ['bm_float', 'bm_pidigits']
+	programs = ['bm_json', 'bm_mako', 'bm_nbody', 'bm_nqueens', 'bm_pickle', 'bm_float', 'bm_pidigits']
 	if options.benchmarks:
 		programs = [p.strip() for p in options.benchmarks.split(',')]
 
