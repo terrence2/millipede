@@ -586,6 +586,7 @@ class Py2C(ASTVisitor):
 			tgt_inst = self._load_name(source)
 		elif isinstance(source, py.Subscript):
 			o = self.visit(source.value)
+			#FIXME: this could be a slice
 			i = self.visit(source.slice)
 			tgt_inst = o.get_item(i)
 		else:
