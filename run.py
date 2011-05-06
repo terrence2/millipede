@@ -6,7 +6,6 @@ import os
 import pickle
 import signal
 import sys
-#from melano.ui.application import MelanoApplication
 
 def main():
 	logging.basicConfig(level=logging.INFO)
@@ -31,10 +30,14 @@ def main():
 	project.configure(programs=[fn[:-3]], roots=[base], verbose=False, stdlib=stdlib, extensions=extensions)
 	project.build_one(fn[:-3], 'test.c')
 
-	#app = MelanoApplication(project, sys.argv)
-	#signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c
-	#return app.exec_()
+	if 'gui' in sys.argv:
+		from melano.ui.application import MelanoApplication
+		app = MelanoApplication(project, sys.argv)
+		signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c
+		return app.exec_()
+
+	return 0
 
 if __name__ == '__main__':
-	main()
+	sys.exit(main())
 
