@@ -13,7 +13,7 @@ class Name(Entity):
 	An item that can be placed in a symbol table.  Contains information about a named
 	python entity, possibly including another symbol table.
 	'''
-	def __init__(self, name:str, parent):
+	def __init__(self, name:str, parent, ast):
 		'''
 		parent: Scope (we cannot formally declare this type because Scope needs Name)
 		'''
@@ -31,6 +31,9 @@ class Name(Entity):
 
 		# the ll instance
 		self.ll = None
+
+		# a ref to the ast where this name is defined
+		self.ast = ast
 
 
 	@property

@@ -6,6 +6,7 @@ from collections import OrderedDict
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
 from melano.hl.types.pydict import PyDictType
+from melano.lang.ast import AST
 import itertools
 import logging
 
@@ -67,9 +68,9 @@ class Scope:
 		return prefix + str(next(self.labels[prefix]))
 
 
-	def add_symbol(self, name:str, init:object=None):
+	def add_symbol(self, name:str, init:object=None, ast:AST=None):
 		if not init:
-			init = Name(name, self)
+			init = Name(name, self, ast)
 		self.symbols[name] = init
 		return self.symbols[name]
 

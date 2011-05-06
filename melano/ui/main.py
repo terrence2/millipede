@@ -1,11 +1,13 @@
 from PyQt4 import QtCore
 from PyQt4.QtCore import QCoreApplication
-from PyQt4.QtGui import QMainWindow
-from PyQt4.QtGui import QAction, QIcon, QLabel, QDockWidget, QTreeView, QTabWidget
-from melano.ui.editor.view import MelanoCodeView
-from melano.ui.editor.document import MelanoCodeDocument
-from melano.ui.docks.projectlist import MelanoProjectListWidget
+from PyQt4.QtGui import QAction, QIcon, QLabel, QDockWidget, QTreeView, \
+	QTabWidget, QMainWindow
+from melano.hl.name import Name
 from melano.ui.docks.projectbrowser import MelanoProjectTreeWidget
+from melano.ui.docks.projectlist import MelanoProjectListWidget
+from melano.ui.docks.symbolinfo import MelanoSymbolInfoWidget
+from melano.ui.editor.document import MelanoCodeDocument
+from melano.ui.editor.view import MelanoCodeView
 import os.path
 
 
@@ -49,6 +51,14 @@ class MelanoMainWindow(QMainWindow):
 		self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockProjectTree)
 
 
+		self.symInfo = MelanoSymbolInfoWidget(self)
+		self.dockSymInfo = QDockWidget("Symbol Info", self);
+		self.dockSymInfo.setObjectName('dockSymbolInfo')
+		self.dockSymInfo.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea);
+		self.dockSymInfo.setWidget(self.symInfo)
+		self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.dockSymInfo)
+
+
 	def closeEvent(self, *args):
 		QCoreApplication.instance().onQuitTriggered()
 
@@ -76,4 +86,12 @@ class MelanoMainWindow(QMainWindow):
 		self.tabPane.setCurrentIndex(self.tabPane.count() - 1)
 
 		return self.views[doc.filename]
+
+
+	def show_symbol(self, doc:MelanoCodeDocument, node:Name):
+		view = self.show_document(doc)
+		view.edit.show_symbol(node)
+
+		self.projectBrowser.show_symbol(node)
+		self.symInfo.show_symbol(node)
 

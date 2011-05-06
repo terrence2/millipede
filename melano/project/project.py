@@ -94,7 +94,7 @@ class MelanoProject:
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
 
 		# build a 'scope' for our builtins
-		self.builtins_scope = Builtins(Name('builtins', None))
+		self.builtins_scope = Builtins(Name('builtins', None, None))
 		for n in PY_BUILTINS:
 			self.builtins_scope.add_symbol(n)
 
@@ -171,6 +171,7 @@ class MelanoProject:
 				# create the module
 				mod = MelanoModule(modtype, filename, modname, self.builtins_scope)
 				mod.ast = ast
+				mod.owner.ast = ast
 				mod.ast.hl = mod
 
 				# add to order, in depth first order

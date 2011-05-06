@@ -104,7 +104,7 @@ class Indexer1(ASTVisitor):
 					for name in alias.name.get_names():
 						# NOTE: don't bother visiting, since this recorded as a Load
 						name.set_context(py.Store)
-						name.hl = Name(str(name), self.context)
+						name.hl = Name(str(name), self.context, None)
 						if name is alias.name.first():
 							self.context.symbols[str(name)] = name.hl
 						# find the real name of this part of the module and create a ref to the underlying module
@@ -128,7 +128,7 @@ class Indexer1(ASTVisitor):
 				if not self.context.has_symbol(name):
 					ref = NameRef(mod.lookup(name))
 					ref.parent = self.context
-					self.context.add_symbol(name, ref)
+					self.context.add_symbol(name, ref, ast=alias.name)
 
 		# query the module (keeping in mind that this may be a package we want)
 		pkg_or_mod_name = '.' * node.level + str(node.module)
@@ -186,12 +186,12 @@ class Indexer1(ASTVisitor):
 
 			if alias.asname:
 				#self.visit(alias.asname)
-				self.context.add_symbol(str(alias.asname), ref)
+				self.context.add_symbol(str(alias.asname), ref, ast=alias.asname)
 				alias.asname.hl = ref
 				alias.name.hl = ref
 			else:
 				#self.visit(alias.name)
-				self.context.add_symbol(str(alias.name), ref)
+				self.context.add_symbol(str(alias.name), ref, ast=alias.name)
 				alias.name.hl = ref
 
 

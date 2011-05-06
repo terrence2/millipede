@@ -25,6 +25,9 @@ class MelanoApplication(QApplication):
 		# the main application window
 		self.window = MelanoMainWindow()
 		self.window.show()
+
+		self.window.resize(800, 600)
+
 		'''
 		try:
 			w = int(self.config.get_key('app_window_w'))
@@ -70,7 +73,12 @@ class MelanoApplication(QApplication):
 
 	def show_symbol(self, module:MelanoModule, node:Name):
 		doc = self.load_document(module)
-		view = self.window.show_document(doc)
-		view.edit.show_symbol(node)
+		self.window.show_symbol(doc, node)
 
+
+	def on_hover_text(self, module:MelanoModule, start:(int, int), end:(int, int), context:str):
+		'''Discover the node we are hovering over based on the position of the token.  Possibly 
+			format and return a tooltip if this is possible for this text position.'''
+		#module.find_ast_node_for_position
+		return 'Hover Text!'
 

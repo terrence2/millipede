@@ -58,7 +58,7 @@ class Indexer0(ASTVisitor):
 			name = str(node.name)
 
 		# insert node into parent scope
-		sym = self.scope.add_symbol(name)
+		sym = self.scope.add_symbol(name, ast=node)
 		sym.scope = scope_ty(sym)
 		node.hl = sym.scope
 
@@ -159,7 +159,7 @@ class Indexer0(ASTVisitor):
 			#NOTE: this scope may be the only creator of this symbol (e.g. no Name Store), so we 
 			#		need to make sure that the symbol gets created on the module scope too
 			if name not in self.module.symbols:
-				self.module.add_symbol(name)
+				self.module.add_symbol(name, ast=node)
 			sym = self.module.lookup(name)
 			ref = self.scope.set_reference(sym)
 			ref.is_global = True
@@ -221,7 +221,7 @@ class Indexer0(ASTVisitor):
 			#		this name as a ref, thus preventing us from doing the (incorrect) lookup here
 			name = str(node)
 			if name not in self.scope.symbols:
-				sym = self.scope.add_symbol(name)
+				sym = self.scope.add_symbol(name, ast=node)
 				node.hl = sym
 
 			# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
@@ -274,7 +274,7 @@ class Indexer0(ASTVisitor):
 			if handler.name:
 				name = str(handler.name)
 				if name not in self.scope.symbols:
-					sym = self.scope.add_symbol(name)
+					sym = self.scope.add_symbol(name, ast=handler.name)
 					handler.name.hl = sym
 				# if we store to the same name multiple times in a scope, assign the ref or sym to the ll ast at each point it is used
 				if not handler.name.hl:

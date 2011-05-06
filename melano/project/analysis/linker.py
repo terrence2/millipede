@@ -41,7 +41,7 @@ class Linker(ASTVisitor):
 		#		correct type info into the attribute at, e.g. assignment, because we assign this attribute node
 		#		as a ref into the name we create here on the actual attribute.
 		assert node.attr.hl is None
-		node.attr.hl = Name(str(node.attr), node.value.hl)
+		node.attr.hl = Name(str(node.attr), node.value.hl, node)
 		node.hl = NameRef(node.attr.hl)
 		node.value.hl.add_attribute(str(node.attr), node.attr.hl)
 
@@ -167,7 +167,7 @@ class Linker(ASTVisitor):
 		#		correct type info into the index at, e.g. assignment, because we assign this index node
 		#		as a ref into the name we create here on the actual index
 		assert node.slice.hl is None
-		node.slice.hl = Name(str(node.slice), node.value.hl)
+		node.slice.hl = Name(str(node.slice), node.value.hl, node.slice)
 		node.hl = NameRef(node.slice.hl)
 		node.value.hl.add_subscript(node.slice, node.slice.hl)
 

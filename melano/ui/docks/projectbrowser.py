@@ -1,10 +1,11 @@
 from PyQt4.QtCore import QCoreApplication
-from PyQt4.QtGui import QTreeWidget, QTreeWidgetItem, QIcon
+from PyQt4.QtGui import QTreeWidget, QTreeWidgetItem, QIcon, QPalette
 from melano.hl.class_ import MelanoClass
 from melano.hl.function import MelanoFunction
 from melano.hl.module import MelanoModule
 from melano.hl.name import Name
 import os.path
+import pdb
 
 
 class MelanoProjectTreeWidget(QTreeWidget):
@@ -14,7 +15,8 @@ class MelanoProjectTreeWidget(QTreeWidget):
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		self.project = QCoreApplication.instance().project
+		self.app = QCoreApplication.instance()
+		self.project = self.app.project
 
 		# load icon paths
 		#self.ICONS = {
@@ -37,28 +39,41 @@ class MelanoProjectTreeWidget(QTreeWidget):
 		self._setup()
 
 	def _select_icon(self, sym):
-		import pdb; pdb.set_trace()
-		print('sym:', sym)
 		if sym.scope:
-			print("scope: ", type(sym.scope))
+			# symbols that own a scope
 			if isinstance(sym.scope, MelanoClass):
 				return self.icon_class
+			elif isinstance(sym.scope, MelanoFunction):
+				return self.icon_function
 			elif isinstance(sym.scope, MelanoModule):
-				if sym.filename.endswith('__init__.py'):
+				if sym.scope.filename.endswith('__init__.py') or sym.scope.is_main:
 					return self.icon_package
 				else:
 					return self.icon_module
-			elif isinstance(sym.scope, MelanoFunction):
-				return self.icon_function
+		else:
+			# symbols that do not own a scope
+			return self.icon_symbol
+
 		return QIcon.fromTheme("emblem-unreadable")
 
+
+	def _setup_font(self, child, name, sym):
+		print(name)
+		if name.startswith('__') and name.endswith('__'):
+			child.setTextColor(0, self.app.palette().color(QPalette.Disabled, QPalette.Text))
+			fnt = self.app.font()
+			fnt.setItalic(True)
+			child.setFont(0, fnt)
+		return
+
+
 	def _setup(self):
-		seen = set()
 		def _add_children(item, mod):
 			for ref in mod.refs:
 				childMod = self.project.get_module_at_filename(ref)
 				child = QTreeWidgetItem(item)
 				child.setText(0, ref)
+				self._setup_font(child, ref, childMod.owner)
 				child.setIcon(0, self._select_icon(childMod.owner))
 				child.setData(0, self.TYPE_MODULE, childMod)
 				child.setData(0, self.TYPE_NODE, None)
@@ -68,16 +83,17 @@ class MelanoProjectTreeWidget(QTreeWidget):
 				if not isinstance(sym, Name): continue
 				child = QTreeWidgetItem(item)
 				child.setText(0, name)
+				self._setup_font(child, name, sym)
 				child.setIcon(0, self._select_icon(sym))
 				child.setData(0, self.TYPE_MODULE, mod)
 				child.setData(0, self.TYPE_NODE, mod.symbols[name])
 				item.addChild(child)
 
-
 		for prog in self.project.programs:
 			mod = self.project.get_module_at_dottedname(prog)
 			item = QTreeWidgetItem(self)
 			item.setText(0, prog)
+			self._setup_font(item, prog, mod.owner)
 			item.setIcon(0, self._select_icon(mod.owner))
 			item.setData(0, self.TYPE_MODULE, mod)
 			item.setData(0, self.TYPE_NODE, None)
@@ -175,6 +191,8 @@ class MelanoProjectTreeWidget(QTreeWidget):
 			return
 
 		# this will on-demand load the document and browse to the symbol
-		QCoreApplication.instance().show_symbol(module, node)
+		self.app.show_symbol(module, node)
 
 
+	def show_symbol(self, node:Name):
+		pass
