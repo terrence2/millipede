@@ -438,8 +438,8 @@ class PyObjectLL(LLType):
 			_step = step.as_pyobject()
 
 			slice_inst.new(_start, _end, _step)
-
 			out_inst = self.get_item(slice_inst, out_inst)
+			slice_inst.clear()
 
 		return out_inst
 
@@ -471,8 +471,8 @@ class PyObjectLL(LLType):
 			_step = step.as_pyobject()
 
 			slice_inst.new(_start, _end, _step)
-
 			out_inst = self.set_item(slice_inst, src_inst)
+			slice_inst.clear()
 
 		return out_inst
 
