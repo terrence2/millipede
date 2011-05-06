@@ -857,6 +857,11 @@ class Py2C(ASTVisitor):
 			funcinst.call(args, None, rv)
 			return rv
 
+		def _call_builtin(self, node, funcinst):
+			raise NotImplementedError
+
+		def _call_local(self, node, funcinst):
+			raise NotImplementedError
 
 		def _call_remote(self, node, funcinst):
 			# if we are calling super with no args, we need to provide them, since this is the framework's responsibility
@@ -929,13 +934,20 @@ class Py2C(ASTVisitor):
 		# prepare the func name node
 		funcinst = self.visit(node.func)
 
-		# TODO: if we are defined locally, we can know the expected calling proc and reorganize our args to it
+		# if we are defined locally, we can know the expected calling proc and reorganize our args to it
 		#if node.func.hl and node.func.hl.scope:
 		#	return _call_local(self, node, funcinst)
 		#else:
 		#	return _call_remote(self, node, funcinst)
 		with self.scope.ll.maybe_recursive_call():
-			rv = _call_remote(self, node, funcinst)
+			ty = node.hl.get_type()
+			ct = ty.call_type if isinstance(ty, PyFunctionType) else PyFunctionType.CALL_TYPE_UNKNOWN
+			if ct == PyFunctionType.CALL_TYPE_LOCAL:
+				rv = _call_local(self, node, funcinst)
+			elif ct == PyFunctionType.CALL_TYPE_BUILTIN:
+				rv = _call_builtin(self, node, funcinst)
+			else:
+				rv = _call_remote(self, node, funcinst)
 
 		return rv
 
