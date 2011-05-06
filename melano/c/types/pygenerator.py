@@ -86,11 +86,10 @@ class PyGeneratorLL(PyFunctionLL):
 
 		#FIXME: do not re-declare here... maybe share this with pyfunction? 
 		for offset, arg in enumerate(arg_list, self.ARGS_INDEX):
-			self.v.ctx.add(c.Comment("set arg '{}'".format(str(arg.arg))))
+			#NOTE: incref happened in stub to preserve the value for us
 			inst = PyObjectLL(arg.arg.hl, self.v)
 			inst.declare()
 			self.v.ctx.add(c.Assignment('=', c.ID(inst.name), c.ArrayRef(c.ID(self.args_name), c.Constant('integer', offset))))
-			inst.incref()
 			self.locals_map[str(arg.arg)] = str(arg.arg)
 			self.args_pos_map.append(str(arg.arg))
 
@@ -143,8 +142,11 @@ class PyGeneratorLL(PyFunctionLL):
 		# assign to our yielded slot slot
 		if not rv_inst:
 			rv_inst = self.v.none
-		rv_inst.incref()
-		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID(rv_inst.name)))
+
+		# set yielded slot: tp_iter is responsible for incref, the caller of PyIter_Next is responsible for decref
+		ret_ref = c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX))
+
+		self.v.ctx.add(c.Assignment('=', ret_ref, c.ID(rv_inst.name)))
 
 		with self.v.scope.ll.maybe_recursive_call():
 			# transfer control back to originator
@@ -152,14 +154,11 @@ class PyGeneratorLL(PyFunctionLL):
 			self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_Yield'), c.ExprList(c.ID(self.gen_inst.name))))
 			self.v.ctx.add(c.FuncCall(c.ID('MpGenerator_EnterContext'), c.ExprList(c.ID(self.gen_inst.name))))
 
-		# set yielded slot to null -- other context stole the ref
-		self.v.ctx.add(c.Assignment('=', c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.RETURN_INDEX)), c.ID('NULL')))
-
 		# check for dealloc and jump to cleanup
 		if_exhausted = self.v.ctx.add(c.If(
-				c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.SEND_INDEX)), 
+				c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.SEND_INDEX)),
 					c.Compound(), None))
 		with self.v.new_context(if_exhausted.iftrue):
 			self.v.ctx.add(c.Goto('end'))
-		
+
 

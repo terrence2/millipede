@@ -115,6 +115,7 @@ gen_iternext(MpGeneratorObject *gen)
 		PyErr_SetNone(PyExc_StopIteration);
 		return NULL;
 	}
+	Py_INCREF(rv);
 	return rv;
 }
 
