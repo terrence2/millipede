@@ -66,6 +66,8 @@ class MelanoModule(Scope, Entity):
 
 
 	def set_as_main(self):
+		if self.modtype != MelanoModule.PROJECT:
+			raise SystemError("Main module must be part of the project!")
 		self.is_main = True
 
 
