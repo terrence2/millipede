@@ -39,7 +39,7 @@ class MelanoModule(Scope, Entity):
 			self.source = self._read_file(self.filename)
 			self.checksum = hashlib.sha1(self.source.encode('UTF-8')).hexdigest()
 			self.lines = self.source.split('\n')
-		elif self.filename.endswith('.so'):
+		else:
 			self.source = None
 			self.checksum = None
 			self.lines = None
