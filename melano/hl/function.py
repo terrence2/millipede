@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.entity import Entity
 from melano.hl.name import Name
 from melano.hl.scope import Scope
 from melano.hl.types.pyclosure import PyClosureType
@@ -13,7 +14,7 @@ import logging
 
 
 
-class MelanoFunction(Scope):
+class MelanoFunction(Scope, Entity):
 	'''Specialization of function scope to contain expected calling style.'''
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
