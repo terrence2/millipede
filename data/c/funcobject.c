@@ -212,7 +212,7 @@ static PyMemberDef meth_members[] = {
 static PyObject *
 meth_repr(MpFunctionObject *m)
 {
-    return PyUnicode_FromFormat("<melano function %s", m->m_name);
+    return PyUnicode_FromFormat("<melano function %s>", m->m_name);
 }
 
 static PyObject *
