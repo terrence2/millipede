@@ -90,6 +90,7 @@ class MelanoModule(Scope, Entity):
 
 
 	def lookup(self, name:str) -> Name:
+		'''Get the symbol in this scope or raise the lookup to higher scopes by python's rules.'''
 		try:
 			return self.symbols[name]
 		except KeyError:
@@ -99,6 +100,11 @@ class MelanoModule(Scope, Entity):
 
 	def has_symbol(self, name:str) -> bool:
 		return name in self.symbols
+
+
+	def get_symbol(self, name:str) -> Name:
+		'''Return the symbol from this scope, or raise a KeyError.'''
+		return self.symbols[name]
 
 
 	def lookup_star(self) -> [str]:
