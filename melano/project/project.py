@@ -102,12 +102,17 @@ class MelanoProject:
 	def configure(self, *, programs:[str], roots:[str],
 				stdlib:[str]=[], extensions:[str]=[], builtins:[str]=[], override:[str]=[],
 				prefix:str='/usr', version:str='3.1', abi:str='',
-				limit='.*', verbose=False):
+				include='.*', exclude='$^',
+				verbose=False, opt_level:int=1, opt_options:{str}=''):
 		'''
 		Set up this project.
 		stdlib, extensions, builtins, overrides : extra directories to search before the standard paths
 		builddir : the target build directory
-		limit : only files matching this regex as part of the program set
+		include : only files matching this regex are part of the program set
+		exclude : only files NOT matching this regex are part of the program set
+		opt_level : 0 or 1, corresponding to sap and asp respectively
+		opt_options : set of string options
+			nodocstrings -- elide docstrings from output executable  
 		'''
 		self.programs = programs
 		self.roots = roots
@@ -120,7 +125,11 @@ class MelanoProject:
 		self.c_version = version
 		self.c_abi = abi
 
-		self.limit = re.compile(limit)
+		self.limit_include = re.compile(include)
+		self.limit_exclude = re.compile(exclude)
+
+		self.opt_level = opt_level
+		self.opt_options = opt_options
 
 		self.cache.prepare(programs, roots, stdlib, extensions, builtins, override)
 
@@ -275,7 +284,7 @@ class MelanoProject:
 		if not programs: programs = self.programs
 		for program in programs:
 			# apply the low-level transformation
-			visitor = Py2C()
+			visitor = Py2C(self.opt_level, self.opt_options)
 			for fn in self.order:
 				mod = self.modules_by_path[fn]
 				if self.is_local(mod):
@@ -342,7 +351,9 @@ class MelanoProject:
 
 	def is_local(self, mod:ast.Module) -> bool:
 		'''Return true if the module should be translated, false if bridged to.'''
-		return mod.modtype == MelanoModule.PROJECT and self.limit.match(mod.filename) is not None
+		return (mod.modtype == MelanoModule.PROJECT and
+				self.limit_include.match(mod.filename) is not None and
+				self.limit_exclude.match(mod.filename) is None)
 
 
 	def get_module_at_filename(self, filename):

@@ -136,17 +136,16 @@ class Py2C(ASTVisitor):
 	}
 
 
-	def __init__(self, **kwargs):
+	def __init__(self, opt_level, opt_options):
 		super().__init__()
 
 		# Emit helpful source-level comments
 		self.debug = True
 
 		# options
-		self.opt_elide_docstrings = kwargs.get('elide_docstrings', False)
-		self.opt_static_globals = kwargs.get('static_globals', False)
-		self.opt_static_builtins = kwargs.get('static_builtins', False)
-		self.opt_static_defaults = kwargs.get('static_defaults', False)
+		self.opt_level = opt_level
+		self.opt_options = opt_options
+		self.opt_elide_docstrings = 'nodocstrings' in opt_options
 
 		# the python hl walker context
 		self.scopes = []
