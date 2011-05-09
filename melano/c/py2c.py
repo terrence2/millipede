@@ -156,6 +156,9 @@ class Py2C(ASTVisitor):
 		#		control to work together to create a correct goto-web.
 		self.flowcontrol = []
 
+		# A stack that contains the current nest of loop variable names.
+		self.loop_vars = []
+
 		# A) If we get an exception from within an exception handling context, we need to
 		#	(1) trigger a nested exception output in our traceback line list
 		# -- i think this is all -- the new exception appears to stomp the old exception in libpython
@@ -830,7 +833,7 @@ class Py2C(ASTVisitor):
 	def visit_Break(self, node):
 		self.comment('break')
 		def break_handler(label): # the next break is our ultimate target
-			self.loop_var.decref() # NOTE: cleanup the loop variable
+			self.loop_vars[-1].decref() # NOTE: cleanup the loop variable
 			self.clear_exception()
 			self.ctx.add(c.Goto(label))
 			return True
@@ -1150,15 +1153,16 @@ class Py2C(ASTVisitor):
 		iter_obj.get_iter(iter)
 
 		# the gets the object locally inside of the while expr; we do the full assignment inside the body
-		self.loop_var = PyObjectLL(None, self)
-		self.loop_var.declare()
-		stmt = self.ctx.add(c.While(c.Assignment('=', c.ID(self.loop_var.name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound()))
+		self.loop_vars.append(PyObjectLL(None, self))
+		self.loop_vars[-1].declare()
+		stmt = self.ctx.add(c.While(c.Assignment('=', c.ID(self.loop_vars[-1].name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound()))
 		with self.new_context(stmt.stmt):
 			with self.new_label(break_label), self.new_label(continue_label):
-				self._store_any(node.target, self.loop_var)
+				self._store_any(node.target, self.loop_vars[-1])
 				self.visit_nodelist(node.body)
 			self.ctx.add(c.Label(continue_label))
-			self.loop_var.decref()
+			self.loop_vars[-1].decref()
+		self.loop_vars.pop()
 
 		# handle the no-break case: else
 		# if we don't jump to forloop, then we need to just run the else block
