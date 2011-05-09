@@ -231,7 +231,7 @@ class MelanoProject:
 		visited = set()
 		def _index(self):
 			nonlocal missing, records, visited
-			for fn in self.order:
+			for fn in reversed(self.order):
 				if fn not in missing or missing[fn] > 0:
 					mod = self.modules_by_path[fn]
 					if fn not in missing:
@@ -263,7 +263,7 @@ class MelanoProject:
 	def link_references(self):
 		'''Look through our module's reachability and our names databases to find
 			the actual definition points for all referenced code.'''
-		for fn in self.order:
+		for fn in reversed(self.order):
 			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
 				logging.info("Linking: {}".format(mod.filename))
@@ -273,7 +273,7 @@ class MelanoProject:
 
 	def derive_types(self):
 		'''Look up-reference and thru-call to find the types of all names.'''
-		for fn in self.order:
+		for fn in reversed(self.order):
 			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
 				logging.info("Typing: {}".format(mod.filename))
