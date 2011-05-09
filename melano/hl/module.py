@@ -2,7 +2,6 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
-from melano.hl.builtins import Builtins
 from melano.hl.entity import Entity
 from melano.hl.name import Name
 from melano.hl.scope import Scope
@@ -22,7 +21,7 @@ class MelanoModule(Scope, Entity):
 	PROJECT = 3
 
 
-	def __init__(self, modtype:int, filename:str, dottedname:str, builtins_scope:Builtins):
+	def __init__(self, modtype:int, filename:str, dottedname:str, builtins_scope):
 		'''
 		The source is the location (project root relative) where
 		this module can be found.

@@ -94,7 +94,7 @@ class MelanoProject:
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
 
 		# build a 'scope' for our builtins
-		self.builtins_scope = Builtins(Name('builtins', None, None))
+		self.builtins_scope = Builtins(MelanoModule.BUILTIN, '<builtin>', 'builtins', None)
 		for n in PY_BUILTINS:
 			self.builtins_scope.add_symbol(n)
 
@@ -178,7 +178,10 @@ class MelanoProject:
 				logging.info("mapping module: " + modname + ' -> ' + filename)
 
 				# create the module
-				mod = MelanoModule(modtype, filename, modname, self.builtins_scope)
+				if modname == 'builtins' and modtype == MelanoModule.BUILTIN:
+					mod = self.builtins_scope
+				else:
+					mod = MelanoModule(modtype, filename, modname, self.builtins_scope)
 				mod.ast = ast
 				mod.owner.ast = ast
 				mod.ast.hl = mod
