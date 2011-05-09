@@ -49,8 +49,10 @@ class MelanoModule(Scope, Entity):
 		self.real_name = None
 
 		# add names common
+		#FIXME: the name field of these should be the _name_, not the value... figure out where to put the value
 		self.add_symbol('__name__', Name(dottedname, self, None))
 		self.add_symbol('__file__', Name(filename, self, None))
+		self.add_symbol('__doc__', Name('', self, None))
 
 		# the refs table contains referenced modules (not the symbols they pull in, just a 
 		#	mapping from the accessing module name to the module itself).
