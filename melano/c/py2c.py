@@ -1485,6 +1485,7 @@ class Py2C(ASTVisitor):
 					self.ll_module.set_initial_string_attribute('__file__', self.hl_module.filename)
 					docstring, body = self.split_docstring(node.body)
 					self.ll_module.set_initial_string_attribute('__doc__', docstring)
+					sym = node.hl.get_symbol('__doc__').name = docstring
 
 					# record the top-level context in the scope, so we can declare toplevel variables when in a sub-contexts
 					self.scope.ctx = self.ctx
