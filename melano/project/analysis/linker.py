@@ -147,8 +147,7 @@ class Linker(ASTVisitor):
 	def visit_Name(self, node):
 		if node.ctx in [py.Load, py.Del]:
 			sym = self.scope.lookup(str(node))
-			ref = self.scope.add_reference(sym)
-			node.hl = ref
+			node.hl = NameRef(sym)
 
 
 	def visit_SetComp(self, node):
@@ -179,12 +178,10 @@ class Linker(ASTVisitor):
 			if isinstance(handler.type, py.Tuple):
 				for name in handler.type.elts:
 					sym = self.scope.lookup(str(name))
-					ref = self.scope.add_reference(sym)
-					name.hl = ref
+					name.hl = NameRef(sym)
 			elif isinstance(handler.type, py.Name):
 				sym = self.scope.lookup(str(handler.type))
-				ref = self.scope.add_reference(sym)
-				handler.type.hl = ref
+				handler.type.hl = NameRef(sym)
 			else:
 				assert handler is node.handlers[-1], "default 'except' must be last"
 			# NOTE: don't bother visiting the name, since we know it is a Store

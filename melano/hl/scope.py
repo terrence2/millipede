@@ -75,15 +75,6 @@ class Scope:
 		return self.symbols[name]
 
 
-	def add_reference(self, sym:Name):
-		'''Add a reference to an existing name.  If we already have reffed, or otherwise own
-			the name, skip this and return the already set name.'''
-		if sym.name in self.symbols:
-			return self.symbols[sym.name]
-		self.symbols[sym.name] = NameRef(sym)
-		return self.symbols[sym.name]
-
-
 	def set_reference(self, sym:Name):
 		'''Add a reference to an existing name.  Like add reference, except that this ensures
 			that the captured name _is_ a reference.  We use this when we know we are not
