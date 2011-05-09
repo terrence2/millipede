@@ -62,8 +62,8 @@ class NameRef:
 	def lookup_attribute(self, attrname):
 		return self.ref.lookup_attribute(self, attrname)
 
-	def add_attribute(self, attrname, attrtype):
-		return self.ref.add_attribute(attrname, attrtype)
+	def add_attribute(self, attrname, attrtype, ast):
+		return self.ref.add_attribute(attrname, attrtype, ast)
 
 	def add_subscript(self, slice, reftype):
 		return self.ref.add_subscript(slice, reftype)

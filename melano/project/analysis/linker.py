@@ -43,7 +43,7 @@ class Linker(ASTVisitor):
 		assert node.attr.hl is None
 		node.attr.hl = Name(str(node.attr), node.value.hl, node)
 		node.hl = NameRef(node.attr.hl)
-		node.value.hl.add_attribute(str(node.attr), node.attr.hl)
+		node.value.hl.add_attribute(str(node.attr), node.attr.hl, node)
 
 
 	def visit_AugAssign(self, node):
