@@ -164,13 +164,8 @@ class PyClosureLL(PyFunctionLL):
 	def _runner_cleanup(self):
 		super()._runner_cleanup()
 
-		# clean up all locals references when we leave this frame
-		for _, (i, j) in self.locals_map.items():
-			if i == self.own_scope_offset:
-				ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
-				self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(ref)))
-
 		# clean up the locals holder
+		# Note: the locals will decref all held references, so we don't need to explicitly do any cleanup here
 		self.v.ctx.add(c.FuncCall(c.ID('MpLocals_Destroy'), c.ExprList(
 																					c.ID(self.stack_name), c.Constant('integer', self.own_scope_offset))))
 

@@ -7,6 +7,7 @@ MpLocals_Create(Py_ssize_t cnt) {
     MpLocals *locals;
     locals = (MpLocals *)malloc(sizeof(MpLocals));
     locals->refcnt = 0;
+    locals->locals_count = cnt;
     if(cnt > 0) {
         locals->locals = (PyObject **)calloc(cnt, sizeof(PyObject*));
     } else {
@@ -17,10 +18,14 @@ MpLocals_Create(Py_ssize_t cnt) {
 
 void
 MpLocals_Destroy(MpStack *stack, Py_ssize_t level) {
+    Py_ssize_t i;
     if(!stack[level])
         return;
     stack[level]->refcnt -= 1;
     if(stack[level]->refcnt == 0) {
+        for(i = 0; i < stack[level]->locals_count; i++) {
+            Py_XDECREF(stack[level]->locals[i]);
+        }
         if(stack[level]->locals) {
             free(stack[level]->locals);
         }

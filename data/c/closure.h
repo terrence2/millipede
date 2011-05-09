@@ -9,6 +9,7 @@ extern "C" {
 
 typedef struct {
     Py_ssize_t refcnt;
+    Py_ssize_t locals_count;
     PyObject **locals;
 } MpLocals;
 
