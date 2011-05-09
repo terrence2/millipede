@@ -832,7 +832,8 @@ class Py2C(ASTVisitor):
 	def visit_Break(self, node):
 		self.comment('break')
 		def break_handler(label): # the next break is our ultimate target
-			self.loop_vars[-1].decref() # NOTE: cleanup the loop variable
+			var = self.loop_vars[-1]
+			if var: var.decref() # NOTE: cleanup the loop variable
 			self.clear_exception()
 			self.ctx.add(c.Goto(label))
 			return True
@@ -1780,6 +1781,8 @@ class Py2C(ASTVisitor):
 		break_label = self.scope.get_label('break_while')
 		continue_label = self.scope.get_label('continue_while')
 
+		self.loop_vars.append(None)
+
 		# Note: we use a do{}while(1) with manual break, instead of the more direct while(){}, so that we only
 		#		have to visit/emit the test code once, rather than once outside and once at the end of the loop.
 		dowhile = c.DoWhile(c.Constant('integer', 1), c.Compound())
@@ -1806,6 +1809,8 @@ class Py2C(ASTVisitor):
 
 			# continue on to immediately before test for continue
 			self.ctx.add(c.Label(continue_label))
+
+		self.loop_vars.pop()
 
 		# add the non-break (at the python level, not the c level) case for else
 		self.visit_nodelist(node.orelse)
