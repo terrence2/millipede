@@ -1,7 +1,7 @@
 Millipede - Give your snake legs!
 ======
 
-Millipede is a Python compiler.
+Millipede is a Python application compiler.
 
 
 Goal
@@ -30,7 +30,7 @@ Turning Python into C++ is not the goal!  We want our full, type-agnostic dynami
 
 What about JITing?
 ------------------
-A tracing JIT is simply code execution cache.  This is a planned feature for Millipede.
+A tracing JIT is simply a code execution cache.  This is a planned feature for Millipede.
 
 
 Current Status
@@ -39,7 +39,7 @@ Millipede is fully self hosting, and it's performance in most cases is roughly e
 
 Halfway There: The GUI elements exist (built on PyQt4) although the highlighting engine is still mostly pointing at a prior experiment and are, thus, mainly broken at the moment.
 
-Halfway There: Standard compiler optimzations, like control flow and type analysis.
+Halfway There: Many optimizations based on control flow and type analysis.
 
 
 Playing with Millipede
