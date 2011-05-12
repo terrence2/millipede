@@ -1,23 +1,23 @@
 Millipede - Give your snake legs!
 ======
 
-Millipede is a Python-to-C translator, using CPython's libpython, similar in concept to Nuitka, but with a different focus.
+Millipede is a Python compiler.
 
 
 Goal
 ----
 
-Python is a blazingly fast language (really!), but only if the programming task is abstract enough to make use of the full suite of Python's features -- e.g. a program written in C at a similar level of abstraction would have similar speed.  Python appears slow compared to many other languages in benchmarks largely because many/most programming tasks (particularly in benchmarks) do not take advantage of the majority of Python's features.  The goal of Melano is to have our cake and eat it too -- to provide the full power of Python when it's called for and to automatically remove unused abstractions for maximal performance everywhere else.
+Python is a blazingly fast language, but only if the programming task is abstract enough to make use of the full suite of Python's features -- e.g. a program written in C at a similar level of abstraction would have similar speed.  Python appears slow compared to many other languages in benchmarks largely because many/most programming tasks (particularly in benchmarks) do not take advantage of the majority of Python's features.  The goal of Millipede is to have our cake and eat it too -- to provide the full power of Python when it's called for and to automatically remove unused abstractions for maximal performance everywhere else.
 
 
 How we do this:
 ---------------
 
 1) Static analysis --
-We use offline analysis of a project's source to pull out semantic information about how it uses Python.  Unfortunately, in order to get any level of useful knowledge out of a project's source we need to do whole-program analysis; furthermore, doing this sort of static analysis is slow.  The upshot is that this works best if we compile a full project at once, rather than doing the analysis one-file-at-a-time.  This is the one major incompatibility between Melano and Python.  However, it's not a total lost cause, since importing files we haven't analyzed simply emits a PyImport_ImportModule(...) and runs them in the normal Python interpreter loop.  Therefore, we can still be useful for programs that have a central core of functionality and add (at runtime) extensions or plugins to that base.
+We use offline analysis of a project's source to pull out semantic information about how it uses Python.  Unfortunately, in order to get any level of useful knowledge out of a project's source we need to do whole-program analysis; furthermore, doing this sort of static analysis is slow.  The upshot is that this works best if we compile a full project at once, rather than doing the analysis one-file-at-a-time.  This is the one major incompatibility between Millipede and Python.  However, it's not a total lost cause, since importing files we haven't analyzed simply emits a PyImport_ImportModule(...) and runs them in the normal Python interpreter loop.  Therefore, we can still be useful for programs that have a central core of functionality and add (at runtime) extensions or plugins to that base.
 
 2) Feedback from the Analysis --
-If compilation is a completely opaque process, it is hard for a programmer to understand why a certain bit of code is compiled the way it is.  Melano will integrate a GUI that shows the results of static analysis and tag that analysis with the information a programmer needs to optimize their code.  For example, if a module optionally aliases a builtin in a global variable, then using that builtin in a tight inner loop will be slow.  This is something that is easy for a programmer to fix (e.g. by assigning the builtin to a local), but only if they notice the problem in the first place.  
+If compilation is a completely opaque process, it is hard for a programmer to understand why a certain bit of code is compiled the way it is.  Millipede will integrate a GUI that shows the results of static analysis and tag that analysis with the information a programmer needs to optimize their code.  For example, if a module optionally aliases a builtin in a global variable, then using that builtin in a tight inner loop will be slow.  This is something that is easy for a programmer to fix (e.g. by assigning the builtin to a local), but only if they notice the problem in the first place.  
 
 It should be both fast and easy to scan a piece of code for potential trouble spots.  We see this becoming something like predator vision modes for code: the highlight color of a name will be based on the specificity of their derived type, the amount of indirection required for accesses, etc.
 
@@ -30,31 +30,23 @@ Turning Python into C++ is not the goal!  We want our full, type-agnostic dynami
 
 What about JITing?
 ------------------
-JITing is the way of the future.  Unfortunately though, that is the future, and not the whole story as of this moment.
-
-Extenuating factors leading to Millipede:
-
-1) Python3 support.  Right now.  (Although that's changing fast)
-
-2) Some applications are static by their very nature: i.e. serialization frameworks.  In these cases, dynamic recompilation is not going to be able to do much better than a static compiler.
-
-3) Some applications need low latency and can't afford to wait for a JIT, even if the aggregate performance is lower.
-
-4) JIT's currently only target loops, so code paths that run very frequently, but are not in a loop, do not benefit.
+A tracing JIT is simply code execution cache.  This is a planned feature for Millipede.
 
 
 Current Status
 --------------
-Millipede is fully self hosting.
+Millipede is fully self hosting, and it's performance in most cases is roughly equal in speed to CPython.
 
 Halfway There: The GUI elements exist (built on PyQt4) although the highlighting engine is still mostly pointing at a prior experiment and are, thus, mainly broken at the moment.
 
+Halfway There: Standard compiler optimzations, like control flow and type analysis.
 
-Playing with Melano
+
+Playing with Millipede
 -------------------
 For the truely brave/foolhardy:
 
-> python3 run.py path/to/translate.py
+> python3 run.py -P 3.1 -O asp path/to/translate.py
 ### This will spit out some stuff and maybe create a test.c, if you are lucky.
 ### Good candidates of things that are likely to work are in test/<foo>/<bar>.py
 > make
