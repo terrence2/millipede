@@ -418,8 +418,11 @@ class PyFunctionLL(PyObjectLL):
 
 
 	def del_attr_string(self, attrname):
-		self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(self.locals_map[attrname]))))
-		self.v.ctx.add(c.Assignment('=', c.ID(self.locals_map[attrname]), c.ID('NULL')))
+		#NOTE: we don't own the ref on our args
+		if attrname not in self.args_pos_map:
+			self.v.ctx.add(c.FuncCall(c.ID('Py_CLEAR'), c.ExprList(c.ID(self.locals_map[attrname]))))
+		else:
+			self.v.ctx.add(c.Assignment('=', c.ID(self.locals_map[attrname]), c.ID('NULL')))
 
 
 	def set_attr_string(self, attrname, val):
