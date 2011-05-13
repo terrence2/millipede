@@ -20,6 +20,10 @@ class NameRef:
 		self.is_nonlocal = False
 
 
+	def deref(self):
+		return self.ref.deref()
+
+
 	@property
 	def name(self):
 		return self.ref.name

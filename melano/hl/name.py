@@ -82,3 +82,10 @@ class Name(Entity):
 			logging.info('{}Name: {}'.format('\t' * level, self.name))
 
 
+	def deref(self):
+		return self
+
+
+	def __str__(self):
+		return '<MpName:' + self.name + '>'
+
