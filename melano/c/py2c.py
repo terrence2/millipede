@@ -179,8 +179,11 @@ class Py2C(ASTVisitor):
 		# add common names
 		self.builtins = PyObjectLL(None, self)
 		self.builtins.declare(is_global=True, quals=['static'], name='builtins')
-		self.none = PyObjectLL(None, self)
-		self.none.declare(is_global=True, quals=['static'], name='None')
+		self.builtin_refs = {}
+		for name in PY_BUILTINS:
+			self.builtin_refs[name] = PyObjectLL(None, self)
+			self.builtin_refs[name].declare(is_global=True, quals=['static'], name=name)
+		self.none = self.builtin_refs['None']
 
 		# the main function -- handles init, cleanup, and error printing at top level
 		self.tu.reserve_global_name('main')
@@ -196,9 +199,11 @@ class Py2C(ASTVisitor):
 					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('wchar_t'))), c.Constant('integer', 4)))),
 					c.FuncCall(c.ID('__init__'), c.ExprList(c.ID('argc'), c.ID('argv'))),
 					c.Assignment('=', c.ID(self.builtins.name), c.FuncCall(c.ID('PyImport_ImportModule'), c.ExprList(c.Constant('string', 'builtins')))),
-					c.Assignment('=', c.ID(self.none.name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.builtins.name), c.Constant('string', 'None')))),
 			)
 		)
+		for name in PY_BUILTINS:
+			self.main.body.add(c.Assignment('=', c.ID(self.builtin_refs[name].name), c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.builtins.name), c.Constant('string', name)))))
+
 		self.tu.add_fwddecl(self.main.decl)
 		self.tu.add(c.Comment(' ***Entry Point*** '))
 		self.tu.add(self.main)
