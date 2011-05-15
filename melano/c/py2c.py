@@ -158,6 +158,10 @@ class Py2C(ASTVisitor):
 		# A stack that contains the current nest of loop variable names.
 		self.loop_vars = []
 
+		# This contains the set of all available (at a C scope) temp var names and the set of all in-use (in an expr) names.
+		self.tmp_names = [set()]
+		self.tmp_used = [set()]
+
 		# A) If we get an exception from within an exception handling context, we need to
 		#	(1) trigger a nested exception output in our traceback line list
 		# -- i think this is all -- the new exception appears to stomp the old exception in libpython
@@ -776,6 +780,9 @@ class Py2C(ASTVisitor):
 			l.power(r, inst)
 		else:
 			raise NotImplementedError("BinOp({})".format(node.op))
+
+		l.decref()
+		r.decref()
 
 		return inst
 

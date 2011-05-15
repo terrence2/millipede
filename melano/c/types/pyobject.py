@@ -20,9 +20,16 @@ class PyObjectLL(LLType):
 		super().declare(is_global=is_global, quals=quals, name=name, **kwargs)
 		ctx = self.v.tu if is_global else self.v.scope.ctx
 		ctx.add_variable(c.Decl(self.name, self.typedecl(self.name), quals=quals, init=c.ID('NULL')), need_cleanup=need_cleanup)
+		if name is None:
+			self.v.tmp_names[-1].add(name)
+
+
+	def new(self):
+		self.v.tmp_used[-1].add(self.name)
 
 
 	def clear(self):
+		if self.name in self.v.tmp_used[-1]: self.v.tmp_used[-1].remove(self.name)
 		self.v.ctx.add(c.FuncCall(c.ID('Py_CLEAR'), c.ID(self.name)))
 
 
@@ -35,10 +42,12 @@ class PyObjectLL(LLType):
 
 
 	def decref(self):
+		if self.name in self.v.tmp_used[-1]: self.v.tmp_used[-1].remove(self.name)
 		self.v.ctx.add(c.FuncCall(c.ID('Py_DECREF'), c.ID(self.name)))
 
 
 	def xdecref(self):
+		if self.name in self.v.tmp_used[-1]: self.v.tmp_used[-1].remove(self.name)
 		self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ID(self.name)))
 
 
