@@ -9,8 +9,10 @@ from melano.c.out import COut
 from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.hl.builtins import Builtins
+from melano.hl.cfg.basicblock import BasicBlock
 from melano.hl.module import MelanoModule
 from melano.hl.name import Name
+from melano.project.analysis.cfgbuilder import CFGBuilder
 from melano.project.analysis.clean import Clean
 from melano.project.analysis.indexer0 import Indexer0
 from melano.project.analysis.indexer1 import Indexer1
@@ -27,6 +29,7 @@ import os
 import pdb
 import pickle
 import re
+import sys
 
 
 class FileNotFoundException(Exception):
@@ -151,6 +154,7 @@ class MelanoProject:
 		self.index_imports()
 		self.link_references()
 		self.derive_types()
+		self.build_cfg()
 		c = self.transform_ll_c([program], target, False)
 
 
@@ -160,6 +164,7 @@ class MelanoProject:
 		self.index_imports()
 		self.link_references()
 		self.derive_types()
+		self.build_cfg()
 		self.transform_ll_c()
 
 
@@ -279,6 +284,20 @@ class MelanoProject:
 				logging.info("Typing: {}".format(mod.filename))
 				typer = Typer(self, mod)
 				typer.visit(mod.ast)
+
+
+	def build_cfg(self):
+		'''Compute control flow graphs for use when emitting code.'''
+		for prog in self.programs:
+			mod = self.get_module_at_dottedname(prog)
+			logging.info("Building CFG: {}".format(mod.filename))
+			cfgbuilder = CFGBuilder(self)
+			cfgbuilder.visit(mod.ast)
+			cfgbuilder.cfg.analyze()
+
+			cfgbuilder.cfg.show(sys.stdout)
+			with open('test.gdf', 'w') as fp:
+				BasicBlock.show_gdf(fp, cfgbuilder.cfg)
 
 
 	def transform_ll_c(self, programs=None, target=None, emit_makefile=True):

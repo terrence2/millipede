@@ -6,8 +6,12 @@ All rights reserved.
 class AST:
 	'''Base class of all ast nodes.'''
 	_fields = ()
-	__slots__ = ('symbol', 'hl', 'start', 'end') #'llnode')
+	__slots__ = ('symbol', 'hl', 'bb', 'bb_else', 'start', 'end') #'llnode')
 	def __init__(self, llnode):
+
+		# FIXME: push these down to block that actually use them?
+		self.bb = self.bb_else = None
+
 		#self.llnode = None
 		self.hl = None
 		self.symbol = None
