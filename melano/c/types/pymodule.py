@@ -131,7 +131,7 @@ class PyModuleLL(PyObjectLL):
 		# access globals first, fall back to builtins -- remember to ref the global if we get it, since dict get item borrows
 		#out.xdecref()
 		self.ll_dict.get_item_string_nofail(attrname, out)
-		frombuiltins = self.v.ctx.add(c.If(c.FuncCall(c.ID(mode), 
+		frombuiltins = self.v.ctx.add(c.If(c.FuncCall(c.ID(mode),
 				c.ExprList(c.UnaryOp('!', c.ID(out.name)))), c.Compound(), None))
 		with self.v.new_context(frombuiltins.iftrue):
 			self.v.builtins.get_attr_string_with_exception(attrname, out, 'PyExc_NameError', "name '{}' is not defined".format(attrname))
