@@ -12,6 +12,7 @@ class LLType:
 		self.hlnode = hlnode
 		self.hltype = hlnode.get_type() if hlnode else None
 		self.name = None #set when we declare
+		self.is_tmp = False # helps controls the lifetime of this instance
 
 
 	def declare(self, *, is_global=False, quals=[], name=None):
@@ -29,6 +30,7 @@ class LLType:
 				self.name = fn(self.hlnode.name, *args)
 			else:
 				assert not is_global
+				self.is_tmp = True
 				self.name = self.v.scope.ctx.tmpname(self.v.tu)
 
 
