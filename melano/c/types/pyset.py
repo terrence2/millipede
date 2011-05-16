@@ -9,6 +9,7 @@ from melano.c.types.pyobject import PyObjectLL
 
 class PySetLL(PyObjectLL):
 	def new(self, iterable=None):
+		super().new()
 		iterable_name = iterable.name if iterable else 'NULL'
 		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PySet_New'), c.ExprList(c.ID(iterable_name)))))

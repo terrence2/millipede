@@ -143,6 +143,7 @@ class PyStringLL(PyObjectLL):
 
 
 	def new(self, py_init):
+		super().new()
 		# wchar_t is a signed type (!?!), so we need to do some checking here
 		init = self.python_to_c_string(py_init)
 		strlen = self.strlen(init)

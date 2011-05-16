@@ -8,6 +8,7 @@ from melano.c.types.pyobject import PyObjectLL
 
 class PyFloatLL(PyObjectLL):
 	def new(self, n):
+		super().new()
 		return self._new_from_double(c.Constant('double', n))
 
 

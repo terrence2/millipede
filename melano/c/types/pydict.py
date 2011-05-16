@@ -9,6 +9,8 @@ from melano.c.types.pyobject import PyObjectLL
 
 class PyDictLL(PyObjectLL):
 	def new(self):
+		super().new()
+		#FIXME: missing xdecref
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyDict_New'), c.ExprList())))
 		self.fail_if_null(self.name)
 

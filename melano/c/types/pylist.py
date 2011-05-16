@@ -9,6 +9,7 @@ from melano.c.types.pyobject import PyObjectLL
 
 class PyListLL(PyObjectLL):
 	def new(self):
+		super().new()
 		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyList_New'), c.ExprList(c.Constant('integer', 0)))))
 

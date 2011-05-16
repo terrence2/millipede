@@ -15,6 +15,7 @@ class PyTupleLL(PyObjectLL):
 
 
 	def new(self, size:int or LLType):
+		super.new()
 		if isinstance(size, int):
 			c_sz = c.Constant('integer', size)
 			self._length = size

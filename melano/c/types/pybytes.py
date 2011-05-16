@@ -21,6 +21,7 @@ class PyBytesLL(PyObjectLL):
 
 
 	def new(self, py_init):
+		super().new()
 		init = self.bytes2c(py_init)
 		strlen = self.strlen(init)
 		assert all(map(lambda x: ord(x) < 256 and ord(x) >= 0, init)), 'Out of range character for char in: {}'.format(init)
