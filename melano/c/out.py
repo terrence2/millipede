@@ -222,7 +222,7 @@ class COut(ASTVisitor):
 	def visit_TranslationUnit(self, node):
 		for n in node.ext:
 			self.visit(n)
-			if not isinstance(n, (CPP, FuncDef)):
+			if not isinstance(n, (CPP, FuncDef, c.WhiteSpace)):
 				self.fp.write(';')
 			self.fp.write('\n')
 
