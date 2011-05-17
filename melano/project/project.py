@@ -306,7 +306,7 @@ class MelanoProject:
 		if not programs: programs = self.programs
 		for program in programs:
 			# apply the low-level transformation
-			visitor = Py2C(self.opt_level, self.opt_options)
+			visitor = Py2C(self.opt_level, self.opt_options, self.builtins_scope)
 			for fn in self.order:
 				mod = self.modules_by_path[fn]
 				if self.is_local(mod):

@@ -136,7 +136,7 @@ class Py2C(ASTVisitor):
 	}
 
 
-	def __init__(self, opt_level, opt_options):
+	def __init__(self, opt_level, opt_options, hl_builtins):
 		super().__init__()
 
 		# Emit helpful source-level comments
@@ -181,12 +181,13 @@ class Py2C(ASTVisitor):
 		self.tu.add_include(c.Include('genobject.h', False))
 
 		# add common names
-		self.builtins = PyObjectLL(None, self)
-		self.builtins.declare(is_global=True, quals=['static'], name='builtins')
+		self.hl_builtins = hl_builtins
+		self.builtins = PyObjectLL(hl_builtins, self)
+		self.builtins.declare(is_global=True, quals=['static'])
 		self.builtin_refs = {}
 		for name in PY_BUILTINS:
-			self.builtin_refs[name] = PyObjectLL(None, self)
-			self.builtin_refs[name].declare(is_global=True, quals=['static'], name=name)
+			self.builtin_refs[name] = PyObjectLL(self.hl_builtins.lookup(name), self)
+			self.builtin_refs[name].declare(is_global=True, quals=['static'])
 		self.none = self.builtin_refs['None']
 
 		# the main function -- handles init, cleanup, and error printing at top level
