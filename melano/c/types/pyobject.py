@@ -37,17 +37,17 @@ class PyObjectLL(LLType):
 
 
 	def decref(self):
-		if self.is_tmp: self.v.tmp_used[-1].remove(self.name)
+		#if self.is_tmp: self.v.tmp_used[-1].remove(self.name)
 		self.v.ctx.add(c.FuncCall(c.ID('Py_DECREF'), c.ID(self.name)))
 
 
 	def xdecref(self):
-		if self.is_tmp: self.v.tmp_used[-1].remove(self.name)
+		#if self.is_tmp: self.v.tmp_used[-1].remove(self.name)
 		self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ID(self.name)))
 
 
 	def clear(self):
-		if self.is_tmp: self.v.tmp_used[-1].remove(self.name)
+		#if self.is_tmp: self.v.tmp_used[-1].remove(self.name)
 		self.v.ctx.add(c.FuncCall(c.ID('Py_CLEAR'), c.ID(self.name)))
 
 
