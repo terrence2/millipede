@@ -14,6 +14,7 @@ def parse_args():
 
 	build_opts = OptionGroup(parser, 'Build Options', "If these options do not give you enough freedom to correctly " + \
 							"specify your python on your platform of choice, please file a bug report!")
+	build_opts.add_option('-v', '--verbose', action="store_true", help="Print more information while we compile.")
 	build_opts.add_option('-P', '--python', dest='version', default='3.1', metavar='3.X', help="Version of Python to build against")
 	build_opts.add_option('-p', '--prefix', default='/usr', metavar='PREFIX', help="Where do we find python?")
 	build_opts.add_option('-A', '--abi', default='', metavar='ABI', help="Python's ABI definition string (e.g. du, dmu, etc)")
@@ -80,7 +81,7 @@ def main():
 					stdlib=stdlib, extensions=extensions,
 					prefix=opts.prefix, version=opts.version, abi=opts.abi,
 					include=opts.include, exclude=opts.exclude,
-					verbose=False, opt_level=opts.opt, opt_options=opts.options
+					verbose=opts.verbose, opt_level=opts.opt, opt_options=opts.options
 				)
 	project.build_one(fn[:-3], 'test.c')
 

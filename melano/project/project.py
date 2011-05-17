@@ -180,7 +180,7 @@ class MelanoProject:
 			for modname, filename, modtype, ref_paths, ast in reversed(importer.out):
 				if filename in self.modules_by_path:
 					continue
-				logging.info("mapping module: " + modname + ' -> ' + filename)
+				if self.verbose: logging.info("mapping module: " + modname + ' -> ' + filename)
 
 				# create the module
 				if modname == 'builtins' and modtype == MelanoModule.BUILTIN:
@@ -218,7 +218,7 @@ class MelanoProject:
 		for fn in self.order:
 			mod = self.modules_by_path[fn]
 
-			logging.info("Indexing0: {}".format(mod.filename))
+			if self.verbose: logging.info("Indexing0: {}".format(mod.filename))
 			indexer = Indexer0(self, mod)
 			indexer.visit(mod.ast)
 
@@ -239,10 +239,11 @@ class MelanoProject:
 			for fn in reversed(self.order):
 				if fn not in missing or missing[fn] > 0:
 					mod = self.modules_by_path[fn]
-					if fn not in missing:
-						logging.info("Indexing1: {}".format(mod.filename))
-					else:
-						logging.info("[{} remaining] Indexing1: {}".format(sum(list(missing.values())), fn))
+					if self.verbose:
+						if fn not in missing:
+							logging.info("Indexing1: {}".format(mod.filename))
+						else:
+							logging.info("[{} remaining] Indexing1: {}".format(sum(list(missing.values())), fn))
 					indexer = Indexer1(self, mod, visited)
 					indexer.visit(mod.ast)
 					missing[fn] = len(indexer.missing)
@@ -268,29 +269,33 @@ class MelanoProject:
 	def link_references(self):
 		'''Look through our module's reachability and our names databases to find
 			the actual definition points for all referenced code.'''
+		logging.info("Linking")
 		for fn in reversed(self.order):
 			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
-				logging.info("Linking: {}".format(mod.filename))
+				if self.verbose: logging.info("Linking: {}".format(mod.filename))
 				linker = Linker(self, mod)
 				linker.visit(mod.ast)
 
 
 	def derive_types(self):
 		'''Look up-reference and thru-call to find the types of all names.'''
+		logging.info("Typing")
 		for fn in reversed(self.order):
 			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
-				logging.info("Typing: {}".format(mod.filename))
+				if self.verbose: logging.info("Typing: {}".format(mod.filename))
 				typer = Typer(self, mod)
 				typer.visit(mod.ast)
 
 
 	def build_cfg(self):
 		'''Compute control flow graphs for use when emitting code.'''
+		return
+		logging.info("Building CFG")
 		for prog in self.programs:
 			mod = self.get_module_at_dottedname(prog)
-			logging.info("Building CFG: {}".format(mod.filename))
+			if self.verbose: logging.info("Building CFG: {}".format(mod.filename))
 			cfgbuilder = CFGBuilder(self)
 			cfgbuilder.visit(mod.ast)
 			cfgbuilder.cfg.analyze()
@@ -310,14 +315,14 @@ class MelanoProject:
 			for fn in self.order:
 				mod = self.modules_by_path[fn]
 				if self.is_local(mod):
-					logging.info("Preparing: {}".format(mod.filename))
+					if self.verbose: logging.info("Preparing: {}".format(mod.filename))
 					visitor.preallocate(mod.ast)
 			for fn in self.order:
 				mod = self.modules_by_path[fn]
 				if self.is_local(mod):
 					if mod.python_name in self.programs and mod.python_name != program:
 						continue
-					logging.info("Emitting: {}".format(mod.filename))
+					if self.verbose: logging.info("Emitting: {}".format(mod.filename))
 					visitor.visit(mod.ast)
 			visitor.close()
 
@@ -400,3 +405,4 @@ class MelanoProject:
 			ast = self.parser_driver.parse_string(source)
 			self.global_cache.update_ast_data(filename, checksum, pickle.dumps(ast))
 			return ast
+

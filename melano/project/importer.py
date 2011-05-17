@@ -76,7 +76,8 @@ class Importer:
 
 
 	def find_links(self, initial_modname, absolute_modfile, package_directory, base_location):
-		logging.info("Scanning: {} -> {}".format(initial_modname, absolute_modfile))
+		if self.project.verbose:
+			logging.info("Scanning: {} -> {}".format(initial_modname, absolute_modfile))
 		ref_paths = {}
 		ast = self.project.get_file_ast(absolute_modfile)
 
