@@ -782,9 +782,6 @@ class Py2C(ASTVisitor):
 		else:
 			raise NotImplementedError("BinOp({})".format(node.op))
 
-		l.decref()
-		r.decref()
-
 		return inst
 
 
