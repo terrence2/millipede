@@ -995,9 +995,10 @@ class Py2C(ASTVisitor):
 				args0.pack(*args_insts)
 				va_inst = self.visit(node.starargs)
 				args0_0 = args0.sequence_inplace_concat(va_inst)
-				args0.clear()
+				args0.decref()
+				va_inst.decref()
 				args1 = args0_0.sequence_as_tuple()
-				args0_0.clear()
+				args0_0.decref()
 
 			# build the keyword dict
 			args2 = None
