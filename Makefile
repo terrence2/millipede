@@ -11,6 +11,9 @@ LIBS=-pthread
 py31:
 	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/include/python3.1 -o test-prog test.c ${EXTRA_SOURCES} -lpython3.1 ${LIBS} 
 
+py32:
+	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/include/python3.2 -o test-prog test.c ${EXTRA_SOURCES} -lpython3.2 ${LIBS} 
+
 self:
 	gcc ${CFLAGS} ${CFLAGS_WARN} ${CFLAGS_OPT} ${CFLAGS_INCLUDE} -I/usr/include/python3.1 -o millipede-x-3.1 melano.c ${EXTRA_SOURCES} -lpython3.1 ${LIBS} 
 
