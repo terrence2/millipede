@@ -52,7 +52,7 @@ gen_dealloc(MpGeneratorObject *gen)
 		free(gen->data);
 		gen->data = NULL;
 	}
-	
+
 	PyObject_Del(gen);
 }
 
@@ -351,3 +351,5 @@ MpGenerator_Initialize()
 
 	PyDict_SetItemString(dict, "__generator_stack__", stack);
 }
+
+
