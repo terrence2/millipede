@@ -216,7 +216,7 @@ class COut(ASTVisitor):
 
 	def visit_StructRef(self, node):
 		self.visit(node.name)
-		self.fp.write('->')
+		self.fp.write(node.type)
 		self.visit(node.field)
 
 	def visit_TranslationUnit(self, node):
