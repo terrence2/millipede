@@ -245,23 +245,19 @@ class PyFunctionLL(PyObjectLL):
 				for i, arg in enumerate(kwonlyargs):
 					#FIXME: we can make this significantly more efficient with a bit of work
 					kwargs_dict.get_item_string_nofail(str(arg.arg), kwarg_insts[i])
-					need_default = self.v.ctx.add(c.If(c.UnaryOp('!', c.ID(kwarg_insts[i].name)), c.Compound(), c.Compound()))
+					need_default = self.v.ctx.add(c.If(c.UnaryOp('!', c.ID(kwarg_insts[i].name)), c.Compound(), None))
 
 					### not found in kwdict, means we need to load from default
 					with self.v.new_context(need_default.iftrue):
 						kwdefaults0 = PyDictLL(None, self.v)
 						kwdefaults0.declare_tmp(name='_kwdefaults')
-						#self.c_obj.get_attr_string('__kwdefaults__', kwdefaults0)
-						self.v.ctx.add(c.Assignment('=', c.ID(kwdefaults0.name),
-							c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.c_obj.name), c.Constant('string', '__kwdefaults__')))))
-						#kwdefaults0.get_item_string(str(arg.arg), kwarg_insts[i])
-						#kwdefaults0.decref()
-						need_default.iftrue.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
-							c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(kwdefaults0.name), c.Constant('string', str(arg.arg))))))
-						self.fail_if_null(kwarg_insts[i].name)
+						self.c_obj.get_attr_string('__kwdefaults__', kwdefaults0)
+						kwdefaults0.get_item_string(str(arg.arg), kwarg_insts[i])
+						kwdefaults0.decref()
 					### found in kwdict, means we need to delete from kwdict to avoid passing duplicate arg in kwargs
-					with self.v.new_context(need_default.iffalse):
-						if kwargs_inst:
+					if kwargs_inst:
+						need_default.iffalse = c.Compound()
+						with self.v.new_context(need_default.iffalse):
 							kwargs_inst.del_item_string(str(arg.arg))
 
 			## if have_kwarg.iffalse, need to load from the kwdefaults dict
@@ -273,10 +269,11 @@ class PyFunctionLL(PyObjectLL):
 				for i, arg in enumerate(kwonlyargs):
 					#have_kwarg.iffalse.add(c.Assignment('=', c.ID(kwdefaults1.name),
 					#	c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.c_obj.name), c.Constant('string', '__kwdefaults__')))))
-					#kwdefaults1.get_item_string(str(arg.arg), kwarg_insts[i])
-					have_kwarg.iffalse.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
-						c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(kwdefaults1.name), c.Constant('string', str(arg.arg))))))
-					self.fail_if_null(kwarg_insts[i].name)
+					kwdefaults1.get_item_string(str(arg.arg), kwarg_insts[i])
+					#have_kwarg.iffalse.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
+					#	c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(kwdefaults1.name), c.Constant('string', str(arg.arg))))))
+					#self.fail_if_null(kwarg_insts[i].name)
+				kwdefaults1.decref()
 
 			self.stub_arg_insts.extend(kwarg_insts)
 
