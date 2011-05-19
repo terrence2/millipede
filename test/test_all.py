@@ -74,16 +74,31 @@ def test_all(testfile, root, interpreter, version):
 
 	out = p.communicate()
 	assert p.returncode == expect['returncode']
+	actual_stdout, mem_used = filter_output(out[0])
+	actual_stderr, _ = filter_output(out[1])
+	assert mem_used == 0
 	if not expect['skip_io']:
-		assert filter_output(out[0]) == expect['stdout']
-		assert filter_output(out[1]) == expect['stderr']
+		assert actual_stdout == expect['stdout']
+		assert actual_stderr == expect['stderr']
 	if interpreter == 'melano' and expect['no_external']:
 		with open('test.c', 'r') as fp:
 			assert len([ln for ln in fp if 'PyImport_ImportModule' in ln]) <= 1
 
 def filter_output(data:bytes) -> [str]:
-	out = data.strip().decode('UTF-8').split('\n') # turn into text lines
-	return [o.strip() for o in out if o and not re.match(r'\[\d+ refs\]', o)] # remove empty elements
+	raw = data.strip().decode('UTF-8').split('\n') # turn into text lines
+	out = []
+	mem_used = 0
+	for line in raw:
+		line = line.strip()
+		if not line: continue
+		if re.match(r'\[\d+ refs\]', line): continue
+		if line.startswith('DBG_excess_mem: '):
+			mem_used = int(line[len('DBG_excess_mem: '):])
+			continue
+		out.append(line)
+
+	return out, mem_used
+
 
 
 def load_expectations(testfile):

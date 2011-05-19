@@ -146,6 +146,7 @@ class Py2C(ASTVisitor):
 		self.opt_level = opt_level
 		self.opt_options = opt_options
 		self.opt_elide_docstrings = 'nodocstrings' in opt_options
+		self.opt_debug_memory = 'debug_memory' in self.opt_options
 
 		# the python hl walker context
 		self.scopes = []
@@ -216,12 +217,24 @@ class Py2C(ASTVisitor):
 		# the low-level statment emission context... e.g. the Compound for functions, ifs, etc.
 		self.ctx = self.main.body
 
+		if self.opt_debug_memory:
+			self.tu.add_include(c.Include('malloc.h', True))
+			self.main.body.add_variable(c.Decl('mi0', c.TypeDecl('mi0', c.IdentifierType('struct mallinfo'))), need_cleanup=False)
+			self.main.body.add_variable(c.Decl('mi1', c.TypeDecl('mi1', c.IdentifierType('struct mallinfo'))), need_cleanup=False)
+			self.main.body.add(c.Assignment('=', c.ID('mi0'), c.FuncCall(c.ID('mallinfo'), c.ExprList())))
+
 		# the module we are currently processing
 		self.module = None
 
 
 	def close(self):
 		self.main.body.add(c.FuncCall(c.ID('Py_Finalize'), c.ExprList()))
+		if self.opt_debug_memory:
+			self.main.body.add(c.Assignment('=', c.ID('mi1'), c.FuncCall(c.ID('mallinfo'), c.ExprList())))
+			self.main.body.add(c.FuncCall(c.ID('printf'), c.ExprList(c.Constant('string', 'DBG_excess_mem: %d\\n'),
+																	c.BinaryOp('-',
+																			c.StructRef(c.ID('mi1'), '.', c.ID('hblkhd')),
+																			c.StructRef(c.ID('mi0'), '.', c.ID('hblkhd'))))))
 		self.main.body.add(c.Return(c.Constant('integer', 0)))
 
 
