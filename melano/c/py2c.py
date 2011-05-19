@@ -282,7 +282,11 @@ class Py2C(ASTVisitor):
 
 
 	def on_line_changed(self, lineno):
-		self.ctx.add(c.WhiteSpace(''))
+		prior = self.hl_module.get_source_line(lineno - 1).strip() if lineno > 0 else ''
+		line = self.hl_module.get_source_line(lineno).strip()
+		if not prior.endswith(':') or prior.startswith('def') or prior.startswith('class'):
+			self.ctx.add(c.WhiteSpace(''))
+		self.comment(line.replace('/', '<div>').replace('\\', '<bs>'))
 
 
 	def split_docstring(self, nodes:[py.AST]) -> (Nonable(str), [py.AST]):
