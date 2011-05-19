@@ -37,7 +37,8 @@ gen_dealloc(MpGeneratorObject *gen)
 		coro_transfer(gen->coro_source, &gen->coro);
 	}
 
-	coro_destroy(&gen->coro);
+	// Note: this is usually a no-op macro, so suppress the "unused" warning
+	__attribute__((unused)) void *ctx = coro_destroy(&gen->coro);
 
 	free(gen->stack);
 	gen->stack = NULL;
