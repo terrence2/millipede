@@ -268,6 +268,7 @@ MpGenerator_EnterContext(PyObject *obj) {
 
 	// append our capsule
 	rv = PyList_Append(stack, cap);
+	Py_DECREF(cap);
 	if(rv)
 		return -1;
 
@@ -350,6 +351,7 @@ MpGenerator_Initialize()
 	PyList_SET_ITEM(stack, 0, cap);
 
 	PyDict_SetItemString(dict, "__generator_stack__", stack);
+	Py_DECREF(stack);
 }
 
 
