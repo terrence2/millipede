@@ -6,9 +6,7 @@ def mycontextmgr():
 	yield
 	print('b')
 
-foo = mycontextmgr()
-with foo:
-	pass
+print(mycontextmgr())
 
-#out: a
-#out: b
+#this should simply not segfault
+#skip_io

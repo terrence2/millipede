@@ -3,12 +3,12 @@ from contextlib import contextmanager
 @contextmanager
 def mycontextmgr():
 	print('a')
-	yield
+	yield 'hello'
 	print('b')
 
-foo = mycontextmgr()
-with foo:
-	pass
+with mycontextmgr() as ctx:
+	print(ctx)
 
 #out: a
+#out: hello
 #out: b
