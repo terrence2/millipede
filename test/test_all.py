@@ -40,16 +40,11 @@ def test_all(testfile, root, interpreter, version):
 		if expect['xfail']:
 			pytest.xfail()
 
-		p = subprocess.Popen(['python' + version, 'run.py', '-P', version, '-O', 'asp', testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-		p.communicate()
+		p = subprocess.Popen(['python3.1', 'run.py', '-P', version, '-O', 'asp', '-o', 'debug_memory', testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		out = p.communicate()
 		assert p.returncode == 0, "Failed melano-x build for {}".format(testfile)
 
-		#fn = os.path.basename(testfile)
-		#project = MelanoProject('test', programs=[fn[:-3]], roots=[root])
-		#project.configure(limit='', verbose=False)
-		#project.build('test.c')
-
-		p = subprocess.Popen(['make'])
+		p = subprocess.Popen(['make', 'py' + ''.join(version.split('.'))])
 		out = p.communicate()
 		assert p.returncode == 0, "Failed Make: {}".format(out)
 
@@ -59,7 +54,7 @@ def test_all(testfile, root, interpreter, version):
 		if expect['xfail']:
 			pytest.xfail()
 
-		p = subprocess.Popen([os.path.join(TESTDIR, 'millipede-x-' + version), testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		p = subprocess.Popen([os.path.join(TESTDIR, 'millipede-x-' + version), '-P', version, '-O', 'asp', '-o', 'debug_memory', testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 		p.communicate()
 		assert p.returncode == 0, "Failed melano-x build for {}".format(testfile)
 
