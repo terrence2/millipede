@@ -35,6 +35,9 @@ typedef struct {
 
 	// set to 1 after we have reached the end of generation for the first time
 	int exhausted;
+	
+	// set to 1 immediately before we enter the co-routine for the first time
+	int entered;
 } MpGeneratorObject;
 
 PyObject * MpGenerator_New(char *name, coro_func func, void *data, int stacksize);

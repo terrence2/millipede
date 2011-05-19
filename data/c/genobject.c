@@ -32,7 +32,7 @@ gen_dealloc(MpGeneratorObject *gen)
 	if(DEBUG)
 		printf("GenDealloc:  %p\n", gen->coro_source);
 
-	if(!gen->exhausted) {
+	if(!gen->exhausted && gen->entered) {
 		((PyObject **)(gen->data))[SEND_INDEX] = (PyObject *)1;
 		coro_transfer(gen->coro_source, &gen->coro);
 	}
@@ -91,6 +91,9 @@ static PyObject *
 gen_iternext(MpGeneratorObject *gen)
 {
 	PyObject *rv;
+
+	// mark us as entered
+	gen->entered = 1;
 
 	// once we have reached the end, we cannot run again
 	if(gen->exhausted) {
@@ -212,6 +215,7 @@ MpGenerator_New(char *name, coro_func func, void *data, int stacksize)
 	gen->data = data;
 	gen->coro_source = NULL;
 	gen->exhausted = 0;
+	gen->entered = 0;
 
 	gen->stacksize = stacksize;
 	gen->stack = calloc(1, stacksize);
@@ -292,6 +296,7 @@ MpGenerator_LeaveContext(PyObject *obj) {
 
 	if(DEBUG) {
 		top0 = PyList_GetItem(stack, PyList_Size(stack) - 1);
+		Py_INCREF(top0);
 		if(!top0) return -1;
 	}
 
@@ -306,6 +311,7 @@ MpGenerator_LeaveContext(PyObject *obj) {
 		printf("LeaveCtx:    %p -> %p\n",
 			PyCapsule_GetPointer(top0, GEN_CAPSULE_NAME),
 			PyCapsule_GetPointer(top1, GEN_CAPSULE_NAME));
+		Py_DECREF(top0);
 	}
 
 	return 0;
