@@ -148,7 +148,6 @@ class PyStringLL(PyObjectLL):
 		init = self.python_to_c_string(py_init)
 		strlen = self.strlen(init)
 		assert all(map(lambda x: ord(x) < 2 ** 31 and ord(x) >= 0, init)), 'Out of range character for wchar in: {}'.format(init)
-		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyUnicode_FromUnicode'), c.ExprList(
 											c.Cast(c.PtrDecl(c.TypeDecl(self.name, c.IdentifierType('Py_UNICODE'))), c.Constant('string', init, prefix='L')),
 											c.Constant('integer', strlen)))))

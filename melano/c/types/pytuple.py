@@ -15,7 +15,7 @@ class PyTupleLL(PyObjectLL):
 
 
 	def new(self, size:int or LLType):
-		super.new()
+		super().new()
 		if isinstance(size, int):
 			c_sz = c.Constant('integer', size)
 			self._length = size
@@ -41,7 +41,6 @@ class PyTupleLL(PyObjectLL):
 			else:
 				raise ValueError('unrecognized type to pack in PyTupleLL.pack: {}'.format(inst))
 		self._length = len(ids_to_pack)
-		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyTuple_Pack'), c.ExprList(
 																						c.Constant('integer', len(ids_to_pack)), *ids_to_pack))))
 		self.fail_if_null(self.name)
@@ -66,7 +65,7 @@ class PyTupleLL(PyObjectLL):
 			offset = offset.as_ssize()
 		if not out_inst:
 			out_inst = PyObjectLL(None, self.v)
-			out_inst.declare(name="_item")
+			out_inst.declare_tmp(name="_item")
 		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyTuple_GetItem'), c.ExprList(c.ID(self.name), c.ID(offset.name)))))
 		self.fail_if_null(out_inst.name)
 		out_inst.incref()
@@ -76,7 +75,7 @@ class PyTupleLL(PyObjectLL):
 	def get_length(self, out_inst=None):
 		if not out_inst:
 			out_inst = CIntegerLL(None, self.v)
-			out_inst.declare(name="_len")
+			out_inst.declare_tmp(name="_len")
 		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyTuple_Size'), c.ExprList(c.ID(self.name)))))
 		return out_inst
 
@@ -84,7 +83,7 @@ class PyTupleLL(PyObjectLL):
 	def get_slice(self, start:int or CIntegerLL, end:int or CIntegerLL, out_inst=None):
 		if not out_inst:
 			out_inst = PyTupleLL(None, self.v)
-			out_inst.declare(name="_slice_out")
+			out_inst.declare_tmp(name="_slice_out")
 
 		start_ref = c.Constant('integer', start) if isinstance(start, int) else c.ID(end.as_ssize().name)
 		end_ref = c.Constant('integer', end) if isinstance(end, int) else c.ID(end.as_ssize().name)

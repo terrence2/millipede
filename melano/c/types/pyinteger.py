@@ -8,7 +8,6 @@ from melano.c.types.pyobject import PyObjectLL
 
 class PyIntegerLL(PyObjectLL):
 	def new(self, n):
-		super().new()
 		#FIXME: need a way to get the target architecture word size for this!
 		if n < 2 ** 63 - 1:
 			return self._new_from_long(c.Constant('integer', n))
@@ -21,13 +20,13 @@ class PyIntegerLL(PyObjectLL):
 
 
 	def _new_from_long(self, c_n):
-		self.xdecref()
+		super().new()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyLong_FromLong'), c.ExprList(c_n))))
 		self.fail_if_null(self.name)
 
 
 	def _new_from_string(self, c_s):
-		self.xdecref()
+		super().new()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyLong_FromString'), c.ExprList(
 																c_s, c.ID('NULL'), c.Constant('integer', 0)))))
 		self.fail_if_null(self.name)

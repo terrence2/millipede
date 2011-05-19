@@ -107,13 +107,13 @@ class PyGeneratorLL(PyFunctionLL):
 
 		self.v.ctx.add(c.Comment('get function instance'))
 		self.self_inst = PyObjectLL(None, self.v)
-		self.self_inst.declare(name='__self__', need_cleanup=False)
+		self.self_inst.declare_tmp(name='__self__')
 		self.v.ctx.add(c.Assignment('=', c.ID(self.self_inst.name), c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.SELF_INDEX))))
 		self.fail_if_null(self.self_inst.name)
 
 		self.v.ctx.add(c.Comment('get generator instance'))
 		self.gen_inst = PyObjectLL(None, self.v)
-		self.gen_inst.declare(name='__gen__', need_cleanup=False)
+		self.gen_inst.declare_tmp(name='__gen__')
 		self.v.ctx.add(c.Assignment('=', c.ID(self.gen_inst.name), c.ArrayRef(c.ID(self.args_name), c.Constant('integer', self.GENERATOR_INDEX))))
 		self.fail_if_null(self.gen_inst.name)
 
@@ -121,9 +121,10 @@ class PyGeneratorLL(PyFunctionLL):
 
 		self.v.ctx.add(c.Comment('mark us as in the generator'))
 		tmp = CIntegerLL(None, self.v)
-		tmp.declare()
+		tmp.declare_tmp()
 		self.v.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID('MpGenerator_EnterContext'), c.ExprList(c.ID(self.gen_inst.name)))))
 		self.fail_if_nonzero(tmp.name)
+		tmp.decref()
 
 
 	def _runner_cleanup(self):

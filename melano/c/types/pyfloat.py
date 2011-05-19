@@ -13,12 +13,10 @@ class PyFloatLL(PyObjectLL):
 
 
 	def _new_from_double(self, c_n):
-		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyFloat_FromDouble'), c.ExprList(c_n))))
 		self.fail_if_null(self.name)
 
 
 	def _new_from_string(self, c_s):
-		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyFloat_FromString'), c.ExprList(c_s))))
 		self.fail_if_null(self.name)

@@ -59,7 +59,7 @@ class PyModuleLL(PyObjectLL):
 
 		# get the modules dict
 		mods = PyDictLL(None, self.v)
-		mods.declare(name='_modules')
+		mods.declare_tmp(name='_modules')
 		self.v.ctx.add(c.Comment('Insert into sys.modules'))
 		self.v.ctx.add(c.Assignment('=', c.ID(mods.name), c.FuncCall(c.ID('PyImport_GetModuleDict'), c.ExprList())))
 		self.fail_if_null(self.ll_mod.name)
@@ -86,13 +86,14 @@ class PyModuleLL(PyObjectLL):
 	def set_initial_string_attribute(self, name:str, s:str):
 		if s is not None:
 			ps = PyStringLL(None, self.v)
-			ps.declare()
+			ps.declare_tmp()
 			ps.new(s)
 		else:
 			ps = PyObjectLL(None, self.v)
-			ps.declare()
+			ps.declare_tmp()
 			ps.assign_none()
 		self.set_attr_string(name, ps)
+		ps.decref()
 
 
 	def intro(self):
@@ -119,7 +120,7 @@ class PyModuleLL(PyObjectLL):
 	def set_attr_string(self, name:str, val:LLType):
 		self.ll_dict.set_item_string(name, val)
 		#FIXME: do we really need both dict and attr?  don't these go to the same place?
-		super().set_attr_string(name, val)
+		#super().set_attr_string(name, val)
 
 
 	def get_attr_string(self, attrname:str, out:LLType):

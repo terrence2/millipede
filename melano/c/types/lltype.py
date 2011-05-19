@@ -15,23 +15,56 @@ class LLType:
 		self.is_tmp = False # helps controls the lifetime of this instance
 
 
+	def tmp_incref(self):
+		if self.is_tmp:
+			#print("ADD   : {}".format(self.name))
+			if self in self.v.tmp_free[-1]:
+				self.v.tmp_free[-1].remove(self)
+			self.v.tmp_used[-1].add(self)
+
+	def tmp_decref(self):
+		if self.is_tmp:
+			#print("REMOVE: {}".format(self.name))
+			self.v.tmp_used[-1].remove(self)
+			self.v.tmp_free[-1].add(self)
+
+
+	def declare_tmp(self, *, name=None):
+		'''Note: this steals names, not instances -- although we store the instance, we blow it away here if we overwrite the name'''
+		def _find_name():
+			# NOTE: ensure these or ordered, so that it is easier to track their re-use at C level
+			for prior in sorted(self.v.tmp_free[-1], key=lambda k: k.name):
+				if type(prior) is type(self):
+					if name is not None and prior.name.startswith(name):
+						self.v.tmp_free[-1].remove(prior)
+						return prior.name, False
+					elif name is None and prior.name.startswith('tmp'):
+						self.v.tmp_free[-1].remove(prior)
+						return prior.name, False
+
+			if name:
+				return self.v.scope.ctx.reserve_name(name, self.v.tu), True
+			return self.v.scope.ctx.tmpname(self.v.tu), True
+
+		self.is_tmp = True
+		self.name, need_declare = _find_name()
+		self.v.tmp_used[-1].add(self)
+		#print("DECL  : {}".format(self.name))
+		#if self.name == 'tmp5':
+		#	import pdb; pdb.set_trace()
+		return need_declare
+
+
 	def declare(self, *, is_global=False, quals=[], name=None):
 		assert self.name is None # we can only declare once
+		assert (self.hlnode and hasattr(self.hlnode, 'name')) or (name is not None)
 		if is_global:
 			fn = self.v.tu.reserve_global_name
 			args = ()
 		else:
 			fn = self.v.scope.ctx.reserve_name
 			args = (self.v.tu,)
-		if name:
-			self.name = fn(name, *args)
-		else:
-			if self.hlnode and hasattr(self.hlnode, 'name'):
-				self.name = fn(self.hlnode.name, *args)
-			else:
-				assert not is_global
-				self.is_tmp = True
-				self.name = self.v.scope.ctx.tmpname(self.v.tu)
+		self.name = fn(name or self.hlnode.name, *args)
 
 
 	def fail(self, typename, error):

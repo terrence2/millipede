@@ -45,19 +45,23 @@ class PyFunctionLL(PyObjectLL):
 	def attach_defaults(self, default_insts, kwdefault_insts):
 		if default_insts:
 			tmp = PyTupleLL(None, self.v)
-			tmp.declare(name=self.hlnode.owner.name + "_defaults")
+			tmp.declare_tmp(name=self.hlnode.owner.name + "_defaults")
 			tmp.pack(*default_insts)
 			self.c_obj.set_attr_string('__defaults__', tmp)
+			tmp.decref()
 		if kwdefault_insts:
 			tmp = PyDictLL(None, self.v)
-			tmp.declare(name=self.hlnode.owner.name + "_kwdefaults")
+			tmp.declare_tmp(name=self.hlnode.owner.name + "_kwdefaults")
 			tmp.new()
 			for name, inst in kwdefault_insts:
 				if inst is None:
+					self.v.none.incref()
 					tmp.set_item_string(name, self.v.none)
 				else:
 					tmp.set_item_string(name, inst)
+					inst.decref()
 			self.c_obj.set_attr_string('__kwdefaults__', tmp)
+			tmp.decref()
 
 
 	def attach_annotations(self, ret, args, vararg_name, vararg, kwonlyargs, kwarg_name, kwarg):
@@ -66,7 +70,7 @@ class PyFunctionLL(PyObjectLL):
 
 		self.v.ctx.add(c.Comment("build annotations dict"))
 		tmp = PyDictLL(None, self.v)
-		tmp.declare(name=self.hlnode.owner.name + '_annotations')
+		tmp.declare_tmp(name=self.hlnode.owner.name + '_annotations')
 		tmp.new()
 
 		if ret:
@@ -83,6 +87,7 @@ class PyFunctionLL(PyObjectLL):
 				tmp.set_item_string(str(name), ann)
 
 		self.c_obj.set_attr_string('__annotations__', tmp)
+		tmp.decref()
 
 
 
@@ -99,6 +104,10 @@ class PyFunctionLL(PyObjectLL):
 		self.v.ctx.add(c.Assignment('=', c.ID(self.c_obj.name), c.FuncCall(c.ID('MpFunction_New'), c.ExprList(
 													c_name, c.ID(self.c_pystub_func.decl.name), c_docstring))))
 		self.fail_if_null(self.c_obj.name)
+
+		# Note: this incref is for the global reference and needs to get cleaned up too 
+		#		-- the inst we return gets owned by the local scope
+		self.c_obj.incref()
 
 		return self.c_obj
 
@@ -120,6 +129,7 @@ class PyFunctionLL(PyObjectLL):
 			c.Compound()
 		)
 		self.v.tu.add_fwddecl(self.c_pystub_func.decl)
+		self.v.tu.add(c.WhiteSpace('\n'))
 		self.v.tu.add(self.c_pystub_func)
 
 	def stub_intro(self):
@@ -130,7 +140,7 @@ class PyFunctionLL(PyObjectLL):
 		self.stub_kwargs_dict = PyDictLL(None, self.v)
 		self.stub_kwargs_dict.name = self.v.scope.ctx.reserve_name('kwargs', self.v.tu)
 		#FIXME: make this an instance and and inst
-		self.v.scope.ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+		self.v.scope.ctx.add_variable(c.Decl('__return_value__', PyObjectLL.typedecl('__return_value__'), init=c.ID('NULL')), False)
 
 	def stub_load_args(self, args, defaults, vararg, kwonlyargs, kw_defaults, kwarg):
 		self.stub_arg_insts = []
@@ -153,7 +163,7 @@ class PyFunctionLL(PyObjectLL):
 		# load positional and normal keyword args
 		if args:
 			c_args_size = CIntegerLL(None, self.v)
-			c_args_size.declare(name='args_size')
+			c_args_size.declare_tmp(name='_args_size')
 			args_tuple.get_size_unchecked(c_args_size)
 
 			arg_insts = [None] * len(args)
@@ -187,7 +197,7 @@ class PyFunctionLL(PyObjectLL):
 							# try loading from defaults
 							default_offset = i - kwstartoffset
 							tmp = PyTupleLL(None, self.v)
-							tmp.declare()
+							tmp.declare_tmp()
 							self.c_obj.get_attr_string('__defaults__', tmp)
 							#self.v.ctx.add(c.Assignment('=', c.ID(tmp.name),
 							#		c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.c_obj.name), c.Constant('string', '__defaults__')))))
@@ -196,6 +206,7 @@ class PyFunctionLL(PyObjectLL):
 							#self.v.ctx.add(c.Assignment('=', c.ID(arg_insts[i].name),
 							#		c.FuncCall(c.ID('PyTuple_GetItem'), c.ExprList(c.ID(tmp.name), c.Constant('integer', default_offset)))))
 							arg_insts[i].incref()
+							tmp.decref()
 							#self.v.ctx.add(c.FuncCall(c.ID('Py_INCREF'), c.ID(arg_insts[i].name)))
 						else:
 							# emit an error for an unpassed arg
@@ -233,17 +244,18 @@ class PyFunctionLL(PyObjectLL):
 			with self.v.new_context(have_kwarg.iftrue):
 				for i, arg in enumerate(kwonlyargs):
 					#FIXME: we can make this significantly more efficient with a bit of work
-					kwargs_dict.get_item_string_nofail_nofree(str(arg.arg), kwarg_insts[i])
+					kwargs_dict.get_item_string_nofail(str(arg.arg), kwarg_insts[i])
 					need_default = self.v.ctx.add(c.If(c.UnaryOp('!', c.ID(kwarg_insts[i].name)), c.Compound(), c.Compound()))
 
 					### not found in kwdict, means we need to load from default
 					with self.v.new_context(need_default.iftrue):
 						kwdefaults0 = PyDictLL(None, self.v)
-						kwdefaults0.declare(name='_kwdefaults')
+						kwdefaults0.declare_tmp(name='_kwdefaults')
 						#self.c_obj.get_attr_string('__kwdefaults__', kwdefaults0)
 						self.v.ctx.add(c.Assignment('=', c.ID(kwdefaults0.name),
 							c.FuncCall(c.ID('PyObject_GetAttrString'), c.ExprList(c.ID(self.c_obj.name), c.Constant('string', '__kwdefaults__')))))
 						#kwdefaults0.get_item_string(str(arg.arg), kwarg_insts[i])
+						#kwdefaults0.decref()
 						need_default.iftrue.add(c.Assignment('=', c.ID(kwarg_insts[i].name),
 							c.FuncCall(c.ID('PyDict_GetItemString'), c.ExprList(c.ID(kwdefaults0.name), c.Constant('string', str(arg.arg))))))
 						self.fail_if_null(kwarg_insts[i].name)
@@ -256,7 +268,7 @@ class PyFunctionLL(PyObjectLL):
 			#TODO: this is identical to the failure case from above
 			with self.v.new_context(have_kwarg.iffalse):
 				kwdefaults1 = PyDictLL(None, self.v)
-				kwdefaults1.declare(name='_kwdefaults')
+				kwdefaults1.declare_tmp(name='_kwdefaults')
 				self.c_obj.get_attr_string('__kwdefaults__', kwdefaults1)
 				for i, arg in enumerate(kwonlyargs):
 					#have_kwarg.iffalse.add(c.Assignment('=', c.ID(kwdefaults1.name),
@@ -394,7 +406,7 @@ class PyFunctionLL(PyObjectLL):
 
 
 	def runner_intro(self):
-		self.v.ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+		self.v.ctx.add_variable(c.Decl('__return_value__', PyObjectLL.typedecl('__return_value__'), init=c.ID('NULL')), False)
 
 
 	def runner_outro(self):
@@ -433,7 +445,6 @@ class PyFunctionLL(PyObjectLL):
 
 
 	def get_attr_string(self, attrname, outvar):
-		outvar.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(outvar.name), c.ID(self.locals_map[attrname])))
 		self.except_if_null(outvar.name, 'PyExc_UnboundLocalError', "local variable '{}' referenced before assignment".format(attrname))
 		outvar.incref()

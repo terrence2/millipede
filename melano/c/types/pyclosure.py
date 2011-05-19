@@ -187,7 +187,6 @@ class PyClosureLL(PyFunctionLL):
 
 	def get_attr_string(self, attrname, outvar):
 		i, j = self.locals_map[attrname]
-		outvar.xdecref()
 		ref = c.ArrayRef(c.StructRef(c.ArrayRef(c.ID(self.stack_name), c.Constant('integer', i)), '->', c.ID('locals')), c.Constant('integer', j))
 		self.v.ctx.add(c.Assignment('=', c.ID(outvar.name), ref))
 		self.except_if_null(outvar.name, 'PyExc_UnboundLocalError', "local variable '{}' referenced before assignment".format(attrname))

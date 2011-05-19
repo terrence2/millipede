@@ -15,9 +15,6 @@ class PyClassLL(PyObjectLL):
 		# the low-level func responsible for building the class
 		self.c_builder_func = None
 
-		# the pycfunction wrapper around the lowlevel builder func that makes it pycallable
-		self.c_builder_obj = None
-
 		# the pyobject that our builder will return into
 		self.c_obj = None
 
@@ -45,15 +42,14 @@ class PyClassLL(PyObjectLL):
 		self.v.ctx.add(c.Comment('Declare Class creation pycfunction "{}"'.format(self.hlnode.owner.name)))
 
 		# create the function pyobject itself
-		self.c_builder_obj = PyObjectLL(self.hlnode, self.v)
-		self.c_builder_obj.declare(name=self.hlnode.owner.name + "_builder_pycfunc")
-		self.c_builder_obj.xdecref()
+		builder_func = PyObjectLL(self.hlnode, self.v)
+		builder_func.declare_tmp(name=self.hlnode.owner.name + "_builder_pycfunc")
 		c_name = c.Constant('string', PyStringLL.name_to_c_string(self.hlnode.owner.name))
-		self.v.ctx.add(c.Assignment('=', c.ID(self.c_builder_obj.name), c.FuncCall(c.ID('MpFunction_New'), c.ExprList(
+		self.v.ctx.add(c.Assignment('=', c.ID(builder_func.name), c.FuncCall(c.ID('MpFunction_New'), c.ExprList(
 													c_name, c.ID(self.c_builder_func.decl.name), c.ID('NULL')))))
-		self.fail_if_null(self.c_builder_obj.name)
+		self.fail_if_null(builder_func.name)
 
-		return self.c_builder_obj
+		return builder_func
 
 
 	def declare_pyclass(self):
@@ -67,23 +63,25 @@ class PyClassLL(PyObjectLL):
 
 
 	def intro(self, docstring, module_name):
-		self.v.ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+		self.v.ctx.add_variable(c.Decl('__return_value__', PyObjectLL.typedecl('__return_value__')), False)
 
 		# set the docstring
 		ds = PyStringLL(None, self.v)
-		ds.declare()
+		ds.declare_tmp()
 		if docstring:
 			ds.new(docstring)
 		else:
 			ds.assign_none()
 		self.c_namespace_dict.set_item_string('__doc__', ds)
+		ds.decref()
 
 		# set the module name
 		ds = PyStringLL(None, self.v)
-		ds.declare()
+		ds.declare_tmp()
 		if module_name:
 			ds.new(module_name)
 			self.c_namespace_dict.set_item_string('__module__', ds)
+		ds.decref()
 
 
 	def outro(self):

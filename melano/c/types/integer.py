@@ -18,21 +18,35 @@ class CIntegerLL(LLType):
 		self.is_a_bool = self.hltype.is_a_bool if self.hltype else is_a_bool
 
 
-	def declare(self, *, quals=[], init=0, name=None, **kwargs):
-		super().declare(quals=quals, name=name, **kwargs)
+	def declare_tmp(self, *, name=None):
+		need_declare = super().declare_tmp(name=name)
+		if need_declare:
+			self.v.scope.ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=[]), need_cleanup=False)
+
+
+	def declare(self, *, is_global=False, quals=[], init=0):
+		super().declare(is_global=is_global, quals=quals)
 		#TODO: specialize for signed and sized ints
-		self.v.ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=quals, init=c.Constant('integer', init)), False)
+		self.v.scope.ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=quals, init=c.Constant('integer', init)), False)
+
+
+	def decref(self):
+		self.tmp_decref()
+	def xdecref(self):
+		self.tmp_decref()
+	def clear(self):
+		self.tmp_decref()
 
 
 	def as_pyobject(self):
 		if self.is_a_bool:
 			out = PyBoolLL(None, self.v)
-			out.declare()
+			out.declare_tmp()
 			out._new_from_long(c.ID(self.name))
 			return out
 		else:
 			out = PyIntegerLL(None, self.v)
-			out.declare()
+			out.declare_tmp()
 			out._new_from_long(c.ID(self.name))
 			return out
 
@@ -44,7 +58,7 @@ class CIntegerLL(LLType):
 	def not_(self, out_inst=None):
 		if not out_inst:
 			out_inst = CIntegerLL(None, self.v)
-			out_inst.declare(name="_inv_rv")
+			out_inst.declare_tmp(name="_inv_rv")
 		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.UnaryOp('!', c.ID(self.name))))
 		return out_inst
 

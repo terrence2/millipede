@@ -10,14 +10,13 @@ from melano.c.types.pyobject import PyObjectLL
 class PyListLL(PyObjectLL):
 	def new(self):
 		super().new()
-		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyList_New'), c.ExprList(c.Constant('integer', 0)))))
 
 
 	def append(self, inst, out_inst=None):
 		if not out_inst:
 			out_inst = CIntegerLL(None, self.v)
-			out_inst.declare(name='_append_rv')
+			out_inst.declare_tmp(name='_append_rv')
 		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyList_Append'), c.ExprList(c.ID(self.name), c.ID(inst.name)))))
 		self.fail_if_nonzero(out_inst.name)
 		return out_inst
@@ -34,7 +33,6 @@ class PyListLL(PyObjectLL):
 				ids_to_pack.append(c.ID(self.v.none.name))
 			else:
 				raise ValueError('unrecognized type to pack in PyListLL.pack: {}'.format(inst))
-		self.xdecref()
 		self.v.ctx.add(c.Assignment('=', c.ID(self.name), c.FuncCall(c.ID('PyList_New'), c.ExprList(c.Constant('integer', len(ids_to_pack))))))
 		self.fail_if_null(self.name)
 		for i, id in enumerate(ids_to_pack):
@@ -44,7 +42,7 @@ class PyListLL(PyObjectLL):
 	def get_length(self, out_inst=None):
 		if not out_inst:
 			out_inst = CIntegerLL(None, self.v)
-			out_inst.declare(name="_len")
+			out_inst.declare_tmp(name="_len")
 		self.v.ctx.add(c.Assignment('=', c.ID(out_inst.name), c.FuncCall(c.ID('PyList_Size'), c.ExprList(c.ID(self.name)))))
 		return out_inst
 
