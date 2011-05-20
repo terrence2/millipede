@@ -1,7 +1,7 @@
 from .editor.document import MelanoCodeDocument
 from .main import MelanoMainWindow
 from PyQt4.QtGui import QApplication
-from melano.hl.module import MelanoModule
+from melano.hl.module import MpModule
 from melano.hl.name import Name
 import base64
 import os.path
@@ -57,7 +57,7 @@ class MelanoApplication(QApplication):
 		self.exit()
 
 
-	def load_document(self, module:MelanoModule):
+	def load_document(self, module:MpModule):
 		# load the document
 		doc = self.documents.get(module.filename)
 		if not doc:
@@ -71,12 +71,12 @@ class MelanoApplication(QApplication):
 		del self.documents[filename]
 
 
-	def show_symbol(self, module:MelanoModule, node:Name):
+	def show_symbol(self, module:MpModule, node:Name):
 		doc = self.load_document(module)
 		self.window.show_symbol(doc, node)
 
 
-	def on_hover_text(self, module:MelanoModule, start:(int, int), end:(int, int), context:str):
+	def on_hover_text(self, module:MpModule, start:(int, int), end:(int, int), context:str):
 		'''Discover the node we are hovering over based on the position of the token.  Possibly 
 			format and return a tooltip if this is possible for this text position.'''
 		#module.find_ast_node_for_position

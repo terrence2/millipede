@@ -2,11 +2,11 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.module import MelanoModule
+from melano.hl.module import MpModule
 from melano.hl.name import Name
 
 
-class Builtins(MelanoModule):
+class Builtins(MpModule):
 
 	def lookup(self, name:str) -> Name:
 		# Don't fall back to builtins!

@@ -10,7 +10,7 @@ from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.hl.builtins import Builtins
 from melano.hl.cfg.basicblock import BasicBlock
-from melano.hl.module import MelanoModule
+from melano.hl.module import MpModule
 from melano.hl.name import Name
 from melano.project.analysis.cfgbuilder import CFGBuilder
 from melano.project.analysis.clean import Clean
@@ -76,8 +76,8 @@ class MelanoProject:
 		self.limit = re.compile('.*')
 
 		# maps module paths to module definitions
-		self.modules_by_path = {} # {str: MelanoModule}
-		self.modules_by_absname = {} # {str: MelanoModule}
+		self.modules_by_path = {} # {str: MpModule}
+		self.modules_by_absname = {} # {str: MpModule}
 		self.order = [] # depth first traversal order
 
 		# the core parser infrastructure
@@ -98,7 +98,7 @@ class MelanoProject:
 		self.cached = {k: None for k in os.listdir(self.cachedir)}
 
 		# build a 'scope' for our builtins
-		self.builtins_scope = Builtins(MelanoModule.BUILTIN, '<builtin>', 'builtins', None)
+		self.builtins_scope = Builtins(MpModule.BUILTIN, '<builtin>', 'builtins', None)
 		for n in PY_BUILTINS:
 			self.builtins_scope.add_symbol(n)
 
@@ -172,10 +172,10 @@ class MelanoProject:
 				if self.verbose: logging.info("mapping module: " + modname + ' -> ' + filename)
 
 				# create the module
-				if modname == 'builtins' and modtype == MelanoModule.BUILTIN:
+				if modname == 'builtins' and modtype == MpModule.BUILTIN:
 					mod = self.builtins_scope
 				else:
-					mod = MelanoModule(modtype, filename, modname, self.builtins_scope)
+					mod = MpModule(modtype, filename, modname, self.builtins_scope)
 				mod.ast = ast
 				mod.owner.ast = ast
 				mod.ast.hl = mod
@@ -372,7 +372,7 @@ class MelanoProject:
 
 	def is_local(self, mod:ast.Module) -> bool:
 		'''Return true if the module should be translated, false if bridged to.'''
-		return (mod.modtype == MelanoModule.PROJECT and
+		return (mod.modtype == MpModule.PROJECT and
 				self.limit_include.match(mod.filename) is not None and
 				self.limit_exclude.match(mod.filename) is None)
 
@@ -386,7 +386,7 @@ class MelanoProject:
 
 
 	def get_file_ast(self, filename):
-		source = MelanoModule._read_file(filename)
+		source = MpModule._read_file(filename)
 		checksum = hashlib.sha1(source.encode('UTF-8')).hexdigest()
 		data = self.global_cache.query_ast_data(filename, checksum)
 

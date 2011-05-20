@@ -2,7 +2,7 @@ from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTreeWidget, QTreeWidgetItem, QIcon, QPalette
 from melano.hl.class_ import MelanoClass
 from melano.hl.function import MelanoFunction
-from melano.hl.module import MelanoModule
+from melano.hl.module import MpModule
 from melano.hl.name import Name
 import os.path
 import pdb
@@ -45,7 +45,7 @@ class MelanoProjectTreeWidget(QTreeWidget):
 				return self.icon_class
 			elif isinstance(sym.scope, MelanoFunction):
 				return self.icon_function
-			elif isinstance(sym.scope, MelanoModule):
+			elif isinstance(sym.scope, MpModule):
 				if sym.scope.filename.endswith('__init__.py') or sym.scope.is_main:
 					return self.icon_package
 				else:

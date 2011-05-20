@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.module import MelanoModule
+from melano.hl.module import MpModule
 from melano.project.analysis.find_links import FindLinks
 import logging
 import melano.py.ast as py
@@ -224,10 +224,10 @@ class Importer:
 		Return a tuple of absolute_filename and type.
 		'''
 		search = [
-			(MelanoModule.PROJECT, self.roots),
-			(MelanoModule.BUILTIN, self.builtins),
-			(MelanoModule.STDLIB, self.stdlib),
-			(MelanoModule.EXTENSION, self.extensions)
+			(MpModule.PROJECT, self.roots),
+			(MpModule.BUILTIN, self.builtins),
+			(MpModule.STDLIB, self.stdlib),
+			(MpModule.EXTENSION, self.extensions)
 		]
 		rel_noext_modpath = modname.replace('.', '/')
 		for ty, base_paths in search:

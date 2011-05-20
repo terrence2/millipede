@@ -11,7 +11,7 @@ import logging
 import tokenize
 
 
-class MelanoModule(Scope, Entity):
+class MpModule(Scope, Entity):
 	'''
 	Represents one python-level module.
 	'''
@@ -66,7 +66,7 @@ class MelanoModule(Scope, Entity):
 
 
 	def set_as_main(self):
-		if self.modtype != MelanoModule.PROJECT:
+		if self.modtype != MpModule.PROJECT:
 			raise SystemError("Main module must be part of the project!")
 		self.is_main = True
 
@@ -118,7 +118,7 @@ class MelanoModule(Scope, Entity):
 	def show(self, level=0):
 		logging.info('Module: {} as {}'.format(self.python_name, self.owner.name))
 		for name, val in self.symbols.items():
-			if isinstance(val.scope, MelanoModule):
+			if isinstance(val.scope, MpModule):
 				logging.info('{}Name: {}'.format('\t' * (level + 1), name))
 			else:
 				val.show(level + 1)

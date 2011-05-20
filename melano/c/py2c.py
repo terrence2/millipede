@@ -27,7 +27,7 @@ from melano.c.types.pytuple import PyTupleLL
 from melano.c.types.pytype import PyTypeLL
 from melano.hl.class_ import MelanoClass
 from melano.hl.function import MelanoFunction
-from melano.hl.module import MelanoModule
+from melano.hl.module import MpModule
 from melano.hl.nameref import NameRef
 from melano.hl.types.hltype import HLType
 from melano.hl.types.integer import CIntegerType
@@ -1481,7 +1481,7 @@ class Py2C(ASTVisitor):
 	def _import_module(self, module, fullname):
 		tmp = PyObjectLL(None, self)
 		tmp.declare_tmp()
-		if module.modtype == MelanoModule.PROJECT:
+		if module.modtype == MpModule.PROJECT:
 			# call the builder function to construct or access the module
 			self.comment("Import local module {}".format(str(module.python_name)))
 			self.ctx.add(c.Assignment('=', c.ID(tmp.name), c.FuncCall(c.ID(module.ll.c_builder_name), c.ExprList())))
@@ -1574,7 +1574,7 @@ class Py2C(ASTVisitor):
 				continue
 
 			# get the reference -- hl is always stored on the name by the indexer
-			if isinstance(alias.name.hl, NameRef) and isinstance(alias.name.hl.ref, MelanoModule):
+			if isinstance(alias.name.hl, NameRef) and isinstance(alias.name.hl.ref, MpModule):
 				val = self._import_module(alias.name.hl.ref, alias.name.hl.ref.python_name)
 			else:
 				val = _import_name(alias.name, base_module_inst)

@@ -5,7 +5,7 @@ All rights reserved.
 from contextlib import contextmanager
 from melano.hl.builtins import Builtins
 from melano.hl.cfg.basicblock import BasicBlock
-from melano.hl.module import MelanoModule
+from melano.hl.module import MpModule
 from melano.lang.visitor import ASTVisitor
 import melano.py.ast as py
 import pdb
@@ -171,7 +171,7 @@ class CFGBuilder(ASTVisitor):
 				mod = alias.name.attr.hl.scope
 			else:
 				mod = alias.name.hl.scope
-			assert isinstance(mod, MelanoModule)
+			assert isinstance(mod, MpModule)
 
 			# load the ast 
 			tail = self._maybe_run_module(mod)
