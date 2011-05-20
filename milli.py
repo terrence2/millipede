@@ -89,8 +89,8 @@ def main():
 	project.build_all()
 
 	if opts.gui:
-		from melano.ui.application import MelanoApplication
-		app = MelanoApplication(project, sys.argv)
+		from melano.ui.application import MpApplication
+		app = MpApplication(project, sys.argv)
 		signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c
 		return app.exec_()
 

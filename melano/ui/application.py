@@ -11,7 +11,7 @@ import os.path
 #from melano.code.symbols.symbol import Symbol
 
 
-class MelanoApplication(QApplication):
+class MpApplication(QApplication):
 	def __init__(self, project, *args):
 		super().__init__(*args)
 		self.project = project
