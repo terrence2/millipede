@@ -81,7 +81,7 @@ class PyClosureLL(PyFunctionLL):
 
 		# create a new stack (MpStack *) of len(list(self.each_func_scope()))
 		stack_name = self.v.scope.ctx.reserve_name(self.hlnode.owner.name + '_locals', self.v.tu)
-		self.v.ctx.add_variable(c.Decl(stack_name, self.stack_typedecl(stack_name)), False)
+		self.v.scope.ctx.add_variable(c.Decl(stack_name, self.stack_typedecl(stack_name)), False)
 		self.v.ctx.add(c.Assignment('=', c.ID(stack_name), c.FuncCall(c.ID('MpStack_Create'), c.ExprList(
 																									c.Constant('integer', self.own_scope_offset + 1)))))
 		self.fail_if_null(stack_name)
