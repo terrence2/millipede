@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from melano import MelanoProject
+from melano import MpProject
 import logging
 import os
 import pickle
@@ -19,7 +19,7 @@ def main():
 		stdlib = ['/usr/lib/python3.1', '/usr/lib/python3.1/lib-dynload']
 		extensions = ['/usr/lib/python3.1/site-packages']
 
-	project = MelanoProject('melano')
+	project = MpProject('melano')
 	project.configure(programs=['run'], roots=[os.path.realpath('.')], stdlib=stdlib, extensions=extensions)
 	project.build_all()
 

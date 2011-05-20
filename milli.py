@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from melano import MelanoProject
+from melano import MpProject
 from melano.c.out import COut
 from optparse import OptionParser, OptionGroup
 import logging
@@ -79,7 +79,7 @@ def main():
 	path = args[-1]
 	base = os.path.dirname(path)
 	fn = os.path.basename(path)
-	project = MelanoProject('test-' + os.path.basename(path), build_dir=opts.build_dir, cache_dir=opts.cache_dir)
+	project = MpProject('test-' + os.path.basename(path), build_dir=opts.build_dir, cache_dir=opts.cache_dir)
 	project.configure(programs=[fn[:-3]], roots=[base],
 					stdlib=stdlib, extensions=extensions,
 					prefix=opts.prefix, version=opts.version, abi=opts.abi,

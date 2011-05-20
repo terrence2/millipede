@@ -3,7 +3,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano import MelanoProject
+from melano import MpProject
 import logging
 import optparse
 import os
@@ -40,7 +40,7 @@ def main():
 	if options.benchmarks:
 		programs = [p.strip() for p in options.benchmarks.split(',')]
 
-	project = MelanoProject('benchmarks')
+	project = MpProject('benchmarks')
 	project.configure(programs=programs, roots=[os.path.realpath('../py3benchmarks/performance')],
 					stdlib=stdlib, extensions=extensions,
 					prefix=prefix, version=version, abi=abi)

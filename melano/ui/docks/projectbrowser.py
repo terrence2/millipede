@@ -8,7 +8,7 @@ import os.path
 import pdb
 
 
-class MelanoProjectTreeWidget(QTreeWidget):
+class MpProjectTreeWidget(QTreeWidget):
 	TYPE_LOADED = 32
 	TYPE_MODULE	 = 33
 	TYPE_NODE = 34

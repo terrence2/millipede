@@ -8,7 +8,6 @@ TESTDIR = os.path.realpath('.')
 sys.path = [TESTDIR] + sys.path
 
 from contextlib import contextmanager
-from melano.project.project import MelanoProject
 import pytest
 import re
 import shutil

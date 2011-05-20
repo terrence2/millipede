@@ -3,8 +3,8 @@ from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QAction, QIcon, QLabel, QDockWidget, QTreeView, \
 	QTabWidget, QMainWindow
 from melano.hl.name import Name
-from melano.ui.docks.projectbrowser import MelanoProjectTreeWidget
-from melano.ui.docks.projectlist import MelanoProjectListWidget
+from melano.ui.docks.projectbrowser import MpProjectTreeWidget
+from melano.ui.docks.projectlist import MpProjectListWidget
 from melano.ui.docks.symbolinfo import MelanoSymbolInfoWidget
 from melano.ui.editor.document import MelanoCodeDocument
 from melano.ui.editor.view import MelanoCodeView
@@ -35,7 +35,7 @@ class MelanoMainWindow(QMainWindow):
 		#self.fileMenu.addAction(saveAct)
 
 		'''
-		self.projectsList = MelanoProjectListWidget(self)
+		self.projectsList = MpProjectListWidget(self)
 		self.dockProjectList = QDockWidget("Project List", self)
 		self.dockProjectList.setObjectName('dockProjectList')
 		self.dockProjectList.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
@@ -43,7 +43,7 @@ class MelanoMainWindow(QMainWindow):
 		self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockProjectList)
 		'''
 
-		self.projectBrowser = MelanoProjectTreeWidget(self)
+		self.projectBrowser = MpProjectTreeWidget(self)
 		self.dockProjectTree = QDockWidget("Project Browser", self);
 		self.dockProjectTree.setObjectName('dockProjectTree')
 		self.dockProjectTree.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea);

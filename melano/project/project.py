@@ -40,7 +40,7 @@ class MissingSymbolsError(Exception):
 	'''Raised if we cannot resolve all symbols when indexing.'''
 
 
-class MelanoProject:
+class MpProject:
 	'''
 	A project represents a collection of python modules.
 	
