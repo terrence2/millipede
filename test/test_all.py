@@ -40,15 +40,11 @@ def test_all(testfile, root, interpreter, version):
 		if expect['xfail']:
 			pytest.xfail()
 
-		p = subprocess.Popen(['python3.1', 'run.py', '-P', version, '-O', 'asp', '-o', 'debug_memory', testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		p = subprocess.Popen(['python3.1', 'milli.py', '-P', version, '-O', 'asp', '-o', 'debug_memory', testfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 		out = p.communicate()
 		assert p.returncode == 0, "Failed melano-x build for {}".format(testfile)
 
-		p = subprocess.Popen(['make', 'py' + ''.join(version.split('.'))])
-		out = p.communicate()
-		assert p.returncode == 0, "Failed Make: {}".format(out)
-
-		p = subprocess.Popen([os.path.join(TESTDIR, 'test-prog')], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		p = subprocess.Popen([os.path.join(TESTDIR, os.path.join('build', os.path.basename(testfile))[:-3])], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
 	elif interpreter == 'hosted':
 		if expect['xfail']:
