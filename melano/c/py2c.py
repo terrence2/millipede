@@ -1398,12 +1398,13 @@ class Py2C(ASTVisitor):
 		inst.create_pystubfunc()
 		inst.create_runnerfunc(*full_args)
 
-		self.comment("Build function {}".format(str(node.name)))
+		self.comment("Build genexp function {}".format(str(node.name)))
 		pycfunc = inst.declare_function_object(docstring)
-		# NOTE: doing the call here will xdecref the target (us) before assignment, so avoid freeing ourself
-		pycfunc.incref()
-		# NOTE: we don't really care about the generator _function_, we just want the underlying generator
-		pycfunc.call(None, None, pycfunc)
+		# NOTE: we don't really care about the generator _function_, we just want the underlying generator, so call to flush it out
+		tmp = PyObjectLL(None, self)
+		tmp.declare_tmp()
+		pycfunc.call(None, None, tmp)
+		pycfunc.decref()
 
 		# Build the python stub function
 		with self.new_scope(node.hl, inst.c_pystub_func.body):
@@ -1427,8 +1428,8 @@ class Py2C(ASTVisitor):
 		# store the resulting function into the scope where it's defined
 		if not node.hl.is_anonymous:
 			self.comment('store function name into scope')
-			self._store_name(node.name, pycfunc)
-		inst.name = inst.c_obj.name
+			self._store_name(node.name, tmp)
+		inst.name = tmp.name
 
 		return inst
 
