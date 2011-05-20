@@ -6,7 +6,7 @@ from melano.hl.scope import Scope
 from melano.hl.types.pycomprehension import PyComprehensionType
 
 
-class MelanoComprehension(Scope):
+class MpComprehension(Scope):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.type = PyComprehensionType()

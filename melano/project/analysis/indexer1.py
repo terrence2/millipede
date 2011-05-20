@@ -3,7 +3,6 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.hl.comprehension import MelanoComprehension
 from melano.hl.constant import Constant
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
