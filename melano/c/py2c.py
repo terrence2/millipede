@@ -197,11 +197,11 @@ class Py2C(ASTVisitor):
 		# the main function -- handles init, cleanup, and error printing at top level
 		self.tu.reserve_global_name('main')
 		self.main = c.FuncDef(
-			c.Decl('__melano_main__',
+			c.Decl('__millipede_main__',
 				c.FuncDecl(c.ParamList(
 						c.Decl('argc', c.TypeDecl('argc', c.IdentifierType('int'))),
 						c.Decl('argv', c.PtrDecl(c.PtrDecl(c.TypeDecl('argv', c.IdentifierType('wchar_t')))))),
-					c.TypeDecl('__melano_main__', c.IdentifierType('int')))
+					c.TypeDecl('__millipede_main__', c.IdentifierType('int')))
 			),
 			c.Compound(
 					c.FuncCall(c.ID('assert'), c.ExprList(c.BinaryOp(' == ', c.FuncCall(c.ID('sizeof'), c.ExprList(c.ID('Py_UNICODE'))), c.Constant('integer', 4)))),

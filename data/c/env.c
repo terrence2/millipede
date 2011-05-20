@@ -3,7 +3,7 @@
 #include <coro.h>
 #include "genobject.h"
 
-extern int __melano_main__(int argc, wchar_t **argv);
+extern int __millipede_main__(int argc, wchar_t **argv);
 extern wchar_t* _Mp_char2wchar(const char* arg, size_t *size);
 
 
@@ -29,13 +29,13 @@ void __err_capture__(char *file, int lineno, int clineno, char *context,
     }
 
     // get the traceback list
-    tb = PyDict_GetItemString(dict, "__melano_traceback__");
+    tb = PyDict_GetItemString(dict, "__millipede_traceback__");
     if(!tb) {
 		tb = PyList_New(0);
 		if(!tb)
 			Py_FatalError("Could not create traceback list");
 		Py_INCREF(tb);
-		rv = PyDict_SetItemString(dict, "__melano_traceback__", tb);
+		rv = PyDict_SetItemString(dict, "__millipede_traceback__", tb);
 		if(rv == -1)
 			Py_FatalError("Failed to insert traceback into thread state");
     }
@@ -59,7 +59,7 @@ void __err_show_traceback__() {
 	dict = PyThreadState_GET()->dict;
 	if(!dict)
 		return;
-	tb = PyDict_GetItemString(dict, "__melano_traceback__");
+	tb = PyDict_GetItemString(dict, "__millipede_traceback__");
 	if(!tb)
 		return;
 
@@ -89,7 +89,7 @@ void __err_clear__() {
 		return;
 
     // grab the traceback list
-    tb = PyDict_GetItemString(dict, "__melano_traceback__");
+    tb = PyDict_GetItemString(dict, "__millipede_traceback__");
     if(!tb)
 		return;
 
@@ -271,7 +271,7 @@ int main(int argc, char **argv) {
     }
     setlocale(LC_ALL, oldloc);
     free(oldloc);
-    res = __melano_main__(argc, argv_copy);
+    res = __millipede_main__(argc, argv_copy);
     for (i = 0; i < argc; i++) {
         PyMem_Free(argv_copy2[i]);
     }
