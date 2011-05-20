@@ -22,6 +22,7 @@ from melano.project.global_cache import GlobalCache
 from melano.project.importer import Importer
 from melano.project.project_cache import ProjectCache
 from melano.py.driver import PythonParserDriver
+import errno
 import hashlib
 import logging
 import melano.py.ast as ast
@@ -144,18 +145,6 @@ class MelanoProject:
 			logging.info("Stdlib Search: {}".format(self.stdlib))
 			logging.info("Extension Search: {}".format(self.extensions))
 			logging.info("Builtins Search: {}".format(self.builtins))
-
-
-	def build_one(self, program, target):
-		assert program in self.programs
-		assert target.endswith('.c')
-		self.locate_modules()
-		self.index_static()
-		self.index_imports()
-		self.link_references()
-		self.derive_types()
-		self.build_cfg()
-		c = self.transform_ll_c([program], target, False)
 
 
 	def build_all(self):
@@ -305,11 +294,11 @@ class MelanoProject:
 				BasicBlock.show_gdf(fp, cfgbuilder.cfg)
 
 
-	def transform_ll_c(self, programs=None, target=None, emit_makefile=True):
-		makefile = Makefile(os.path.join(self.build_dir, 'Makefile'), self.data_dir, prefix=self.c_prefix, version=self.c_version, abi=self.c_abi)
+	def transform_ll_c(self):
+		makename = 'Makefile-' + (self.programs[0] if len(self.programs) == 1 else hashlib.md5(''.join(self.programs)).hexdigest())
+		makefile = Makefile(os.path.join(self.build_dir, makename), self.data_dir, prefix=self.c_prefix, version=self.c_version, abi=self.c_abi)
 
-		if not programs: programs = self.programs
-		for program in programs:
+		for program in self.programs:
 			# apply the low-level transformation
 			visitor = Py2C(self.opt_level, self.opt_options, self.builtins_scope)
 			for fn in self.order:
@@ -327,8 +316,7 @@ class MelanoProject:
 			visitor.close()
 
 			# write the file
-			if not target:
-				target = os.path.join(self.build_dir, program + '.c')
+			target = os.path.join(self.build_dir, program + '.c')
 			logging.info("Writing: {}".format(target))
 			with COut(target) as v:
 				v.visit(visitor.tu)
@@ -341,8 +329,14 @@ class MelanoProject:
 			target = None
 
 		# write the makefile
-		if emit_makefile:
-			makefile.write()
+		makefile.write()
+
+		# link makefile name to Makefile for simplicty
+		try:
+			os.unlink(os.path.join(self.build_dir, 'Makefile'))
+		except OSError as ex:
+			if ex.errno != errno.ENOENT: raise
+		os.symlink(os.path.join(self.build_dir, makename), os.path.join(self.build_dir, 'Makefile'))
 
 
 	def reset_ll(self):

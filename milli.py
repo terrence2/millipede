@@ -16,10 +16,13 @@ def parse_args():
 							"specify your python on your platform of choice, please file a bug report!")
 	build_opts.add_option('-v', '--verbose', action="store_true", help="Print more information while we compile.")
 	build_opts.add_option('-P', '--python', dest='version', default='3.1', metavar='3.X', help="Version of Python to build against")
+	build_opts.add_option('-B', '--build-dir', dest='build_dir', default='./build/', metavar='DIR', help="Output target directory")
+	build_opts.add_option('-C', '--cache-dir', dest='cache_dir', default='./cache/', metavar='DIR', help="Cachefile directory.")
 	build_opts.add_option('-p', '--prefix', default='/usr', metavar='PREFIX', help="Where do we find python?")
 	build_opts.add_option('-A', '--abi', default='', metavar='ABI', help="Python's ABI definition string (e.g. du, dmu, etc)")
 	build_opts.add_option('-I', '--include', default='.*', metavar='REGEX', help="Only matching files will be considered as in the project (default: .*)")
 	build_opts.add_option('-E', '--exclude', default='$^', metavar='REGEX', help="Any matching files will be considered as outside the project (default: $^)")
+	build_opts.add_option('--no-make', dest='no_make', action='store_true', help="Don't exec make after we generate sources.")
 	parser.add_option_group(build_opts)
 
 	gui_opts = OptionGroup(parser, 'GUI Options')
@@ -76,20 +79,23 @@ def main():
 	path = args[-1]
 	base = os.path.dirname(path)
 	fn = os.path.basename(path)
-	project = MelanoProject('test-' + os.path.basename(path), build_dir='.')
+	project = MelanoProject('test-' + os.path.basename(path), build_dir=opts.build_dir, cache_dir=opts.cache_dir)
 	project.configure(programs=[fn[:-3]], roots=[base],
 					stdlib=stdlib, extensions=extensions,
 					prefix=opts.prefix, version=opts.version, abi=opts.abi,
 					include=opts.include, exclude=opts.exclude,
 					verbose=opts.verbose, opt_level=opts.opt, opt_options=opts.options
 				)
-	project.build_one(fn[:-3], 'test.c')
+	project.build_all()
 
 	if opts.gui:
 		from melano.ui.application import MelanoApplication
 		app = MelanoApplication(project, sys.argv)
 		signal.signal(signal.SIGINT, signal.SIG_DFL) # set default sighandler (after qapp init) so we can exit with ctrl+c
 		return app.exec_()
+
+	if not opts.no_make:
+		os.execlp('make', 'make', '-C', opts.build_dir)
 
 	return 0
 
