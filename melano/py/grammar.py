@@ -6,7 +6,7 @@ that the low-level parser needs at runtime to parse the language.
 This adds the SKIPTOKENS bits to support our additions to the parser and 
 TOKEN_MAP as a convenience for printing useful info about parse trees.
 
-NOTES for Melano:
+NOTES for Millipede:
 	- Copied from pypy
 	- Adds skiptokens to PythonGrammar
 	- Adds TOKEN_MAP to PythonGrammar.

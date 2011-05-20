@@ -1,11 +1,11 @@
 from PyQt4.QtGui import QWidget, QPainter, QIcon, QColor
-from melano.ui.editor.edit import MelanoCodeEdit
+from melano.ui.editor.edit import MpCodeEdit
 
 
-class MelanoCodeLineStatus(QWidget):
+class MpCodeLineStatus(QWidget):
 	ICON_SIZE = 12
 
-	def __init__(self, edit:MelanoCodeEdit, parent:QWidget):
+	def __init__(self, edit:MpCodeEdit, parent:QWidget):
 		super().__init__(parent)
 		self.edit = edit
 
@@ -15,17 +15,17 @@ class MelanoCodeLineStatus(QWidget):
 		self._prior_linecount = 0
 		self.edit.document().contentsChanged.connect(self.onDocContentsChanged)
 		self.onDocContentsChanged()
-		
+
 		# connect scrollbar events to updates on this widget
 		self.edit.verticalScrollBar().valueChanged.connect(self.update)
 
 		# connect cursor position updates to updates on this widget
-		self.edit.cursorPositionChanged.connect(self.update)		
+		self.edit.cursorPositionChanged.connect(self.update)
 
 		# containers for error and warning lines
 		self._errors = {}
 		self._warnings = {}
-		
+
 		self._errors[3] = "Foobar!"
 		self._warnings[6] = "Barfoo!"
 
@@ -36,17 +36,17 @@ class MelanoCodeLineStatus(QWidget):
 
 	def add_error(self, lineno:int, message:str):
 		self._errors[lineno] = message
-	
+
 	def clear_errors(self):
 		self._errors = {}
 
-	
+
 	def add_warning(self, lineno:int, message:str):
 		self._warnings[lineno] = message
-	
+
 	def clear_warnings(self):
 		self._warnings = {}
-	
+
 
 	def onDocContentsChanged(self):
 		line_count = self.edit.document().blockCount()
@@ -78,20 +78,20 @@ class MelanoCodeLineStatus(QWidget):
 			if pos + blk_bounds.height() >= start_pos and pos <= end_pos:
 				txt = str(lineno)
 				centering = (blk_bounds.height() - font_height) / 2
-				p.drawText(self.width() - fmetrics.width(txt), 
+				p.drawText(self.width() - fmetrics.width(txt),
 					round(pos - centering - start_pos + font_ascent + font_extra),
 					txt)
-			
+
 				if lineno in self._errors:
 					centering = (blk_bounds.height() - self.ICON_SIZE) / 2
-					self._icon_error.paint(p, 0, round(pos + centering), 
+					self._icon_error.paint(p, 0, round(pos + centering),
 							self.ICON_SIZE, self.ICON_SIZE)
 
 				elif lineno in self._warnings:
 					centering = (blk_bounds.height() - self.ICON_SIZE) / 2
 					self._icon_warning.paint(p, 0, round(pos + centering),
 							self.ICON_SIZE, self.ICON_SIZE)
-			
+
 			lineno += 1
 			blk = blk.next()
 

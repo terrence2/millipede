@@ -63,7 +63,7 @@ IGNORE_TOKENS = set([
 ])
 
 
-class MelanoCodeDocument(QTextDocument):
+class MpCodeDocument(QTextDocument):
 	def __init__(self, module, parent):
 		self.module = module
 		self.filename = module.filename

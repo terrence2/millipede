@@ -1,5 +1,5 @@
 '''
-Melano: a python development suite.
+Millipede: a python compiler
 '''
 __author__ = 'Terrence Cole <terrence@zettabytestorage.com>'
 

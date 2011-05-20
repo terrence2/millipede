@@ -1,7 +1,7 @@
 """
 A CPython inspired RPython parser.
 
-NOTES for Melano:
+NOTES for Millipede:
     - Copied from pypy (+2to3)
     - Add SkipToken and logic to carry unparsed nodes in the tree
     - Carry startpos/endpos through parse rather than lineno/column
@@ -75,7 +75,7 @@ class Node(object):
 class ParseError(Exception):
 
     def __init__(self, msg, token_type, value, startpos, endpos, line,
-                 expected=-1):
+                 expected= -1):
         self.msg = msg
         self.token_type = token_type
         self.value = value
@@ -95,7 +95,7 @@ class Parser(object):
         self.root = None
         self.stack = None
 
-    def prepare(self, start=-1):
+    def prepare(self, start= -1):
         """Setup the parser for parsing.
 
         Takes the starting symbol as an argument.
@@ -114,7 +114,7 @@ class Parser(object):
             new_node = Node(token_type, value, None, startpos, endpos)
             self.stack[-1][2].children.append(new_node)
             return
-            
+
         sym_id = 0 # for the annotator
         while True:
             dfa, state_index, node = self.stack[-1]

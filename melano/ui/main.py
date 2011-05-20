@@ -5,17 +5,17 @@ from PyQt4.QtGui import QAction, QIcon, QLabel, QDockWidget, QTreeView, \
 from melano.hl.name import Name
 from melano.ui.docks.projectbrowser import MpProjectTreeWidget
 from melano.ui.docks.projectlist import MpProjectListWidget
-from melano.ui.docks.symbolinfo import MelanoSymbolInfoWidget
-from melano.ui.editor.document import MelanoCodeDocument
-from melano.ui.editor.view import MelanoCodeView
+from melano.ui.docks.symbolinfo import MpSymbolInfoWidget
+from melano.ui.editor.document import MpCodeDocument
+from melano.ui.editor.view import MpCodeView
 import os.path
 
 
-class MelanoMainWindow(QMainWindow):
+class MpMainWindow(QMainWindow):
 	def __init__(self):
 		super().__init__()
 
-		# one MelanoCodeEdit for each view in the tabwidget
+		# one MpCodeEdit for each view in the tabwidget
 		self.views = {}
 
 		# the core widget is a tabpane
@@ -51,7 +51,7 @@ class MelanoMainWindow(QMainWindow):
 		self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockProjectTree)
 
 
-		self.symInfo = MelanoSymbolInfoWidget(self)
+		self.symInfo = MpSymbolInfoWidget(self)
 		self.dockSymInfo = QDockWidget("Symbol Info", self);
 		self.dockSymInfo.setObjectName('dockSymbolInfo')
 		self.dockSymInfo.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea);
@@ -74,21 +74,21 @@ class MelanoMainWindow(QMainWindow):
 		QCoreApplication.instance().view_closed(view.edit.document().filename)
 
 
-	def show_document(self, doc:MelanoCodeDocument):
+	def show_document(self, doc:MpCodeDocument):
 		# show and return the existing view
 		if doc.filename in self.views:
 			self.tabPane.setCurrentWidget(self.views[doc.filename])
 			return self.views[doc.filename]
 
 		# create a new view and tab for the view
-		self.views[doc.filename] = MelanoCodeView(doc, None)
+		self.views[doc.filename] = MpCodeView(doc, None)
 		self.tabPane.addTab(self.views[doc.filename], QIcon.fromTheme("text-x-generic"), os.path.basename(doc.filename))
 		self.tabPane.setCurrentIndex(self.tabPane.count() - 1)
 
 		return self.views[doc.filename]
 
 
-	def show_symbol(self, doc:MelanoCodeDocument, node:Name):
+	def show_symbol(self, doc:MpCodeDocument, node:Name):
 		view = self.show_document(doc)
 		view.edit.show_symbol(node)
 

@@ -3,7 +3,7 @@ Makes a parser from a grammar source.
 
 Inspired by Guido van Rossum's pgen2.
 
-NOTES for Melano:
+NOTES for Millipede:
     - Copied from pypy (+2to3)
 """
 

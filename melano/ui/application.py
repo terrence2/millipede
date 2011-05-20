@@ -1,14 +1,10 @@
-from .editor.document import MelanoCodeDocument
-from .main import MelanoMainWindow
+from .editor.document import MpCodeDocument
+from .main import MpMainWindow
 from PyQt4.QtGui import QApplication
 from melano.hl.module import MpModule
 from melano.hl.name import Name
 import base64
 import os.path
-#from melano.config.config import MelanoConfig
-#from melano.code.symbols.module import Module
-#from melano.code.symbols.block import Block
-#from melano.code.symbols.symbol import Symbol
 
 
 class MpApplication(QApplication):
@@ -23,7 +19,7 @@ class MpApplication(QApplication):
 		self.icons_dir = os.path.join('.', 'data', 'icons')
 
 		# the main application window
-		self.window = MelanoMainWindow()
+		self.window = MpMainWindow()
 		self.window.show()
 
 		self.window.resize(800, 600)
@@ -61,7 +57,7 @@ class MpApplication(QApplication):
 		# load the document
 		doc = self.documents.get(module.filename)
 		if not doc:
-			doc = MelanoCodeDocument(module, self.window)
+			doc = MpCodeDocument(module, self.window)
 			self.documents[module.filename] = doc
 
 		return doc

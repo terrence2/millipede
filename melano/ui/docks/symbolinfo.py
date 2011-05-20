@@ -7,7 +7,7 @@ from PyQt4.QtGui import QTextBrowser
 from melano.hl.name import Name
 from melano.util.debug import qt_debug
 
-class MelanoSymbolInfoWidget(QTextBrowser):
+class MpSymbolInfoWidget(QTextBrowser):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.app = QCoreApplication.instance()

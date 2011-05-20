@@ -1,7 +1,7 @@
 '''
 Convert the low-level parse tree into a high-level Abstract Syntax Tree.
 
-NOTES for Melano:
+NOTES for Millipede:
 	- Copied and adapted from pypy; this involved a complete rewrite of many
 		different elements to support new python3 constructs.
 	- Passes the low-level Node to the ast nodes directly, rather than pulling

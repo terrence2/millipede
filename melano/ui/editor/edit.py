@@ -1,4 +1,4 @@
-from .document import MelanoCodeDocument
+from .document import MpCodeDocument
 from PyQt4.QtCore import QCoreApplication, QEvent
 from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor, QTextFormat, QColor, \
 	QToolTip
@@ -9,8 +9,8 @@ from melano.util.debug import qt_debug
 #from melano.code.symbols.function import Function
 
 
-class MelanoCodeEdit(QTextEdit):
-	def __init__(self, doc:MelanoCodeDocument, parent):
+class MpCodeEdit(QTextEdit):
+	def __init__(self, doc:MpCodeDocument, parent):
 		super().__init__(parent)
 
 		self.setDocument(doc)
