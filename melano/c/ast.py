@@ -380,9 +380,9 @@ class TranslationUnit(AST):
 	def reserve_global_name(self, name):
 		cnt = 0
 		if name.startswith('__'):
-			nm = '__mg_' + name[2:]
+			nm = '__mp_' + name[2:]
 		else:
-			nm = 'mg_' + name
+			nm = 'mp_' + name
 		while nm in self.names or nm in self.mask or nm in C_KEYWORDS:
 			nm = name + '_' + str(cnt)
 			cnt += 1
