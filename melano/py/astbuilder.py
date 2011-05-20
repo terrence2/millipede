@@ -1282,14 +1282,16 @@ class PythonASTBuilder:
 
 	def count_comp_ifs(self, iter_node, for_type):
 		count = 0
+		iter_children = self.children(iter_node)
 		while True:
-			first_child = iter_node.children[0]
+			first_child = iter_children[0]
+			first_children = self.children(first_child)
 			if first_child.type == for_type:
 				return count
 			count += 1
-			if len(first_child.children) == 2:
+			if len(first_children) == 2:
 				return count
-			iter_node = first_child.children[2]
+			iter_node = first_children[2]
 
 
 	def comprehension_helper(self, comp_node, for_type, if_type, iter_type,
