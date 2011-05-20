@@ -2067,6 +2067,8 @@ class Py2C(ASTVisitor):
 		# get the returned instance
 		rv_inst = self.visit(node.value)
 		self.scope.ll.do_yield(rv_inst)
+		if rv_inst:
+			rv_inst.decref()
 
 
 
