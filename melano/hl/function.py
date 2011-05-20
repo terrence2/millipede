@@ -14,7 +14,7 @@ import logging
 
 
 
-class MelanoFunction(Scope, Entity):
+class MpFunction(Scope, Entity):
 	'''Specialization of function scope to contain expected calling style.'''
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)

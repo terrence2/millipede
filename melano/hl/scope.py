@@ -46,8 +46,8 @@ class Scope:
 		Note: use this instead of owner.parent to skip class scopes.
 		'''
 		cur = self.owner.parent
-		from melano.hl.class_ import MelanoClass
-		while isinstance(cur, MelanoClass):
+		from melano.hl.class_ import MpClass
+		while isinstance(cur, MpClass):
 			cur = cur.owner.parent
 		return cur
 

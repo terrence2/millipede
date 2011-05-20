@@ -9,7 +9,7 @@ from melano.hl.types.pyclass import PyClassType
 import logging
 
 
-class MelanoClass(Scope, Entity):
+class MpClass(Scope, Entity):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 

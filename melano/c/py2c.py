@@ -25,8 +25,8 @@ from melano.c.types.pyset import PySetLL
 from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
 from melano.c.types.pytype import PyTypeLL
-from melano.hl.class_ import MelanoClass
-from melano.hl.function import MelanoFunction
+from melano.hl.class_ import MpClass
+from melano.hl.function import MpFunction
 from melano.hl.module import MpModule
 from melano.hl.nameref import NameRef
 from melano.hl.types.hltype import HLType
@@ -350,22 +350,22 @@ class Py2C(ASTVisitor):
 
 	def find_nearest_class_scope(self, err=''):
 		for s in reversed(self.scopes):
-			if isinstance(s, MelanoClass):
+			if isinstance(s, MpClass):
 				return s
 		raise InvalidScope(err)
 
 
 	def find_nearest_function_scope(self, err=''):
 		for s in reversed(self.scopes):
-			if isinstance(s, MelanoFunction):
+			if isinstance(s, MpFunction):
 				return s
 		raise InvalidScope(err)
 
 
 	def find_nearest_method_scope(self, err=''):
 		for s in reversed(self.scopes):
-			if isinstance(s, MelanoFunction):
-				if isinstance(s.owner.parent, MelanoClass):
+			if isinstance(s, MpFunction):
+				if isinstance(s.owner.parent, MpClass):
 					return s
 		raise InvalidScope(err)
 

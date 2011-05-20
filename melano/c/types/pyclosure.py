@@ -8,7 +8,7 @@ from melano.c.types.integer import CIntegerLL
 from melano.c.types.pydict import PyDictLL
 from melano.c.types.pyfunction import PyFunctionLL
 from melano.c.types.pyobject import PyObjectLL
-from melano.hl.function import MelanoFunction
+from melano.hl.function import MpFunction
 from melano.hl.nameref import NameRef
 
 
@@ -54,7 +54,7 @@ class PyClosureLL(PyFunctionLL):
 	def each_func_scope(self):
 		cur = self.hlnode
 		while cur:
-			if isinstance(cur, MelanoFunction):
+			if isinstance(cur, MpFunction):
 				yield cur
 			cur = cur.owner.parent
 

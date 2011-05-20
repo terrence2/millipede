@@ -10,7 +10,6 @@ from melano.c.types.pyinteger import PyIntegerLL
 from melano.c.types.pyobject import PyObjectLL
 from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
-from melano.hl.class_ import MelanoClass
 from melano.hl.name import Name
 
 
@@ -91,7 +90,7 @@ class PyFunctionLL(PyObjectLL):
 
 
 
-	### MelanoFunction
+	### MpFunction
 	def declare_function_object(self, docstring):
 		# create the function definition structure
 		c_name = c.Constant('string', PyStringLL.name_to_c_string(self.hlnode.owner.name))

@@ -3,10 +3,10 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.hl.class_ import MelanoClass
+from melano.hl.class_ import MpClass
 from melano.hl.comprehension import MelanoComprehension
 from melano.hl.constant import Constant
-from melano.hl.function import MelanoFunction
+from melano.hl.function import MpFunction
 from melano.hl.name import Name
 from melano.hl.nameref import NameRef
 from melano.hl.scope import Scope
@@ -76,7 +76,7 @@ class Indexer0(ASTVisitor):
 	def find_nearest_function(self, base):
 		cur = base
 		while cur:
-			if isinstance(cur, MelanoFunction):
+			if isinstance(cur, MpFunction):
 				return cur
 			cur = cur.owner.parent
 		return None
@@ -92,7 +92,7 @@ class Indexer0(ASTVisitor):
 		self.visit_nodelist(node.keywords)
 		self.visit(node.starargs)
 		self.visit(node.kwargs)
-		with self.new_scope(node, scope_ty=MelanoClass):
+		with self.new_scope(node, scope_ty=MpClass):
 			self.visit_nodelist(node.body)
 		self.visit_nodelist(node.decorator_list)
 
@@ -126,7 +126,7 @@ class Indexer0(ASTVisitor):
 		self.visit_nodelist(node.args.defaults) # positional arg default values
 		self.visit_nodelist(node.args.kw_defaults) # kwargs default values
 
-		with self.new_scope(node, scope_ty=MelanoFunction):
+		with self.new_scope(node, scope_ty=MpFunction):
 			if self.find_nearest_function(self.scope.owner.parent):
 				self.scope.set_needs_closure()
 
@@ -146,7 +146,7 @@ class Indexer0(ASTVisitor):
 		name = 'genexp_scope_' + str(next(self.anon_count))
 		node.name = py.Name(name, py.Store, None)
 		self.visit(node.name)
-		with self.new_scope(node, scope_ty=MelanoFunction, name=name):
+		with self.new_scope(node, scope_ty=MpFunction, name=name):
 			self.scope.is_generator = True
 			self.scope.is_anonymous = True
 			self.scope.set_needs_closure()
@@ -184,7 +184,7 @@ class Indexer0(ASTVisitor):
 		name = 'lambda_scope_' + str(next(self.anon_count))
 		node.name = py.Name(name, py.Store, None)
 		self.visit(node.name)
-		with self.new_scope(node, scope_ty=MelanoFunction):
+		with self.new_scope(node, scope_ty=MpFunction):
 			if self.find_nearest_function(self.scope.owner.parent):
 				self.scope.set_needs_closure()
 			self.scope.is_anonymous = True
@@ -290,6 +290,6 @@ class Indexer0(ASTVisitor):
 
 
 	def visit_Yield(self, node):
-		assert isinstance(self.scope, MelanoFunction), 'Yield in non-function scope'
+		assert isinstance(self.scope, MpFunction), 'Yield in non-function scope'
 		self.scope.is_generator = True
 		self.visit(node.value)
