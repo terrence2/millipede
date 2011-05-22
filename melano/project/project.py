@@ -10,7 +10,7 @@ from melano.c.py2c import Py2C
 from melano.c.pybuiltins import PY_BUILTINS
 from melano.hl.builtins import Builtins
 from melano.hl.cfg.basicblock import BasicBlock
-from melano.hl.module import MpModule
+from melano.hl.module import MpModule, MpMissingModule, MpProbedModule
 from melano.hl.name import Name
 from melano.project.analysis.cfgbuilder import CFGBuilder
 from melano.project.analysis.clean import Clean
@@ -19,7 +19,7 @@ from melano.project.analysis.indexer1 import Indexer1
 from melano.project.analysis.linker import Linker
 from melano.project.analysis.typer import Typer
 from melano.project.global_cache import GlobalCache
-from melano.project.importer import Importer
+from melano.project.importer import Importer, ModuleDesc
 from melano.project.project_cache import ProjectCache
 from melano.py.driver import PythonParserDriver
 import errno
@@ -60,10 +60,10 @@ class MpProject:
 		self.build_dir = os.path.realpath(build_dir)
 		self.data_dir = os.path.join(os.path.realpath('.'), 'data')
 
-		self.stdlib = [os.path.realpath('./data/lib-dynload')]
+		self.stdlib = [] #[os.path.realpath('./data/lib-dynload')]
 		self.extensions = []
-		self.builtins = [os.path.realpath('./data/builtins')]
-		self.override = [os.path.realpath('./data/override')]
+		self.builtins = [] #[os.path.realpath('./data/builtins')]
+		self.override = [] #[os.path.realpath('./data/override')]
 
 		# defines the c prefix to use when creating the makefile
 		self.c_prefix = '/usr'
@@ -166,39 +166,60 @@ class MpProject:
 		# load all modules in depth-first order
 		for program in self.programs:
 			importer.trace_import_tree(program)
-			for modname, filename, modtype, ref_paths, ast in reversed(importer.out):
-				if filename in self.modules_by_path:
-					continue
-				if self.verbose: logging.info("mapping module: " + modname + ' -> ' + filename)
+			#for modname, filename, modtype, ref_paths, ast in reversed(importer.out):
+			for desc, ast, ref_paths in reversed(importer.out):
+				if desc.type == ModuleDesc.TYPE_MISSING:
+					mod = MpMissingModule(desc.modtype, desc.modname, self.builtins_scope)
+					assert desc.modname not in self.modules_by_absname
+					self.modules_by_absname[desc.modname] = mod
 
-				# create the module
-				if modname == 'builtins' and modtype == MpModule.BUILTIN:
-					mod = self.builtins_scope
+				elif desc.type == ModuleDesc.TYPE_PROBE:
+					if desc.modname == 'builtins':
+						assert desc.modtype == MpModule.BUILTIN
+						mod = self.builtins_scope
+					else:
+						mod = MpProbedModule(desc.modtype, desc.names, desc.modname, self.builtins_scope)
+
+					assert desc.modname not in self.modules_by_absname
+					self.modules_by_absname[desc.modname] = mod
+
 				else:
-					mod = MpModule(modtype, filename, modname, self.builtins_scope)
-				mod.ast = ast
-				mod.owner.ast = ast
-				mod.ast.hl = mod
+					assert desc.type == ModuleDesc.TYPE_FILE, "unknown module descriptor type"
+					if desc.path in self.modules_by_path:
+						logging.warning("Skipping duplicate module: {}".format(desc.path))
+						continue
+					if self.verbose: logging.info("mapping module: " + desc.modname + ' -> ' + desc.path)
 
-				# add to order, in depth first order
-				self.order.append(filename)
+					# create the module
+					assert desc.modtype != MpModule.BUILTIN, "we should not have builtin modules with a file"
+					mod = MpModule(desc.modtype, desc.path, desc.modname, self.builtins_scope)
+					mod.ast = ast
+					mod.owner.ast = ast
+					mod.ast.hl = mod
 
-				# map the module by filename
-				self.modules_by_path[filename] = mod
-				self.modules_by_absname[modname] = mod
+					# add to order, in depth first order
+					self.order.append(desc.path)
 
-				# store aside the refmap for after we have loaded all modules
-				ref_paths_by_module[filename] = ref_paths
+					# map the module by filename
+					self.modules_by_path[desc.path] = mod
+					self.modules_by_absname[desc.modname] = mod
 
-				# NOTE: mark each program as having real name __main__
-				if modname == program:
-					mod.set_as_main()
+					# store aside the refmap for after we have loaded all modules
+					ref_paths_by_module[desc.path] = ref_paths
+
+					# NOTE: mark each program as having real name __main__
+					if desc.modname == program:
+						mod.set_as_main()
 
 		# after we have loaded all modules, fill in the refs in each module
+		# NOTE: we can only track refs when we have the source (so we know what names are imports)
 		for filename, mod in self.modules_by_path.items():
 			ref_paths = ref_paths_by_module[filename]
-			for local_modname, ref_filename in ref_paths.items():
-				mod.refs[local_modname] = self.modules_by_path[ref_filename]
+			for local_modname, desc in ref_paths.items():
+				try:
+					mod.refs[local_modname] = self.modules_by_absname[desc.modname]
+				except:
+					pdb.set_trace()
 
 
 	def index_static(self):
@@ -222,7 +243,7 @@ class MpProject:
 		'''Find and add to the scope stack, all names from imports.'''
 		missing = {}
 		records = {}
-		visited = set()
+		visited = {mod for mod in self.modules_by_absname.values() if isinstance(mod, (MpProbedModule, MpMissingModule))}
 		def _index(self):
 			nonlocal missing, records, visited
 			for fn in reversed(self.order):

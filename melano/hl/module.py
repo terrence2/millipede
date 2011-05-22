@@ -11,6 +11,7 @@ import logging
 import tokenize
 
 
+
 class MpModule(Scope, Entity):
 	'''
 	Represents one python-level module.
@@ -71,6 +72,7 @@ class MpModule(Scope, Entity):
 		self.is_main = True
 
 
+	#FIXME: are we still using this and should we be?
 	@property
 	def name(self):
 		if self.real_name:
@@ -126,4 +128,59 @@ class MpModule(Scope, Entity):
 
 	def get_source_line(self, lineno:int) -> str:
 		return self.lines[lineno - 1]
+
+
+class MpProbedModule(MpModule):
+	'''A module with limited functionality because it has no source -- e.g. no ast, unvisitable, etc.'''
+	def __init__(self, modtype:int, names:[str], dottedname:str, builtins_scope):
+		super().__init__(modtype, '', dottedname, builtins_scope)
+		self.symbols = {}
+		for name in names:
+			self.add_symbol(name, Name(name, self, None))
+
+	def set_as_main(self):
+		raise SystemError("Main module must have source!")
+
+	def get_source_line(self, lineno:int) -> str:
+		raise SystemError("No source at this line")
+
+
+class MpMissingModule(MpModule):
+	'''A module with limited functionality because we cannot find it when building.  This may be a
+		normal, expected condition -- e.g. an import that is simply checking for support that is not expected -- or
+		it could be a failure to find a needed module.  We will only know when analyzing if we refer
+		to names in the module.  Fail if we lookup a symbol in this module.'''
+	QUIRKS = {
+			'_emx_link': ['link'],
+			'_gestalt': ['gestalt'],
+			'_subprocess': ['CREATE_NEW_PROCESS_GROUP', 'CREATE_NEW_CONSOLE'],
+			'ce': ['_exit'],
+			'hashlib': ['sha512'],
+			'java': ['lang'],
+			'java.lang': ['System'],
+			'org': ['python'],
+			'org.python': ['core'],
+			'org.python.core': ['PyStringMap'],
+			'nt': ['_exit', '_getfullpathname', '_getfileinformation', '_getfinalpathname'],
+			'os2': ['_exit'],
+			'win32api': ['RegOpenKeyEx', 'RegQueryValueEx', 'GetVersionEx', 'RegCloseKey'],
+			'win32con': ['VER_PLATFORM_WIN32_NT', 'VER_PLATFORM_WIN32_WINDOWS', 'HKEY_LOCAL_MACHINE', 'VER_NT_WORKSTATION'],
+		}
+
+	def __init__(self, modtype:int, dottedname:str, builtins_scope):
+		super().__init__(modtype, '', dottedname, builtins_scope)
+
+		for nm, quirks in self.QUIRKS.items():
+			if nm != self.python_name: continue
+			for i, quirk in enumerate(quirks):
+				self.add_symbol(self.QUIRKS[nm][i], Name(self.QUIRKS[nm][i], self, None), None)
+
+
+	def lookup(self, name):
+		# Note: no need to recurse to builtins, since we can't actually do lookups from _inside_ the module
+		return self.symbols[name]
+
+
+	def lookup_star(self):
+		return list(self.symbols.keys())
 

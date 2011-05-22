@@ -38,19 +38,19 @@ class ModuleLocation(SQLBase):
 	__tablename__ = 'module_locations'
 	id = Column(Integer, primary_key=True)
 
-	name = Column(Unicode)
 	type = Column(Integer)
-	path = Column(Unicode)
-	location = Column(Unicode)
+	modtype = Column(Integer)
+	modname = Column(Unicode)
+	data = Column(Unicode)
 
-	unique_rows = UniqueConstraint('name', 'type', 'path', 'location')
+	unique_rows = UniqueConstraint('name', 'data')
 
-	def __init__(self, name, type, path, location):
+	def __init__(self, type, modtype, modname, data):
 		super().__init__()
-		self.name = name
 		self.type = type
-		self.path = path
-		self.location = location
+		self.modtype = modtype
+		self.modname = modname
+		self.data = data
 
 
 class ProjectCache:
@@ -138,7 +138,7 @@ class ProjectCache:
 
 
 	def get_module_path(self, dottedname):
-		rows = self.session.query(ModuleLocation).filter_by(name=dottedname).all()
+		rows = self.session.query(ModuleLocation).filter_by(modname=dottedname).all()
 
 		# NOTE: if we have more than one reference to this raw name (e.g. if it is a relative name .foo
 		#	from more than one project directory), then there is not much we can do here and we need
@@ -147,13 +147,10 @@ class ProjectCache:
 			raise KeyError
 
 		row = rows[0]
-		return row.path, row.location, row.type
+		return row.type, row.modtype, row.modname, row.data
 
 
-	def add_module_location(self, initial_name, path, location, type):
-		#existing = self.session.query(ModuleLocations).filter_by(type=type, name=dottedname, path=path)
-		#if len(existing) > 0:
-		#	return
-		row = ModuleLocation(initial_name, type, path, location)
+	def add_module_location(self, type, modtype, modname, data):
+		row = ModuleLocation(type, modtype, modname, data)
 		self.session.add(row)
 		self.session.commit()
