@@ -1282,8 +1282,8 @@ class PythonASTBuilder:
 
 	def count_comp_ifs(self, iter_node, for_type):
 		count = 0
-		iter_children = self.children(iter_node)
 		while True:
+			iter_children = self.children(iter_node)
 			first_child = iter_children[0]
 			first_children = self.children(first_child)
 			if first_child.type == for_type:
