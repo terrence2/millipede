@@ -115,7 +115,12 @@ class Indexer1(ASTVisitor):
 
 	def visit_ImportFrom(self, node):
 		def _handle_star(alias):
-			for name in mod.lookup_star():
+			try:
+				names = mod.lookup_star()
+			except SystemError as ex:
+				logging.error(str(ex))
+				return
+			for name in names:
 				# don't visit until we have already collected all possible symbols in the parent
 				if mod not in self.visited:
 					logging.info("Skipping missing: {}".format(pkg_or_mod_name + '.*'))
