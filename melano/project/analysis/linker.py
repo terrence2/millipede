@@ -179,9 +179,8 @@ class Linker(ASTVisitor):
 				for name in handler.type.elts:
 					sym = self.scope.lookup(str(name))
 					name.hl = NameRef(sym)
-			elif isinstance(handler.type, py.Name):
-				sym = self.scope.lookup(str(handler.type))
-				handler.type.hl = NameRef(sym)
+			elif isinstance(handler.type, (py.Name, py.Attribute, py.Subscript)):
+				self.visit(handler.type)
 			else:
 				assert handler is node.handlers[-1], "default 'except' must be last"
 			# NOTE: don't bother visiting the name, since we know it is a Store

@@ -1835,7 +1835,7 @@ class Py2C(ASTVisitor):
 						for name in handler.type.elts:
 							class_inst = self.visit(name)
 							matchers.append(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))))
-					elif isinstance(handler.type, py.Name):
+					elif isinstance(handler.type, (py.Name, py.Attribute, py.Subscript)):
 						class_inst = self.visit(handler.type)
 						matchers.append(c.FuncCall(c.ID('PyErr_GivenExceptionMatches'), c.ExprList(c.ID(exc_type_inst.name), c.ID(class_inst.name))))
 					else:
