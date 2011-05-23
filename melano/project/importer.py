@@ -195,9 +195,10 @@ class Importer:
 			desc = self.trace_import_tree(abs_pkg_or_mod_name)
 			ref_paths[rel_pkg_or_mod_name] = desc
 
-			# Note: the names in the from . import <names> may be either names in the module we just added, 
-			#		or they may also be modules under the package, if it is a package we just imported
-			if isinstance(desc, ModuleFileDesc) and desc.path.endswith('__init__.py'):
+			# Note: the names in the 'from . import <names>' may be either names in the module we just added, 
+			#		or they may also be modules under the package, if it is a package we just imported.  If they are
+			#		modules, we want to trace them too, as they are part of the import chain.
+			if (isinstance(desc, ModuleFileDesc) and desc.path.endswith('__init__.py')):
 				for alias_name in imp_names:
 					try:
 						self.trace_import_tree(abs_pkg_or_mod_name + '.' + str(alias_name))
