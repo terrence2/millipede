@@ -463,19 +463,35 @@ class PyObjectLL(LLType):
 			slice_inst.decref()
 
 
-	def sequence_del_slice(self,
-						start:int or CIntegerLL,
-						end:int or CIntegerLL,
-						step:int or CIntegerLL):
-		out = CIntegerLL(None, self.v)
-		out.declare_tmp()
-		_start = c.Constant('integer', start) if isinstance(start, int) else c.ID(start.name)
-		_end = c.Constant('integer', end) if isinstance(end, int) else c.ID(end.name)
-		if step != 1:
-			raise NotImplementedError("Slicing with a step size is not yet supported")
-		self.v.ctx.add(c.Assignment('=', c.ID(out.name), c.FuncCall(c.ID('PySequence_DelSlice'), c.ExprList(c.ID(self.name), _start, _end))))
-		self.fail_if_nonzero(out.name)
-		out.decref()
+	def sequence_del_slice(self, start, end, step):
+		if step is None:
+			tmp_inst = CIntegerLL(None, self.v)
+			tmp_inst.declare_tmp(name='_rv_slice')
+
+			if start is None: _start = c.Constant('integer', 0)
+			else: _start = c.ID(start.as_ssize().name)
+			if end is None: _end = c.Constant('integer', CIntegerLL.MAX)
+			else: _end = c.ID(end.as_ssize().name)
+
+			self.v.ctx.add(c.Assignment('=', c.ID(tmp_inst.name), c.FuncCall(c.ID('PySequence_DelSlice'),
+																			c.ExprList(c.ID(self.name), _start, _end))))
+			self.fail_if_nonzero(tmp_inst.name)
+			tmp_inst.decref()
+
+		else:
+			slice_inst = PySliceLL(None, self.v)
+			slice_inst.declare_tmp(name='_slice')
+
+			if start is None: _start = self.v.none; _start.incref()
+			else: _start = start.as_pyobject()
+			if end is None: _end = self.v.none; _end.incref()
+			else: _end = end.as_pyobject()
+			_step = step.as_pyobject()
+
+			slice_inst.new(_start, _end, _step)
+			self.del_item(slice_inst)
+			slice_inst.decref()
+
 	### End Sequence
 
 
