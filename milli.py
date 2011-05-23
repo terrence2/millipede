@@ -66,15 +66,15 @@ def main():
 	if opts.version == '3.3':
 		logging.info("Building against Python3.3")
 		stdlib = [os.path.join(opts.prefix, 'lib', 'python3.3'), os.path.join(opts.prefix, 'lib', 'python3.3', 'lib-dynload')]
-		extensions = [os.path.join(opts.prefix, 'python3.3', 'site-packages')]
+		extensions = [os.path.join(opts.prefix, 'lib', 'python3.3', 'site-packages')]
 	elif opts.version == '3.2':
 		logging.info("Building against Python3.2")
 		stdlib = [os.path.join(opts.prefix, 'lib', 'python3.2'), os.path.join(opts.prefix, 'lib', 'python3.2', 'lib-dynload')]
-		extensions = [os.path.join(opts.prefix, 'python3.2', 'site-packages')]
+		extensions = [os.path.join(opts.prefix, 'lib', 'python3.2', 'site-packages')]
 	else:
 		logging.info("Building against Python3.1")
 		stdlib = [os.path.join(opts.prefix, 'lib', 'python3.1'), os.path.join(opts.prefix, 'lib', 'python3.1', 'lib-dynload')]
-		extensions = [os.path.join(opts.prefix, 'python3.1', 'site-packages')]
+		extensions = [os.path.join(opts.prefix, 'lib', 'python3.1', 'site-packages')]
 
 	path = args[-1]
 	base = os.path.dirname(path)
