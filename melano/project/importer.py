@@ -146,10 +146,11 @@ class Importer:
 		# check for opaque finds and skip them
 		logging.debug("Found file: {}".format(desc.path))
 		if not desc.path.endswith('.py'):
-			raise SystemError("Need to do special probing here!")
-			logging.debug("Opaque: {}".format(desc.path))
-			self.out.append((initial_modname, desc.path, desc.type, {}, None))
-			return desc
+			logging.info("Probing non-py: {}".format(desc.path))
+			real_desc = self.probe_for_module_info(initial_modname)
+			real_desc.modtype = desc.modtype
+			self.out.append((real_desc, None, None))
+			return real_desc
 
 		# visit and pull out refs and renames
 		renames, ref_paths, ast = self.find_links(initial_modname, desc.path, package_directory, desc.directory)
