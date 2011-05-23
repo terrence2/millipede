@@ -176,6 +176,11 @@ class Indexer0(ASTVisitor):
 				self.visit(alias.name)
 
 
+	def visit_Index(self, node):
+		self.visit(node.value)
+		node.hl = node.value.hl
+
+
 	def visit_Lambda(self, node):
 		#defaults
 		self.visit_nodelist(node.args.defaults) # positional arg default values
