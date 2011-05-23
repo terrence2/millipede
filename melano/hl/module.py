@@ -165,6 +165,7 @@ class MpMissingModule(MpModule):
 			'os2': ['_exit'],
 			'win32api': ['RegOpenKeyEx', 'RegQueryValueEx', 'GetVersionEx', 'RegCloseKey'],
 			'win32con': ['VER_PLATFORM_WIN32_NT', 'VER_PLATFORM_WIN32_WINDOWS', 'HKEY_LOCAL_MACHINE', 'VER_NT_WORKSTATION'],
+			'ElementC14N': ['_serialize_c14n'],
 		}
 
 	def __init__(self, modtype:int, dottedname:str, builtins_scope):
