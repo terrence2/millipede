@@ -17,6 +17,7 @@ from melano.hl.types.pyset import PySetType
 from melano.hl.types.pystring import PyStringType, MalformedStringError
 from melano.hl.types.pytuple import PyTupleType
 from melano.lang.visitor import ASTVisitor
+from melano.project.quirks import remove_expected_missing
 from melano.py import ast as py
 import itertools
 import logging
@@ -42,6 +43,7 @@ class Indexer1(ASTVisitor):
 
 		# count of symbols we weren't able to index because of missing dependencies
 		self.missing = set()
+
 
 	@contextmanager
 	def new_scope(self, node, scope_ty=Scope, name=None):
@@ -207,4 +209,5 @@ class Indexer1(ASTVisitor):
 		assert node.hl is self.module
 		node.hl.owner.types = [PyModuleType]
 		self.visit_nodelist(node.body)
+		self.missing = remove_expected_missing(self.missing)
 

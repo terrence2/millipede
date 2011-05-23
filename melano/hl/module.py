@@ -6,6 +6,7 @@ from melano.hl.entity import Entity
 from melano.hl.name import Name
 from melano.hl.scope import Scope
 from melano.hl.types.pymodule import PyModuleType
+from melano.project.quirks import MISSING_QUIRKS
 import hashlib
 import logging
 import tokenize
@@ -150,31 +151,13 @@ class MpMissingModule(MpModule):
 		normal, expected condition -- e.g. an import that is simply checking for support that is not expected -- or
 		it could be a failure to find a needed module.  We will only know when analyzing if we refer
 		to names in the module.  Fail if we lookup a symbol in this module.'''
-	QUIRKS = {
-			'_emx_link': ['link'],
-			'_gestalt': ['gestalt'],
-			'_subprocess': ['CREATE_NEW_PROCESS_GROUP', 'CREATE_NEW_CONSOLE'],
-			'ce': ['_exit'],
-			'hashlib': ['sha512'],
-			'java': ['lang'],
-			'java.lang': ['System'],
-			'org': ['python'],
-			'org.python': ['core'],
-			'org.python.core': ['PyStringMap'],
-			'nt': ['_exit', '_getfullpathname', '_getfileinformation', '_getfinalpathname'],
-			'os2': ['_exit'],
-			'win32api': ['RegOpenKeyEx', 'RegQueryValueEx', 'GetVersionEx', 'RegCloseKey'],
-			'win32con': ['VER_PLATFORM_WIN32_NT', 'VER_PLATFORM_WIN32_WINDOWS', 'HKEY_LOCAL_MACHINE', 'VER_NT_WORKSTATION'],
-			'ElementC14N': ['_serialize_c14n'],
-		}
-
 	def __init__(self, modtype:int, dottedname:str, builtins_scope):
 		super().__init__(modtype, '', dottedname, builtins_scope)
 
-		for nm, quirks in self.QUIRKS.items():
+		for nm, quirks in MISSING_QUIRKS.items():
 			if nm != self.python_name: continue
 			for i, quirk in enumerate(quirks):
-				self.add_symbol(self.QUIRKS[nm][i], Name(self.QUIRKS[nm][i], self, None), None)
+				self.add_symbol(MISSING_QUIRKS[nm][i], Name(MISSING_QUIRKS[nm][i], self, None), None)
 
 
 	def lookup(self, name):

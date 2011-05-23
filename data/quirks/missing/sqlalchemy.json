@@ -1,0 +1,6 @@
+{
+	"sqlalchemy": ["cprocessors", "cresultproxy"],
+	"sqlalchemy.cprocessors": ["str_to_time", "UnicodeResultProcessor", "str_to_datetime", "int_to_boolean", "DecimalResultProcessor", "str_to_date", "to_str", "to_float"],
+	"sqlalchemy.cresultproxy": ["BaseRowProxy", "safe_rowproxy_reconstructor"]
+}
+
