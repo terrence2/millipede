@@ -167,17 +167,14 @@ class Indexer1(ASTVisitor):
 					return
 
 				# filename will be one of either (1) mod/name.py or (2) mod/name/__init__.py
-				real_filename_1 = mod.filename[:-11] + str(alias.name).replace('.', '/') + '.py'
-				real_filename_2 = mod.filename[:-11] + str(alias.name).replace('.', '/') + '/' + '__init__.py'
+				abs_modname = mod.python_name + '.' + str(alias.name)
 				try:
-					sym = self.project.modules_by_path[real_filename_1]
+					sym = self.project.modules_by_absname[abs_modname]
 				except KeyError:
-					try:
-						sym = self.project.modules_by_path[real_filename_2]
-					except KeyError:
-						logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
-						self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
-						return
+					logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
+					self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
+					return
+
 			else:
 				logging.info("Skipping missing from: {}".format(pkg_or_mod_name + '.' + str(alias.name)))
 				self.missing.add(pkg_or_mod_name + '.' + str(alias.name))
