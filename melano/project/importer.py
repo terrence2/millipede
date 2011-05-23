@@ -268,7 +268,7 @@ class Importer:
 		# otherwise, lookup and send visitor against the module
 		else:
 			desc = self.find_best_path_for_modname(parent_modname)
-			if isinstance(desc, ModuleMissingDesc):
+			if not isinstance(desc, ModuleFileDesc):
 				raise NoSuchModuleError("opaque module at bottom of renamed lookup")
 			ast = self.project.get_file_ast(desc.path)
 			visitor = FindLinks()
