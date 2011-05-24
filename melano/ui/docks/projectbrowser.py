@@ -68,12 +68,16 @@ class MpProjectTreeWidget(QTreeWidget):
 
 
 	def _setup(self):
+		visited = set()
 		def _add_children(item, mod):
 			for ref in mod.refs:
 				try:
 					childMod = self.project.get_module_at_filename(ref)
 				except KeyError:
 					childMod = self.project.get_module_at_dottedname(ref)
+
+				if childMod in visited: return
+				visited.add(childMod)
 
 				child = QTreeWidgetItem(item)
 				child.setText(0, ref)
@@ -83,6 +87,7 @@ class MpProjectTreeWidget(QTreeWidget):
 				child.setData(0, self.TYPE_NODE, None)
 				item.addChild(child)
 				_add_children(child, childMod)
+
 			for name, sym in mod.symbols.items():
 				if not isinstance(sym, Name): continue
 				child = QTreeWidgetItem(item)
