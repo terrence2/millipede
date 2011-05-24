@@ -10,6 +10,15 @@ from melano.hl.nameref import NameRef
 from melano.util.debug import qt_debug
 
 class MpSymbolInfoWidget(QTextBrowser):
+	OPERATORS = {
+		'<', '<=', '==', '!=', '>', '>=', 'is', 'is not', 'in', 'not in', 'and', 'or' '|=',
+		'^=', '&=', '<<=', '>>=', '+=', '-=', '*=', '/=', '//=', '%=', '**=', '*', '**'
+	}
+	PUNCTUATION = {
+		'(', ')', '[', ']', ',',
+	}
+
+
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.app = QCoreApplication.instance()
@@ -28,14 +37,22 @@ class MpSymbolInfoWidget(QTextBrowser):
 		#name=name, types=, attrs='\n'.join(attrs), subs='\n'.join(subs))
 		self.setHtml(out)
 
+
 	def format_attrs(self, attributes):
 		return []
+
 
 	def format_subscripts(self, subscripts):
 		return []
 
+
 	def show_keyword(self, word:str):
-		self.show_info('Keyword: ' + word, [], [], [])
+		typename = 'Keyword: '
+		if word in self.OPERATORS:
+			typename = 'Operator: '
+		elif word in self.PUNCTUATION:
+			typename = 'Punctuation: '
+		self.show_info(typename + word, [], [], [])
 
 
 	def show_constant(self, node:Constant):
