@@ -70,7 +70,11 @@ class MpProjectTreeWidget(QTreeWidget):
 	def _setup(self):
 		def _add_children(item, mod):
 			for ref in mod.refs:
-				childMod = self.project.get_module_at_filename(ref)
+				try:
+					childMod = self.project.get_module_at_filename(ref)
+				except KeyError:
+					childMod = self.project.get_module_at_dottedname(ref)
+
 				child = QTreeWidgetItem(item)
 				child.setText(0, ref)
 				self._setup_font(child, ref, childMod.owner)
