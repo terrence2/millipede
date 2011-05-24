@@ -4,7 +4,9 @@ All rights reserved.
 '''
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTextBrowser
+from melano.hl.constant import Constant
 from melano.hl.name import Name
+from melano.hl.nameref import NameRef
 from melano.util.debug import qt_debug
 
 class MpSymbolInfoWidget(QTextBrowser):
@@ -14,22 +16,43 @@ class MpSymbolInfoWidget(QTextBrowser):
 		self.project = self.app.project
 
 
+	def show_info(self, name, types, attrs, subs):
+		out = '<h2>{}</h2>'.format(name)
+		if types:
+			out += '''
+			<h3>Types:</h3>
+			<ul>
+				{}
+			<ul>
+			'''.format('\n'.join(types))
+		#name=name, types=, attrs='\n'.join(attrs), subs='\n'.join(subs))
+		self.setHtml(out)
+
+	def format_attrs(self, attributes):
+		return []
+
+	def format_subscripts(self, subscripts):
+		return []
+
+	def show_keyword(self, word:str):
+		self.show_info('Keyword: ' + word, [], [], [])
+
+
+	def show_constant(self, node:Constant):
+		typename = node.type.__class__.__name__
+		self.show_info('Constant', [typename], self.format_attrs(node.attributes), self.format_subscripts(node.subscripts))
+
 
 	def show_symbol(self, node:Name):
-		typeinfo = '\n'.join(['<li>{}</li>'.format(str(ty)) for ty in node.types])
-		data = '''
-		<h2>{node.name}</h2>
-		<h3>Types</h3>
-		<ul>
-			{types}
-		<ul>
-		'''.format(node=node, types=typeinfo)
-		#node.name
-		#node.types
-		#node.attributes
-		#node.subscripts
+		if not node:
+			self.setHtml('')
+			return
 
-		self.setHtml(data)
+		node = node.deref()
 
-		#qt_debug()
-		#print(node)
+		if node.types:
+			typeinfo = ['<li>{}</li>'.format(ty.__class__.__name__) for ty in node.types]
+		else:
+			typeinfo = ['<li>{}</li>'.format(node.get_type().__class__.__name__)]
+
+		self.show_info(node.name, typeinfo, self.format_attrs(node.attributes), self.format_subscripts(node.subscripts))

@@ -1,8 +1,11 @@
 from .editor.document import MpCodeDocument
 from .main import MpMainWindow
 from PyQt4.QtGui import QApplication
+from melano.hl.constant import Constant
 from melano.hl.module import MpModule
 from melano.hl.name import Name
+from melano.ui.visitors.node_position_mapper import NodePositionMapper
+from melano.util.debug import qt_debug
 import base64
 import os.path
 
@@ -23,6 +26,9 @@ class MpApplication(QApplication):
 		self.window.show()
 
 		self.window.resize(800, 600)
+
+		# keep a map of positions -> hl nodes, for documents we access
+		self.nodemap = {}
 
 		'''
 		try:
@@ -77,4 +83,31 @@ class MpApplication(QApplication):
 			format and return a tooltip if this is possible for this text position.'''
 		#module.find_ast_node_for_position
 		return 'Hover Text!'
+
+
+	def on_click_text(self, module:MpModule, position:(int, int), word:str):
+		'''Discover and return the node corresponding to the text symbol we clicked on.  Take an appropriate action
+			based on the type of the token.'''
+		if module.filename not in self.nodemap:
+			visitor = NodePositionMapper()
+			visitor.visit(module.ast)
+			self.nodemap[module.filename] = visitor.out
+
+		def pos_to_word():
+			for start, end, hl in self.nodemap[module.filename]:
+				if start[0] <= position[0] and end[0] >= position[0]:
+					if start[1] <= position[1] and end[1] >= position[1]:
+						return hl
+			return None
+		node = pos_to_word()
+
+		if node:
+			if isinstance(node, Constant):
+				self.window.symInfo.show_constant(node)
+			else:
+				self.window.symInfo.show_symbol(node)
+		else:
+			self.window.symInfo.show_keyword(word)
+
+		#qt_debug()
 

@@ -20,6 +20,7 @@ class MpCodeEdit(QTextEdit):
 		# highlight the current line on changes
 		self.cursorPositionChanged.connect(self.onCursorPositionChanged)
 
+
 	def event(self, e):
 		if e.type() == QEvent.ToolTip:
 			cursor = self.cursorForPosition(e.pos())
@@ -41,6 +42,7 @@ class MpCodeEdit(QTextEdit):
 			else:
 				QToolTip.hideText()
 			return True
+
 		return super().event(e)
 
 
@@ -67,5 +69,12 @@ class MpCodeEdit(QTextEdit):
 		selection.cursor = self.textCursor()
 		selection.cursor.clearSelection()
 		self.setExtraSelections([selection])
+
+		# discover what word we are over and signal an event if it changes
+		cursor = self.textCursor()
+		pos = (cursor.block().firstLineNumber() + 1, cursor.position() - cursor.block().position())
+		cursor.select(QTextCursor.WordUnderCursor)
+		word = cursor.selectedText()
+		QCoreApplication.instance().on_click_text(self.document().module, pos, word)
 
 

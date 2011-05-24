@@ -26,8 +26,9 @@ class MpCodeLineStatus(QWidget):
 		self._errors = {}
 		self._warnings = {}
 
-		self._errors[3] = "Foobar!"
-		self._warnings[6] = "Barfoo!"
+		# EXAMPLES:
+		#self._errors[3] = "Foobar!"
+		#self._warnings[6] = "Barfoo!"
 
 		# load icons
 		self._icon_error = QIcon.fromTheme("dialog-error")
