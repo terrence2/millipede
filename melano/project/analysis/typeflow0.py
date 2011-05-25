@@ -13,7 +13,7 @@ import logging
 import pdb
 
 
-class TypeFlow(ASTVisitor):
+class TypeFlow0(ASTVisitor):
 	def __init__(self, project, module):
 		super().__init__()
 		self.project = project
@@ -23,6 +23,12 @@ class TypeFlow(ASTVisitor):
 	def visit_Attribute(self, node):
 		self.visit(node.value)
 		node.hl = Attribute(node.value, str(node.attr), node)
+
+
+	def visit_Assign(self, node):
+		self.visit(node.value)
+		self.visit_nodelist(node.targets)
+		node.hl = Coerce(Coerce.OVERRIDE, *([t.hl for t in node.targets] + [node.value.hl]))
 
 
 	def visit_AugAssign(self, node):
