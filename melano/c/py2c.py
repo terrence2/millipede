@@ -1590,8 +1590,8 @@ class Py2C(ASTVisitor):
 
 	def visit_Index(self, node):
 		#NOTE: Pass through index values... not sure why python ast wraps these rather than just having a value.
-		node.hl.ll = self.visit(node.value)
-		return node.hl.ll
+		tmp = self.visit(node.value)
+		return tmp
 
 
 	#def visit_Lambda(self, node):

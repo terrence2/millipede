@@ -16,7 +16,7 @@ from melano.project.analysis.clean import Clean
 from melano.project.analysis.indexer0 import Indexer0
 from melano.project.analysis.indexer1 import Indexer1
 from melano.project.analysis.linker import Linker
-from melano.project.analysis.typer import Typer
+from melano.project.analysis.typeflow import TypeFlow
 from melano.project.global_cache import GlobalCache
 from melano.project.importer import Importer, ModuleDesc
 from melano.project.project_cache import ProjectCache
@@ -292,7 +292,7 @@ class MpProject:
 			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
 				if self.verbose: logging.info("Typing: {}".format(mod.filename))
-				typer = Typer(self, mod)
+				typer = TypeFlow(self, mod)
 				typer.visit(mod.ast)
 
 
