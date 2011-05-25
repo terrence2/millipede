@@ -109,5 +109,3 @@ class MpApplication(QApplication):
 		else:
 			self.window.symInfo.show_keyword(word)
 
-		#qt_debug()
-

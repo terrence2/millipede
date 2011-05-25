@@ -58,7 +58,6 @@ class MpProjectTreeWidget(QTreeWidget):
 
 
 	def _setup_font(self, child, name, sym):
-		print(name)
 		if name.startswith('__') and name.endswith('__'):
 			child.setTextColor(0, self.app.palette().color(QPalette.Disabled, QPalette.Text))
 			fnt = self.app.font()

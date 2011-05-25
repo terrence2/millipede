@@ -98,7 +98,7 @@ class MpCodeDocument(QTextDocument):
 
 	@QtCore.pyqtSlot(int, int, int)
 	def onContentsChange(self, a, b, c):
-		print(a, b, c)
+		#print(a, b, c)
 
 		try:
 			tokens = self.tokenizer.tokenize(self.toPlainText())
@@ -127,7 +127,6 @@ class MpCodeDocument(QTextDocument):
 			elif tok.type in IGNORE_TOKENS:
 				pass
 			else:
-				#print(tok)
 				pass
 
 
