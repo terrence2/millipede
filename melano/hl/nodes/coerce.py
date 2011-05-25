@@ -43,12 +43,7 @@ class Coerce(Entity):
 
 	def get_type(self):
 		if self.coerce_type == self.GENERALIZE:
-			tys = [c.get_type() for c in self.children]
-			print("ALL: {}, {}".format(tys, [tys[0] == ty for ty in tys]))
-			if all([tys[0] == ty for ty in tys]):
-				return tys[0]
-			#TODO: find most general type of children and return that
-			return PyObjectType()
+			return PyObjectType.common_base([c.get_type() for c in self.children])()
 		elif self.coerce_type == self.OVERRIDE:
 			return self.children[-1].get_type()
 		elif self.coerce_type == self.INPLACE:
