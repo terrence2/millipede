@@ -1,9 +1,9 @@
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTreeWidget, QTreeWidgetItem, QIcon, QPalette
-from melano.hl.class_ import MpClass
-from melano.hl.function import MpFunction
-from melano.hl.module import MpModule
-from melano.hl.name import Name
+from melano.hl.nodes.class_ import MpClass
+from melano.hl.nodes.function import MpFunction
+from melano.hl.nodes.module import MpModule
+from melano.hl.nodes.name import Name
 import os.path
 import pdb
 

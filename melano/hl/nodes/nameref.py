@@ -2,12 +2,15 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.name import Name
+from melano.hl.nodes.name import Name
 import logging
 
 
 class NameRef:
 	def __init__(self, ref:Name):
+		super().__init__()
+		assert ref is not None
+
 		self.ref = ref
 		self.inst = None
 
@@ -58,6 +61,9 @@ class NameRef:
 
 	def get_type(self):
 		return self.ref.get_type()
+
+	def get_type_list(self):
+		return self.ref.get_type_list()
 
 	def add_type(self, ty):
 		self.ref.add_type(ty)

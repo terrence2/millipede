@@ -3,9 +3,9 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.hl.builtins import Builtins
+from melano.hl.nodes.builtins import Builtins
 from melano.hl.cfg.basicblock import BasicBlock
-from melano.hl.module import MpModule
+from melano.hl.nodes.module import MpModule
 from melano.lang.visitor import ASTVisitor
 import melano.py.ast as py
 import pdb

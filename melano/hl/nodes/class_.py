@@ -2,9 +2,9 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.entity import Entity
-from melano.hl.name import Name
-from melano.hl.scope import Scope
+from melano.hl.nodes.entity import Entity
+from melano.hl.nodes.name import Name
+from melano.hl.nodes.scope import Scope
 from melano.hl.types.pyclass import PyClassType
 import logging
 
@@ -12,9 +12,7 @@ import logging
 class MpClass(Scope, Entity):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-
-		# the hl type definition
-		self.type = PyClassType(self)
+		self.add_type(PyClassType(self))
 
 
 	def add_function_def(self, inst):

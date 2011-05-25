@@ -2,14 +2,15 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.scope import Scope
+from melano.hl.nodes.entity import Entity
+from melano.hl.nodes.scope import Scope
 from melano.hl.types.pycomprehension import PyComprehensionType
 
 
-class MpComprehension(Scope):
+class MpComprehension(Scope, Entity):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		self.type = PyComprehensionType()
+		self.add_type(PyComprehensionType())
 
 	def lookup(self, name):
 		try:

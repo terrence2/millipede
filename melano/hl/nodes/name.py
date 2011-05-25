@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.entity import Entity
+from melano.hl.nodes.entity import Entity
 from melano.hl.types.hltype import HLType
 from melano.hl.types.pyobject import PyObjectType
 import logging
@@ -17,7 +17,7 @@ class Name(Entity):
 		'''
 		parent: Scope (we cannot formally declare this type because Scope needs Name)
 		'''
-		super().__init__()
+		super().__init__(ast)
 
 		self.python_name = name
 		self.name = name.replace('.', '_')
@@ -25,15 +25,6 @@ class Name(Entity):
 
 		# a name can have a child scope (class/functions, etc)
 		self.scope = None
-
-		# the types that we have proven this name can take
-		self.types = []
-
-		# the ll instance
-		self.ll = None
-
-		# a ref to the ast where this name is defined
-		self.ast = ast
 
 
 	@property
@@ -43,32 +34,6 @@ class Name(Entity):
 		if self.parent:
 			return self.parent.owner.global_c_name + '_' + self.name
 		return self.name
-
-
-	def get_type(self) -> type:
-		'''
-		Query the type list to find the most appropriate type for this name.
-		'''
-		# if we have only one type assigned, just use it
-		if len(self.types) == 1:
-			return self.types[0]
-		# if we have no types, then we just use the most generic possible type
-		if not len(self.types):
-			return PyObjectType()
-
-		# otherwise, we have to find a common base
-		base = self.types[0]
-		for ty in self.types[1:]:
-			if base == ty:
-				continue
-			base = base.common_base_type(ty.__class__)
-
-		#print("RET: {} for {} types".format(base, self.types))
-		return base
-
-
-	def add_type(self, ty:HLType):
-		self.types.append(ty)
 
 
 	def _as_lowlevel(self, name):

@@ -4,9 +4,9 @@ All rights reserved.
 '''
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QTextBrowser
-from melano.hl.constant import Constant
-from melano.hl.name import Name
-from melano.hl.nameref import NameRef
+from melano.hl.nodes.constant import Constant
+from melano.hl.nodes.name import Name
+from melano.hl.nodes.nameref import NameRef
 from melano.util.debug import qt_debug
 
 class MpSymbolInfoWidget(QTextBrowser):
@@ -65,11 +65,13 @@ class MpSymbolInfoWidget(QTextBrowser):
 			self.setHtml('')
 			return
 
-		node = node.deref()
-
-		if node.types:
-			typeinfo = ['<li>{}</li>'.format(ty.__class__.__name__) for ty in node.types]
+		typeinfo = ['<li>{}</li>'.format(ty.__class__.__name__) for ty in node.get_type_list()]
+		if isinstance(node, (Name, NameRef)):
+			name = node.name
+			node = node.deref()
 		else:
-			typeinfo = ['<li>{}</li>'.format(node.get_type().__class__.__name__)]
+			name = node.get_display_name()
 
-		self.show_info(node.name, typeinfo, self.format_attrs(node.attributes), self.format_subscripts(node.subscripts))
+		self.show_info(name, typeinfo, self.format_attrs(node.attributes), self.format_subscripts(node.subscripts))
+
+

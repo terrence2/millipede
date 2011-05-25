@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.coerce import Coerce
+from melano.hl.nodes.coerce import Coerce
 from melano.lang.visitor import ASTVisitor
 from melano.py import ast as py
 import logging

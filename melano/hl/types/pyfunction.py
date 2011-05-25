@@ -2,6 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.types.hltype import HLType
 from melano.hl.types.pyobject import PyObjectType
 
 
@@ -16,7 +17,18 @@ class PyFunctionType(PyObjectType):
 		super().__init__()
 		self.scope = scope
 
+		# types for a function type encapsulates the possible returned types from the function
+		self.types = []
+
 		self._call_type = self.CALL_TYPE_UNKNOWN
+
+
+	def add_type(self, ty:HLType):
+		self.types.append(ty)
+
+
+	def get_type(self):
+		return PyObjectType.common_base(self.types)()
 
 
 	@property

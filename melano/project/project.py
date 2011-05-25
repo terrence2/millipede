@@ -7,11 +7,10 @@ Toplevel tool for analyzing a source base.
 from melano.c.makefile import Makefile
 from melano.c.out import COut
 from melano.c.py2c import Py2C
-from melano.c.pybuiltins import PY_BUILTINS
-from melano.hl.builtins import Builtins
+from melano.hl.nodes.builtins import Builtins
 from melano.hl.cfg.basicblock import BasicBlock
-from melano.hl.module import MpModule, MpMissingModule, MpProbedModule
-from melano.hl.name import Name
+from melano.hl.nodes.module import MpModule, MpMissingModule, MpProbedModule
+from melano.hl.nodes.name import Name
 from melano.project.analysis.cfgbuilder import CFGBuilder
 from melano.project.analysis.clean import Clean
 from melano.project.analysis.indexer0 import Indexer0
@@ -99,8 +98,6 @@ class MpProject:
 
 		# build a 'scope' for our builtins
 		self.builtins_scope = Builtins(MpModule.BUILTIN, '<builtin>', 'builtins', None)
-		for n in PY_BUILTINS:
-			self.builtins_scope.add_symbol(n)
 
 
 	def configure(self, *, programs:[str], roots:[str],

@@ -2,6 +2,9 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.types.pyfloat import PyFloatType
+from melano.hl.types.pyfunction import PyFunctionType
+import json
 import os
 import sys
 
@@ -37,7 +40,7 @@ if os.name != 'nt':
 			})
 if os.name not in ('nt', 'ce'):
 	MISSING_QUIRKS.update({
-			'_subprocess': ['CREATE_NEW_CONSOLE'],
+			'_subprocess': ['CREATE_NEW_CONSOLE', 'CREATE_NEW_PROCESS_GROUP'],
 			'win32api': ['RegOpenKeyEx', 'RegQueryValueEx', 'GetVersionEx', 'RegCloseKey'],
 			'win32con': ['VER_PLATFORM_WIN32_NT', 'VER_PLATFORM_WIN32_WINDOWS', 'HKEY_LOCAL_MACHINE', 'VER_NT_WORKSTATION'],
 			})
@@ -50,12 +53,13 @@ if sys.version_info.minor < 2:
 	MISSING_QUIRKS.update({
 			'sysconfig': ['get_platform'],
 			})
-
+MISSING_QUIRKS.update({
+			'ElementC14N': ['_serialize_c14n'],
+			})
 
 ####
 # Extend builtin missing quirks with installed extra quirks.
 ####
-import json
 extradir = os.path.join('data', 'quirks', 'missing')
 for filename in os.listdir(extradir):
 	with open(os.path.join(extradir, filename), 'r') as fp:
@@ -71,7 +75,7 @@ if os.name not in ('nt', 'ce'):
 	MODULE_QUIRKS.update({
 			'_ctypes': ['FUNCFLAG_STDCALL', 'get_last_error', 'set_last_error', 'LoadLibrary', 'FormatError', '_check_HRESULT'],
 			'_multiprocessing': ['PipeConnection', 'win32'],
-			#'_subprocess': ['win32'],
+			'_subprocess': ['win32'],
 			})
 
 def remove_expected_missing(missing):
@@ -84,3 +88,18 @@ def remove_expected_missing(missing):
 					skips.add(qualified_sym)
 
 	return missing - skips
+
+
+####
+# Augment some of our important, opaque stdlib code.  
+####
+def _augment_math(mod):
+	#import pdb; pdb.set_trace()
+	trigtype = PyFunctionType(mod)
+	trigtype.add_type(PyFloatType())
+	for n in ('sin', 'cos', 'tan'):
+		mod.symbols[n].add_type(trigtype)
+
+AUGMENT_QUIRKS = {
+				'math': _augment_math,
+				}

@@ -9,7 +9,7 @@ from melano.c.types.lltype import LLType
 from melano.c.types.pydict import PyDictLL
 from melano.c.types.pyobject import PyObjectLL
 from melano.c.types.pystring import PyStringLL
-from melano.hl.name import Name
+from melano.hl.nodes.name import Name
 
 
 class PyModuleLL(PyObjectLL):

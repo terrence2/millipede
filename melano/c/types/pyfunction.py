@@ -10,7 +10,7 @@ from melano.c.types.pyinteger import PyIntegerLL
 from melano.c.types.pyobject import PyObjectLL
 from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
-from melano.hl.name import Name
+from melano.hl.nodes.name import Name
 
 
 class PyFunctionLL(PyObjectLL):

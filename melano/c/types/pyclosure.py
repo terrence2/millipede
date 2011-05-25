@@ -8,8 +8,8 @@ from melano.c.types.integer import CIntegerLL
 from melano.c.types.pydict import PyDictLL
 from melano.c.types.pyfunction import PyFunctionLL
 from melano.c.types.pyobject import PyObjectLL
-from melano.hl.function import MpFunction
-from melano.hl.nameref import NameRef
+from melano.hl.nodes.function import MpFunction
+from melano.hl.nodes.nameref import NameRef
 
 
 class PyClosureLL(PyFunctionLL):

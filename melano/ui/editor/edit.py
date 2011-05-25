@@ -2,7 +2,7 @@ from .document import MpCodeDocument
 from PyQt4.QtCore import QCoreApplication, QEvent
 from PyQt4.QtGui import QTextEdit, QTextOption, QTextCursor, QTextFormat, QColor, \
 	QToolTip
-from melano.hl.name import Name
+from melano.hl.nodes.name import Name
 from melano.py import ast
 from melano.util.debug import qt_debug
 #from melano.code.symbols.symbol import Symbol

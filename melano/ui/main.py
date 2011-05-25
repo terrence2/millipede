@@ -2,7 +2,7 @@ from PyQt4 import QtCore
 from PyQt4.QtCore import QCoreApplication
 from PyQt4.QtGui import QAction, QIcon, QLabel, QDockWidget, QTreeView, \
 	QTabWidget, QMainWindow
-from melano.hl.name import Name
+from melano.hl.nodes.name import Name
 from melano.ui.docks.projectbrowser import MpProjectTreeWidget
 from melano.ui.docks.projectlist import MpProjectListWidget
 from melano.ui.docks.symbolinfo import MpSymbolInfoWidget

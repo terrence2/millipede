@@ -3,10 +3,10 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.hl.constant import Constant
-from melano.hl.name import Name
-from melano.hl.nameref import NameRef
-from melano.hl.scope import Scope
+from melano.hl.nodes.constant import Constant
+from melano.hl.nodes.name import Name
+from melano.hl.nodes.nameref import NameRef
+from melano.hl.nodes.scope import Scope
 from melano.hl.types.pybytes import PyBytesType
 from melano.hl.types.pydict import PyDictType
 from melano.hl.types.pyfloat import PyFloatType

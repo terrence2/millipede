@@ -2,11 +2,11 @@
 Copyright (c) 2011, Terrence Cole
 All rights reserved.
 '''
-from melano.hl.entity import Entity
-from melano.hl.name import Name
-from melano.hl.scope import Scope
+from melano.hl.nodes.entity import Entity
+from melano.hl.nodes.name import Name
+from melano.hl.nodes.scope import Scope
 from melano.hl.types.pymodule import PyModuleType
-from melano.project.quirks import MISSING_QUIRKS
+from melano.project.quirks import MISSING_QUIRKS, AUGMENT_QUIRKS
 import hashlib
 import logging
 import tokenize
@@ -28,7 +28,7 @@ class MpModule(Scope, Entity):
 		The source is the location (project root relative) where
 		this module can be found.
 		'''
-		super().__init__(Name(dottedname, None, None))
+		super().__init__(Name(dottedname, None, None), None)
 		self.owner.scope = self
 		self.python_name = dottedname
 
@@ -47,7 +47,6 @@ class MpModule(Scope, Entity):
 			self.lines = None
 
 		# the ast.Module for this module
-		self.ast = None
 		self.real_name = None
 
 		# add names common
@@ -61,7 +60,7 @@ class MpModule(Scope, Entity):
 		self.refs = {}
 
 		# the hl type definition
-		self.type = PyModuleType(self)
+		self.add_type(PyModuleType(self))
 
 		# set to true if we are the main module
 		self.is_main = False
@@ -79,7 +78,6 @@ class MpModule(Scope, Entity):
 		if self.real_name:
 			return self.real_name
 		return self.owner.name
-
 
 	@staticmethod
 	def _read_file(filename):
@@ -135,9 +133,13 @@ class MpProbedModule(MpModule):
 	'''A module with limited functionality because it has no source -- e.g. no ast, unvisitable, etc.'''
 	def __init__(self, modtype:int, names:[str], dottedname:str, builtins_scope):
 		super().__init__(modtype, '', dottedname, builtins_scope)
+
+		# reset symbols
 		self.symbols = {}
 		for name in names:
 			self.add_symbol(name, Name(name, self, None))
+		if dottedname in AUGMENT_QUIRKS:
+			AUGMENT_QUIRKS[dottedname](self)
 
 	def set_as_main(self):
 		raise SystemError("Main module must have source!")

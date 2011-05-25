@@ -3,13 +3,13 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from contextlib import contextmanager
-from melano.hl.class_ import MpClass
-from melano.hl.comprehension import MpComprehension
-from melano.hl.constant import Constant
-from melano.hl.function import MpFunction
-from melano.hl.name import Name
-from melano.hl.nameref import NameRef
-from melano.hl.scope import Scope
+from melano.hl.nodes.class_ import MpClass
+from melano.hl.nodes.comprehension import MpComprehension
+from melano.hl.nodes.constant import Constant
+from melano.hl.nodes.function import MpFunction
+from melano.hl.nodes.name import Name
+from melano.hl.nodes.nameref import NameRef
+from melano.hl.nodes.scope import Scope
 from melano.hl.types.pybytes import PyBytesType
 from melano.hl.types.pydict import PyDictType
 from melano.hl.types.pyfloat import PyFloatType
@@ -59,7 +59,7 @@ class Indexer0(ASTVisitor):
 
 		# insert node into parent scope
 		sym = self.scope.add_symbol(name, ast=node)
-		sym.scope = scope_ty(sym)
+		sym.scope = scope_ty(sym, node)
 		node.hl = sym.scope
 
 		# if we have a name node, also set the sym on it
@@ -83,7 +83,7 @@ class Indexer0(ASTVisitor):
 
 
 	def visit_Bytes(self, node):
-		node.hl = Constant(PyBytesType())
+		node.hl = Constant(PyBytesType(), node)
 
 
 	def visit_ClassDef(self, node):
@@ -98,7 +98,7 @@ class Indexer0(ASTVisitor):
 
 
 	def visit_Dict(self, node):
-		node.hl = Constant(PyDictType())
+		node.hl = Constant(PyDictType(), node)
 		if node.keys and node.values:
 			for k, v in zip(node.keys, node.values):
 				self.visit(k)
@@ -203,7 +203,7 @@ class Indexer0(ASTVisitor):
 
 
 	def visit_List(self, node):
-		node.hl = Constant(PyListType())
+		node.hl = Constant(PyListType(), node)
 		self.visit_nodelist(node.elts)
 
 
@@ -251,13 +251,13 @@ class Indexer0(ASTVisitor):
 	def visit_Num(self, node):
 		#TODO: expand this to discover the minimum sized int that will cover the value.
 		if isinstance(node.n, int):
-			node.hl = Constant(PyIntegerType())
+			node.hl = Constant(PyIntegerType(), node)
 		else:
-			node.hl = Constant(PyFloatType())
+			node.hl = Constant(PyFloatType(), node)
 
 
 	def visit_Set(self, node):
-		node.hl = Constant(PySetType())
+		node.hl = Constant(PySetType(), node)
 		self.visit_nodelist(node.elts)
 
 
@@ -270,12 +270,13 @@ class Indexer0(ASTVisitor):
 
 	def visit_Str(self, node):
 		#TODO: discover if we can use a non-unicode or c string type?
-		node.hl = Constant(PyStringType())
+		node.hl = Constant(PyStringType(), node)
 
 
 	def visit_TryExcept(self, node):
 		self.visit_nodelist(node.body)
 		for handler in node.handlers:
+			self.visit(handler.type)
 			if handler.name:
 				name = str(handler.name)
 				if name not in self.scope.symbols:
@@ -290,7 +291,7 @@ class Indexer0(ASTVisitor):
 
 
 	def visit_Tuple(self, node):
-		node.hl = Constant(PyTupleType())
+		node.hl = Constant(PyTupleType(), node)
 		self.visit_nodelist(node.elts)
 
 

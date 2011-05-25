@@ -2,9 +2,9 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.entity import Entity
-from melano.hl.name import Name
-from melano.hl.scope import Scope
+from melano.hl.nodes.entity import Entity
+from melano.hl.nodes.name import Name
+from melano.hl.nodes.scope import Scope
 from melano.hl.types.pyclosure import PyClosureType
 from melano.hl.types.pyfunction import PyFunctionType
 from melano.hl.types.pygenerator import PyGeneratorType

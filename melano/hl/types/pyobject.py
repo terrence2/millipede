@@ -15,13 +15,26 @@ class PyObjectType(HLType):
 
 
 	@classmethod
-	def common_base_type(cls, other):
-		"""Find and return the common base type between this object and 'other'."""
+	def common_base_type(cls, other:HLType) -> type:
+		"""Find and return the common base type class between this object and 'other'."""
 		if cls == other:
-			return cls()
+			return cls
 		for ty0 in cls.__mro__:
 			for ty1 in other.__mro__:
 				if ty0 == ty1:
-					return ty0()
+					return ty0
 		raise NoCommonBasesError
+
+
+	@staticmethod
+	def common_base(types) -> type:
+		'''Takes a list of PyObjectType and returns the class of the least common base between all types in the list.'''
+		if not types:
+			return PyObjectType
+		base = types[0].__class__
+		for ty in types[1:]:
+			if base == ty.__class__:
+				continue
+			base = base.common_base_type(ty.__class__)
+		return base
 

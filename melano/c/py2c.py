@@ -25,10 +25,10 @@ from melano.c.types.pyset import PySetLL
 from melano.c.types.pystring import PyStringLL
 from melano.c.types.pytuple import PyTupleLL
 from melano.c.types.pytype import PyTypeLL
-from melano.hl.class_ import MpClass
-from melano.hl.function import MpFunction
-from melano.hl.module import MpModule
-from melano.hl.nameref import NameRef
+from melano.hl.nodes.class_ import MpClass
+from melano.hl.nodes.function import MpFunction
+from melano.hl.nodes.module import MpModule
+from melano.hl.nodes.nameref import NameRef
 from melano.hl.types.hltype import HLType
 from melano.hl.types.integer import CIntegerType
 from melano.hl.types.pybool import PyBoolType
@@ -973,7 +973,7 @@ class Py2C(ASTVisitor):
 		def _call_remote(self, node, funcinst):
 			# if we are calling super with no args, we need to provide them, since this is the framework's responsibility
 			#FIXME: should be at higher level in a bit, so remove eventually
-			if node.func.hl and node.func.hl.name == 'super' and not node.args:
+			if node.func.hl and isinstance(node.func, py.Name) and node.func.hl.name == 'super' and not node.args:
 				return _call_super(self, node, funcinst)
 
 			# build the arg tuple

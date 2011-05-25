@@ -3,8 +3,8 @@ Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
 from collections import OrderedDict
-from melano.hl.name import Name
-from melano.hl.nameref import NameRef
+from melano.hl.nodes.name import Name
+from melano.hl.nodes.nameref import NameRef
 from melano.hl.types.pydict import PyDictType
 from melano.lang.ast import AST
 import itertools
@@ -15,14 +15,11 @@ class Scope:
 	'''
 	A symbol table.
 	'''
-	def __init__(self, owner:Name):
-		super().__init__()
+	def __init__(self, owner:Name, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 
 		self.symbols = OrderedDict()
 		self.owner = owner
-
-		# will be set with the instance when we declare it
-		self.ll = None
 
 		# the topmost node of the control-flow-graph for this scope
 		self.cfg = None
@@ -46,7 +43,7 @@ class Scope:
 		Note: use this instead of owner.parent to skip class scopes.
 		'''
 		cur = self.owner.parent
-		from melano.hl.class_ import MpClass
+		from melano.hl.nodes.class_ import MpClass
 		while isinstance(cur, MpClass):
 			cur = cur.owner.parent
 		return cur
@@ -93,13 +90,6 @@ class Scope:
 	def show(self, level=0):
 		for sym in self.symbols.values():
 			sym.show(level + 1)
-
-
-	def get_type(self) -> type:
-		'''
-		Query the type list to find the most appropriate type for this name.
-		'''
-		return self.type
 
 
 	def create_instance(self, name:str):

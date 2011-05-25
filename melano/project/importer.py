@@ -2,7 +2,7 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
-from melano.hl.module import MpModule
+from melano.hl.nodes.module import MpModule
 from melano.project.analysis.find_links import FindLinks
 from textwrap import dedent
 import logging

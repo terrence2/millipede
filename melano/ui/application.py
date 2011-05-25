@@ -1,9 +1,9 @@
 from .editor.document import MpCodeDocument
 from .main import MpMainWindow
 from PyQt4.QtGui import QApplication
-from melano.hl.constant import Constant
-from melano.hl.module import MpModule
-from melano.hl.name import Name
+from melano.hl.nodes.constant import Constant
+from melano.hl.nodes.module import MpModule
+from melano.hl.nodes.name import Name
 from melano.ui.visitors.node_position_mapper import NodePositionMapper
 from melano.util.debug import qt_debug
 import base64

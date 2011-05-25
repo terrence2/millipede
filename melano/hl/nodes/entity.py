@@ -2,6 +2,8 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from melano.hl.types.hltype import HLType
+from melano.hl.types.pyobject import PyObjectType
 
 class EntityAttrAccess:
 	def __init__(self, hlnode, ast):
@@ -14,7 +16,7 @@ class Entity:
 	'''
 	A 'thing' in the program that is usable in the standard ways.  E.g. attribute access, indexing, etc.
 	'''
-	def __init__(self):
+	def __init__(self, ast):
 		super().__init__()
 
 		# The attribute map -- we record all potential attribute usage in the name
@@ -22,6 +24,19 @@ class Entity:
 
 		# The subscript map -- we record all potential indexing of this name here
 		self.subscripts = {} # {slice: HLType}
+
+		# the types that we have proven this name can take
+		self.types = []
+
+		# the ll instance
+		self.ll = None
+
+		# a ref to the ast where this name is defined
+		self.ast = ast
+
+
+	def get_display_name(self):
+		return 'unimplemented'
 
 
 	def add_attribute(self, attrname, hlnode, ast):
@@ -35,6 +50,10 @@ class Entity:
 				self.scope.add_attribute(attrname, hlnode, ast)
 
 
+	def lookup_attribute(self, attrname):
+		return self.attributes[attrname]
+
+
 	def add_subscript(self, slice, hltype):
 		if slice not in self.subscripts:
 			self.subscripts[slice] = []
@@ -42,6 +61,32 @@ class Entity:
 			self.subscripts[slice].append(hltype)
 
 
-	def lookup_attribute(self, attrname):
-		return self.attributes[attrname]
+	def add_type(self, ty:HLType):
+		self.types.append(ty)
 
+
+	def get_type(self):
+		'''
+		Query the type list to find the most appropriate type for this name.
+		'''
+		# if we have only one type assigned, just use it
+		if len(self.types) == 1:
+			return self.types[0]
+		# if we have no types, then we just use the most generic possible type
+		if not len(self.types):
+			return PyObjectType()
+
+		# otherwise, we have to find a common base
+		base = PyObjectType.common_base(self.types)
+
+		#print("RET: {} for {} types".format(base, self.types))
+		return base()
+
+
+	def get_type_list(self):
+		'''
+		Return all types attached to this node.
+		'''
+		if self.types:
+			return self.types
+		return [PyObjectType()]

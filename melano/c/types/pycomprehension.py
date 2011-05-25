@@ -5,7 +5,7 @@ All rights reserved.
 from melano.c import ast as c
 from melano.c.types.lltype import LLType
 from melano.c.types.pyobject import PyObjectLL
-from melano.hl.nameref import NameRef
+from melano.hl.nodes.nameref import NameRef
 
 
 class PyComprehensionLL(LLType):
