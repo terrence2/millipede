@@ -56,7 +56,7 @@ class MpSymbolInfoWidget(QTextBrowser):
 
 
 	def show_constant(self, node:Constant):
-		typename = node.type.__class__.__name__
+		typename = node.get_type().__class__.__name__
 		self.show_info('Constant', [typename], self.format_attrs(node.attributes), self.format_subscripts(node.subscripts))
 
 
