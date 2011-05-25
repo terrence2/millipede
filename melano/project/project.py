@@ -154,7 +154,7 @@ class MpProject:
 		self.link_references()
 		self.derive_types()
 		self.build_cfg()
-		self.transform_ll_c()
+		return self.transform_ll_c()
 
 
 	def locate_modules(self):
@@ -358,6 +358,8 @@ class MpProject:
 		except OSError as ex:
 			if ex.errno != errno.ENOENT: raise
 		os.symlink(os.path.join(self.build_dir, makename), os.path.join(self.build_dir, 'Makefile'))
+
+		return makefile
 
 
 	def reset_ll(self):

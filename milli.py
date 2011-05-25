@@ -86,7 +86,7 @@ def main():
 					include=opts.include, exclude=opts.exclude,
 					verbose=opts.verbose, opt_level=opts.opt, opt_options=opts.options
 				)
-	project.build_all()
+	mf = project.build_all()
 
 	if opts.gui:
 		from melano.ui.application import MpApplication
@@ -95,7 +95,7 @@ def main():
 		return app.exec_()
 
 	if not opts.no_make:
-		os.execlp('make', 'make', '-C', opts.build_dir)
+		os.execlp('make', 'make', '-C', opts.build_dir, '-f', os.path.basename(mf.filename))
 
 	return 0
 
