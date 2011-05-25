@@ -95,9 +95,9 @@ class MpApplication(QApplication):
 
 		def pos_to_word():
 			for start, end, hl in self.nodemap[module.filename]:
-				if start[0] <= position[0] and end[0] >= position[0]:
-					if start[1] <= position[1] and end[1] >= position[1]:
-						return hl
+				if (start[0] < position[0] or (start[0] == position[0] and start[1] <= position[1])) \
+						and (end[0] > position[0] or (end[0] == position[0] and end[1] >= position[1])):
+					return hl
 			return None
 		node = pos_to_word()
 
