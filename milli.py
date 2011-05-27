@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-from melano import MpProject
-from melano.c.out import COut
+from millipede import MpProject
+from millipede.c.out import COut
 from optparse import OptionParser, OptionGroup
 import logging
 import os
