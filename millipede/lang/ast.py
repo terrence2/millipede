@@ -6,10 +6,11 @@ All rights reserved.
 class AST:
 	'''Base class of all ast nodes.'''
 	_fields = ()
-	__slots__ = ('symbol', 'hl', 'll', 'start', 'end')
+	__slots__ = ('symbol', 'hl', 'll', 'bb', 'start', 'end')
 	def __init__(self, llnode):
 		self.hl = None
 		self.ll = None
+		self.bb = None
 
 		self.symbol = None
 
