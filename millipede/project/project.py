@@ -10,6 +10,8 @@ from millipede.c.py2c import Py2C
 from millipede.hl.nodes.builtins import Builtins
 from millipede.hl.nodes.module import MpModule, MpMissingModule, MpProbedModule
 from millipede.hl.nodes.name import Name
+from millipede.ir.ast2ir import Ast2Ir
+from millipede.ir.ir2cfg import ir_2_cfg
 from millipede.project.analysis.clean import Clean
 from millipede.project.analysis.indexer0 import Indexer0
 from millipede.project.analysis.indexer1 import Indexer1
@@ -147,6 +149,7 @@ class MpProject:
 		self.index_static()
 		self.index_imports()
 		self.link_references()
+		self.build_ir()
 		self.derive_types()
 		return self.transform_ll_c()
 
@@ -280,6 +283,23 @@ class MpProject:
 				if self.verbose: logging.info("Linking: {}".format(mod.filename))
 				linker = Linker(self, mod)
 				linker.visit(mod.ast)
+
+
+	def build_ir(self):
+		out = {}
+		for fn in reversed(self.order):
+			mod = self.modules_by_path[fn]
+			if self.is_local(mod):
+				if self.verbose: logging.info("Building IR: {}".format(mod.filename))
+				v = Ast2Ir(self)
+				v.visit(mod.ast)
+				out.update(v.frames)
+
+		for name, frame in out.items():
+			print(name)
+			frame.disassemble()
+
+		cfg = ir_2_cfg(out)
 
 
 	def derive_types(self):
