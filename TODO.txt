@@ -1,13 +1,1 @@
-FIXES:
-* Use a python interpreter to figure out reachability.
-* make AugAssign on indexes work
-
-py2c:
-* Make as much static as possible
-* Make builtins const?
-* __warn_unused_result__?
-* Audit use of python api's and ensure we are using the abstract protocols where possible
-
-CLEANUPS:
-* rename PyMelanoFunction to MgFunction or MpFunction or _anything_ else
-ensure result of reserve_name is never discarded
+* remove constant and coerce assignments from indexer -- not needed, should be moved to bb phases

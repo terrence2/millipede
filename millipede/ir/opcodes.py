@@ -2,10 +2,25 @@
 Copyright (c) 2011, Terrence Cole.
 All rights reserved.
 '''
+from millipede.hl.nodes.entity import Entity
+import itertools
+
+
+class Intermediate(Entity):
+	'''A name in the IR.  In addition to the name and entity properties, this has a slot for the ll inst at emission time.'''
+	def __init__(self, name:str, *args, **kwargs):
+		super().__init__(None, *args, **kwargs)
+		self.name = name
+		self.ll = None
+
+	def __str__(self):
+		return '|' + self.name + '|'
+
+
 
 class Op:
 	def __init__(self, ast):
-		self.ast = ast
+		self._ast = ast
 
 		self.label = None
 		self.target = None
@@ -20,6 +35,10 @@ class Op:
 			out += '{:16}{}'.format(self.__class__.__name__, trailer or '')
 		return out
 
+	def __repr__(self):
+		return '<{}>'.format(self.__class__.__name__)
+
+
 class BinOp(Op):
 	PRETTY_FMT = '?'
 
@@ -30,6 +49,7 @@ class BinOp(Op):
 
 	def format(self):
 		return super().format('{} {} {}'.format(self.operands[0], self.PRETTY_FMT, self.operands[1]))
+
 
 # Arithmetic Ops
 class BINARY_ADD(BinOp): PRETTY_FMT = '+'
@@ -64,12 +84,42 @@ class JUMP(Op):
 		super().__init__(*args, **kws)
 		self.label_target = label_target
 
+	def format(self):
+		return super().format('>> {}'.format(self.label_target))
 
 
-class CALL_FUNCTION(Op):
+class RETURN_VALUE(Op):
+	'''Like an external jump with some extra semantics.'''
+	def __init__(self, value, *args, **kws):
+		super().__init__(*args, **kws)
+		self.operands = (value,)
+
+	def format(self):
+		return super().format(self.operands[0])
+
+
+class NOP(Op):
+	'''Does nothing, but can take a label.'''
+
+
+class DECREF(Op):
+	def __init__(self, value, *args, **kws):
+		super().__init__(*args, **kws)
+		self.operands = (value,)
+
+	def format(self):
+		return super().format(self.operands[0])
+
+
+class CALL_GENERIC(Op):
+	'''Contains all arg sets internally.  Generally, this will get replaced by some more specific calling convention
+		that unrolls the args into manual create_tuple/dict etc, depending on our eventual type information at the 
+		call site.'''
 	def __init__(self, target, func, args, stararg, keywords, kwarg, *args_, **kws_):
 		super().__init__(*args_, **kws_)
 		self.target = target
+		flat_kw = list(itertools.chain.from_iterable(zip([k for k in keywords.keys()], [v for v in keywords.values()])))
+		self.operands = tuple([func] + args + [stararg] + flat_kw + [kwarg])
 		self.func = func
 		self.args = args
 		self.stararg = stararg
@@ -77,7 +127,42 @@ class CALL_FUNCTION(Op):
 		self.kwarg = kwarg
 
 	def format(self):
-		return super().format('{}({}, {}, *{}, **{})'.format(self.func, self.args, self.keywords, self.stararg, self.kwarg))
+		a = ', '.join([str(a) for a in (self.args or [])]) or None
+		b = str(self.stararg) if self.stararg else None
+		c = {str(k): str(self.keywords[k]) for k in (self.keywords or {})}
+		d = str(self.kwarg) if self.kwarg else None
+		return super().format('{}({}, *{}, {}, **{})'.format(str(self.func), a, b, c, d))
+
+
+class IMPORT_NAME(Op):
+	def __init__(self, target, modname, *args, **kws):
+		super().__init__(*args, **kws)
+		self.target = target
+		self.operands = (modname,)
+
+	def format(self):
+		return super().format(self.operands[0])
+
+
+class MAKE_FUNCTION(Op):
+	def __init__(self, target, scope, *args, **kws):
+		super().__init__(*args, **kws)
+		self.target = target
+		self.operands = (scope,)
+
+	def format(self):
+		return super().format(self.operands[0].owner.python_name)
+
+
+class MAKE_DICT(Op):
+	def __init__(self, target, *args, **kws):
+		super().__init__(*(args[-1:]), **kws)
+		self.target = target
+		self.operands = tuple(args[:-1])
+
+	def format(self):
+		data = ','.join([str(o) for o in self.operands])
+		return super().format('{' + data + '}')
 
 
 class LOAD_CONST(Op):
@@ -93,11 +178,11 @@ class LOAD_CONST(Op):
 class STORE_GLOBAL(Op):
 	def __init__(self, hl_target, name, *args, **kws):
 		super().__init__(*args, **kws)
-		self.hl_target = hl_target
+		self.target = hl_target
 		self.operands = (name,)
 
 	def format(self):
-		return super().format('{:12} <- {}'.format(str(self.hl_target), self.operands[0]))
+		return super().format('{}'.format(str(self.operands[0])))
 
 
 class STORE_LOCAL(Op):
@@ -107,10 +192,49 @@ class STORE_LOCAL(Op):
 		self.operands = (name,)
 
 	def format(self):
-		return super().format('{:12} <- {}'.format(str(self.hl_target), self.operands[0]))
+		return super().format('{:12} <- {}'.format(str(self.hl_target), str(self.operands[0])))
+
+
+class STORE_ATTR(Op):
+	def __init__(self, tmp_target, attrname, to_store, *args, **kws):
+		super().__init__(*args, **kws)
+		self.operands = (tmp_target, attrname, to_store)
+
+	def format(self):
+		return super().format('{:12} <- {}'.format(str(self.operands[0]) + '.' + str(self.operands[1]), str(self.operands[2])))
+
+
+class LOAD_ATTR(Op):
+	def __init__(self, target, base, attrname, *args, **kws):
+		super().__init__(*args, **kws)
+		self.target = target
+		self.operands = (base, attrname)
+
+	def format(self):
+		return super().format('{:12}'.format(str(self.operands[0]) + '.' + str(self.operands[1])))
+
+
+class LOAD_BUILTIN(Op):
+	def __init__(self, target, hl_source, *args, **kws):
+		super().__init__(*args, **kws)
+		self.target = target
+		self.hl_source = hl_source
+
+	def format(self):
+		return super().format('{}'.format(str(self.hl_source.deref())))
 
 
 class LOAD_GLOBAL(Op):
+	def __init__(self, target, hl_source, *args, **kws):
+		super().__init__(*args, **kws)
+		self.target = target
+		self.hl_source = hl_source
+
+	def format(self):
+		return super().format('{}'.format(str(self.hl_source.deref())))
+
+
+class LOAD_GLOBAL_OR_BUILTIN(Op):
 	def __init__(self, target, hl_source, *args, **kws):
 		super().__init__(*args, **kws)
 		self.target = target

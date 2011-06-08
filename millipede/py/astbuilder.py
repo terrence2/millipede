@@ -93,8 +93,12 @@ class PythonASTBuilder:
 			if ty == self.syms.stmt:
 				stmts.extend(self.handle_stmt(stmt))
 
+		docstring = None
+		if isinstance(stmts[0], ast.Expr) and isinstance(stmts[0].value, ast.Str):
+			docstring, stmts = stmts[0].value.s, stmts[1:]
+
 		node.endpos = node.children[-1].endpos
-		return ast.Module(stmts, node)
+		return ast.Module(docstring, stmts, node)
 
 
 	def children(self, node):
@@ -552,18 +556,23 @@ class PythonASTBuilder:
 	def handle_classdef(self, classdef_node, decorators=None):
 		children = self.children(classdef_node)
 		name_node = ast.Name(children[1].value, ast.Store, children[1])
+		bases, keywords, starargs, kwargs = None, None, None, None
 		# e.x. class foo:
 		if len(children) == 4:
 			body = self.handle_suite(children[3])
-			return ast.ClassDef(name_node, None, None, None, None, body, decorators, classdef_node)
 		# e.x. class foo():
-		if children[3].type == self.tokens.RPAR:
+		elif children[3].type == self.tokens.RPAR:
 			body = self.handle_suite(children[5])
-			return ast.ClassDef(name_node, None, None, None, None, body, decorators, classdef_node)
 		# everything else
-		bases, keywords, starargs, kwargs = self.handle_arglist(children[3])
-		body = self.handle_suite(children[6])
-		return ast.ClassDef(name_node, bases, keywords, starargs, kwargs, body, decorators, classdef_node)
+		else:
+			bases, keywords, starargs, kwargs = self.handle_arglist(children[3])
+			body = self.handle_suite(children[6])
+
+		docstring = None
+		if isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Str):
+			docstring, body = body[0].value.s, body[1:]
+
+		return ast.ClassDef(name_node, bases, keywords, starargs, kwargs, docstring, body, decorators, classdef_node)
 
 
 	def handle_arglist(self, arglist_node):
@@ -641,7 +650,11 @@ class PythonASTBuilder:
 		assert children[at].type == self.tokens.COLON
 		body = self.handle_suite(children[at + 1])
 
-		return ast.FunctionDef(name, args, body, decorators, returns, funcdef_node)
+		docstring = None
+		if isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Str):
+			docstring, body = body[0].value.s, body[1:]
+
+		return ast.FunctionDef(name, args, docstring, body, decorators, returns, funcdef_node)
 
 
 	def handle_decorators(self, decorators_node):

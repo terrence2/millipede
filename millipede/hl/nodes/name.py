@@ -19,6 +19,8 @@ class Name(Entity):
 		'''
 		super().__init__(ast)
 
+		assert name
+
 		self.python_name = name
 		self.name = name.replace('.', '_')
 		self.parent = parent

@@ -51,9 +51,9 @@ class MpModule(Scope, Entity):
 
 		# add names common
 		#FIXME: the name field of these should be the _name_, not the value... figure out where to put the value
-		self.add_symbol('__name__', Name(dottedname, self, None))
-		self.add_symbol('__file__', Name(filename, self, None))
-		self.add_symbol('__doc__', Name('', self, None))
+		self.add_symbol('__name__', Name('__name__', self, None))
+		self.add_symbol('__file__', Name('__file__', self, None))
+		self.add_symbol('__doc__', Name('__doc__', self, None))
 
 		# the refs table contains referenced modules (not the symbols they pull in, just a 
 		#	mapping from the accessing module name to the module itself).
@@ -129,6 +129,13 @@ class MpModule(Scope, Entity):
 		return self.lines[lineno - 1]
 
 
+	#### Frame related
+	def set_blocks(self, blocks):
+		super().set_blocks(blocks)
+		#FIXME: what about raise?  in what contexts?  What sort of raise?  How do we handle this generally?
+		return self._block_tails.append(blocks[-1])
+
+
 class MpProbedModule(MpModule):
 	'''A module with limited functionality because it has no source -- e.g. no ast, unvisitable, etc.'''
 	def __init__(self, modtype:int, names:[str], dottedname:str, builtins_scope):
@@ -169,4 +176,5 @@ class MpMissingModule(MpModule):
 
 	def lookup_star(self):
 		return list(self.symbols.keys())
+
 

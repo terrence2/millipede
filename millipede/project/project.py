@@ -4,6 +4,7 @@ All rights reserved.
 
 Toplevel tool for analyzing a source base.
 '''
+from millipede.c.frames2c import Frames2C
 from millipede.c.makefile import Makefile
 from millipede.c.out import COut
 from millipede.c.py2c import Py2C
@@ -11,7 +12,6 @@ from millipede.hl.nodes.builtins import Builtins
 from millipede.hl.nodes.module import MpModule, MpMissingModule, MpProbedModule
 from millipede.hl.nodes.name import Name
 from millipede.ir.ast2ir import Ast2Ir
-from millipede.ir.ir2cfg import ir_2_cfg
 from millipede.project.analysis.clean import Clean
 from millipede.project.analysis.indexer0 import Indexer0
 from millipede.project.analysis.indexer1 import Indexer1
@@ -150,7 +150,7 @@ class MpProject:
 		self.index_imports()
 		self.link_references()
 		self.build_ir()
-		self.derive_types()
+		#self.derive_types()
 		return self.transform_ll_c()
 
 
@@ -286,20 +286,29 @@ class MpProject:
 
 
 	def build_ir(self):
-		out = {}
+		frames = {}
 		for fn in reversed(self.order):
 			mod = self.modules_by_path[fn]
 			if self.is_local(mod):
-				if self.verbose: logging.info("Building IR: {}".format(mod.filename))
+				if self.verbose: logging.info("Building LIR: {}".format(mod.filename))
 				v = Ast2Ir(self)
 				v.visit(mod.ast)
-				out.update(v.frames)
+				frames.update(v.frames)
 
-		for name, frame in out.items():
+		print("Initial Frames:")
+		for name, frame in frames.items():
 			print(name)
 			frame.disassemble()
+			print()
 
-		cfg = ir_2_cfg(out)
+		#from millipede.ir.ir2cfg import ir_2_local_cfgs
+		#cfg = ir_2_local_cfgs(frames)
+		#
+		#from millipede.ir.vinterp import VirtualInterpret
+		#for prog in self.programs:
+		#	mod = self.modules_by_absname[prog]
+		#	v = VirtualInterpret(*cfg)
+		#	v.visit_Block(mod.get_head_block())
 
 
 	def derive_types(self):
@@ -319,7 +328,8 @@ class MpProject:
 
 		for program in self.programs:
 			# apply the low-level transformation
-			visitor = Py2C(self.opt_level, self.opt_options, self.builtins_scope)
+			#visitor = Py2C(self.opt_level, self.opt_options, self.builtins_scope)
+			visitor = Frames2C(self.opt_level, self.opt_options, self.builtins_scope)
 			for fn in self.order:
 				mod = self.modules_by_path[fn]
 				if self.is_local(mod):

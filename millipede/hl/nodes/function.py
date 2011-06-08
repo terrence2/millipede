@@ -9,6 +9,7 @@ from millipede.hl.types.pyclosure import PyClosureType
 from millipede.hl.types.pyfunction import PyFunctionType
 from millipede.hl.types.pygenerator import PyGeneratorType
 from millipede.hl.types.pygeneratorclosure import PyGeneratorClosureType
+from millipede.ir.opcodes import RETURN_VALUE
 import itertools
 import logging
 
@@ -65,3 +66,13 @@ class MpFunction(Scope, Entity):
 
 		return self.type
 
+
+	#### Frame related
+	def set_blocks(self, blocks):
+		super().set_blocks(blocks)
+		#FIXME: what about raise?  in what contexts?  What sort of raise?  How do we handle this generally?
+		for bb in blocks:
+			if isinstance(bb._instructions[-1], RETURN_VALUE):
+				self._block_tails.append(blocks[-1])
+
+		assert blocks[-1] in self._block_tails, "We failed to insert a 'return None' at the end of a function!"

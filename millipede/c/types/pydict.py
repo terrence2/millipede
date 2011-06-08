@@ -22,6 +22,8 @@ class PyDictLL(PyObjectLL):
 
 
 	def set_item_string(self, name:str, var:PyObjectLL):
+		assert isinstance(name, str)
+		assert isinstance(var.name, str), "need string, actual type is: {}".format(type(var.name))
 		tmp = CIntegerLL(None, self.v)
 		tmp.declare_tmp(name='_set_str_rv')
 		var = var.as_pyobject()

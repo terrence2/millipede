@@ -166,9 +166,10 @@ class slice_(AST):
 #| Module(stmt* body)
 class Module(mod):
 	_fields = ('body',)
-	__slots__ = ('body',)
-	def __init__(self, body:[stmt], *args, **kwargs):
+	__slots__ = ('docstring', 'body')
+	def __init__(self, docstring, body, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+		self.docstring = docstring
 		self.body = body
 
 
@@ -209,14 +210,15 @@ class Break(stmt):
 #| ClassDef(identifier name, expr* bases, keyword* keywords, expr? starargs, expr? kwargs, stmt* body, expr *decorator_list)
 class ClassDef(stmt):
 	_fields = ('bases', 'keywords', 'starargs', 'kwargs', 'body', 'decorator_list')
-	__slots__ = ('name', 'bases', 'keywords', 'starargs', 'kwargs', 'body', 'decorator_list')
-	def __init__(self, name, bases, keywords, starargs, _kwargs, body, decorator_list, *args, **kwargs):
+	__slots__ = ('name', 'bases', 'keywords', 'starargs', 'kwargs', 'docstring', 'body', 'decorator_list')
+	def __init__(self, name, bases, keywords, starargs, _kwargs, docstring, body, decorator_list, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.name = name
 		self.bases = bases
 		self.keywords = keywords
 		self.starargs = starargs
 		self.kwargs = _kwargs
+		self.docstring = docstring
 		self.body = body
 		self.decorator_list = decorator_list
 
@@ -360,11 +362,12 @@ class With(stmt):
 #| FunctionDef(identifier name, arguments args, stmt* body, expr* decorator_list, expr? returns)
 class FunctionDef(stmt):
 	_fields = ('args', 'body', 'decorator_list', 'returns')
-	__slots__ = ('name', 'args', 'body', 'decorator_list', 'returns')
-	def __init__(self, name, _args, body, decorator_list, _returns, *args, **kwargs):
+	__slots__ = ('name', 'args', 'docstring', 'body', 'decorator_list', 'returns')
+	def __init__(self, name, _args, docstring, body, decorator_list, _returns, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.name = name
 		self.args = _args
+		self.docstring = docstring
 		self.body = body
 		self.decorator_list = decorator_list
 		self.returns = _returns

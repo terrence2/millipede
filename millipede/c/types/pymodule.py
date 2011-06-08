@@ -97,15 +97,17 @@ class PyModuleLL(PyObjectLL):
 
 
 	def intro(self):
-		self.v.scope.ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+		#self.v.scope.ctx.add_variable(c.Decl('__return_value__', c.PtrDecl(c.TypeDecl('__return_value__', c.IdentifierType('PyObject'))), init=c.ID('NULL')), False)
+		pass
 
 
 	def outro(self):
-		self.v.ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.ll_mod.name)))
-		self.v.ctx.add(c.Label('end'))
-		for name in reversed(self.v.scope.ctx.cleanup):
-			self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
-		self.v.ctx.add(c.Return(c.ID('__return_value__')))
+		#self.v.ctx.add(c.Assignment('=', c.ID('__return_value__'), c.ID(self.ll_mod.name)))
+		#self.v.ctx.add(c.Label('end'))
+		#for name in reversed(self.v.scope.ctx.cleanup):
+		#	self.v.ctx.add(c.FuncCall(c.ID('Py_XDECREF'), c.ExprList(c.ID(name))))
+		#self.v.ctx.add(c.Return(c.ID('__return_value__')))
+		pass
 
 
 	@contextmanager

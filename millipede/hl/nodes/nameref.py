@@ -12,7 +12,6 @@ class NameRef:
 		assert ref is not None
 
 		self.ref = ref
-		self.inst = None
 
 		# override properties
 		self._parent = None

@@ -7,8 +7,6 @@ from millipede.hl.nodes.class_ import MpClass
 from millipede.hl.nodes.comprehension import MpComprehension
 from millipede.hl.nodes.constant import Constant
 from millipede.hl.nodes.function import MpFunction
-from millipede.hl.nodes.name import Name
-from millipede.hl.nodes.nameref import NameRef
 from millipede.hl.nodes.scope import Scope
 from millipede.hl.types.pybytes import PyBytesType
 from millipede.hl.types.pydict import PyDictType
@@ -17,7 +15,7 @@ from millipede.hl.types.pyinteger import PyIntegerType
 from millipede.hl.types.pylist import PyListType
 from millipede.hl.types.pymodule import PyModuleType
 from millipede.hl.types.pyset import PySetType
-from millipede.hl.types.pystring import PyStringType, MalformedStringError
+from millipede.hl.types.pystring import PyStringType
 from millipede.hl.types.pytuple import PyTupleType
 from millipede.lang.visitor import ASTVisitor
 from millipede.py import ast as py
