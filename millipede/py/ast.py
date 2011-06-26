@@ -320,24 +320,16 @@ class Return(stmt):
 		super().__init__(*args, **kwargs)
 		self.value = value
 
-#| TryExcept(stmt* body, excepthandler* handlers, stmt* orelse)
-class TryExcept(stmt):
-	_fields = ('body', 'handlers', 'orelse')
-	__slots__ = ('body', 'handlers', 'orelse')
-	def __init__(self, body, handlers, orelse, *args, **kwargs):
+#| Try(stmt* body, excepthandler* handlers, stmt* orelse, stmt* finallybody)
+class Try(stmt):
+	_fields = ('body', 'handlers', 'orelse', 'finallybody')
+	__slots__ = ('body', 'handlers', 'orelse', 'finallybody')
+	def __init__(self, body, handlers, orelse, finallybody, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.body = body
 		self.handlers = handlers
 		self.orelse = orelse
-
-#| TryFinally(stmt* body, stmt* finalbody)
-class TryFinally(stmt):
-	_fields = ('body', 'finalbody')
-	__slots__ = ('body', 'finalbody')
-	def __init__(self, body, finalbody, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-		self.body = body
-		self.finalbody = finalbody
+		self.finallybody = finallybody
 
 #| While(expr test, stmt* body, stmt* orelse)
 class While(stmt):

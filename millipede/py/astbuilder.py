@@ -497,35 +497,30 @@ class PythonASTBuilder:
 
 	def handle_try_stmt(self, try_node):
 		children = self.children(try_node)
-		body = self.handle_suite(children[2])
 		child_count = len(children)
+		body = self.handle_suite(children[2])
 		except_count = (child_count - 3) // 3
-		otherwise = None
+		otherwise_suite = None
 		finally_suite = None
-		possible_extra_clause = children[-3]
+		possible_extra_clause = children[-3] # one or both of else: and finally:
 		if possible_extra_clause.type == self.tokens.NAME:
 			if possible_extra_clause.value == "finally":
-				if child_count >= 9 and \
-						children[-6].type == self.tokens.NAME:
-					otherwise = self.handle_suite(children[-4])
+				if child_count >= 9 and children[-6].type == self.tokens.NAME:
+					otherwise_suite = self.handle_suite(children[-4])
 					except_count -= 1
 				finally_suite = self.handle_suite(children[-1])
 				except_count -= 1
 			else:
-				otherwise = self.handle_suite(children[-1])
+				otherwise_suite = self.handle_suite(children[-1])
 				except_count -= 1
+		handlers = []
 		if except_count:
-			handlers = []
 			for i in range(except_count):
 				base_offset = i * 3
 				exc = children[3 + base_offset]
 				except_body = children[5 + base_offset]
 				handlers.append(self.handle_except_clause(exc, except_body))
-			except_ast = ast.TryExcept(body, handlers, otherwise, try_node)
-			if finally_suite is None:
-				return except_ast
-			body = [except_ast]
-		return ast.TryFinally(body, finally_suite, try_node)
+		return ast.Try(body, handlers, otherwise_suite, finally_suite, try_node)
 
 
 	def handle_with_stmt(self, with_node):
