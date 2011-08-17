@@ -22,6 +22,7 @@ from millipede.c.types.pylist import PyListLL
 from millipede.c.types.pymodule import PyModuleLL
 from millipede.c.types.pyobject import PyObjectLL
 from millipede.c.types.pyset import PySetLL
+from millipede.c.types.pyslice import PySliceLL
 from millipede.c.types.pystring import PyStringLL
 from millipede.c.types.pytuple import PyTupleLL
 from millipede.c.types.pytype import PyTypeLL
@@ -118,6 +119,7 @@ class Frames2C(ASTVisitor):
 		py.Pow: '**=',
 	}
 	TYPEMAP = {
+		CIntegerType: CIntegerLL,
 		PyObjectType: PyObjectLL,
 		PyModuleType: PyModuleLL,
 		PyFunctionType: PyFunctionLL,
@@ -330,12 +332,12 @@ class Frames2C(ASTVisitor):
 			self.ctx.add(c.Comment(cmt))
 
 
-	def on_line_changed(self, lineno):
-		prior = self.hl_module.get_source_line(lineno - 1).strip() if lineno > 0 else ''
-		line = self.hl_module.get_source_line(lineno).strip()
-		if not prior.endswith(':') or prior.startswith('def') or prior.startswith('class'):
-			self.ctx.add(c.WhiteSpace(''))
-		self.comment(line.replace('/', '<div>').replace('\\', '<bs>'))
+	#def on_line_changed(self, lineno):
+	#	prior = self.hl_module.get_source_line(lineno - 1).strip() if lineno > 0 else ''
+	#	line = self.hl_module.get_source_line(lineno).strip()
+	#	if not prior.endswith(':') or prior.startswith('def') or prior.startswith('class'):
+	#		self.ctx.add(c.WhiteSpace(''))
+	#	self.comment(line.replace('/', '<div>').replace('\\', '<bs>'))
 
 
 	def create_ll_instance(self, hlnode:HLType):
@@ -437,7 +439,7 @@ class Frames2C(ASTVisitor):
 	@contextmanager
 	def maybe_save_exception(self):
 		'''Like save_exception, but checks if an exception is set before saving/restoring.'''
-		# if we have an exception set, store it asside during finally processing
+		# if we have an exception set, store it aside during finally processing
 		exc_cookie = self.prepare_cookie()
 		check_err = self.ctx.add(c.If(c.FuncCall(c.ID('PyErr_Occurred'), c.ExprList()), c.Compound(), None))
 		with self.new_context(check_err.iftrue):
@@ -483,28 +485,28 @@ class Frames2C(ASTVisitor):
 			self.restore_exception(exc_cookie)
 
 
-	def prepare_cookie(self):
+	def prepare_cookie(self, names):
 		'''Create and return a new exception cookie.  This assigns the cookie's tmp vars to NULL in the current
 			context.  Note that this is split off from fetch_exception so that we can do the NULL init outside of the
 			branch where we actually fetch the exception so that they can be NULL for sure later when we 
 			restore the exception outside of a branch.'''
-		exc_cookie = (PyObjectLL(None, self), PyObjectLL(None, self), PyObjectLL(None, self))
-		for part in exc_cookie:
-			part.declare_tmp()
+		exc_cookie = (PyObjectLL(names[0], self), PyObjectLL(names[1], self), PyObjectLL(names[2], self))
+		for i, part in enumerate(exc_cookie):
+			part.declare_tmp(name=names[i].name)
 			part.assign_null()
+			names[i].ll = part
 		return exc_cookie
 
 
 	def fetch_exception(self, exc_cookie):
-		self.exc_cookie_stack.append(exc_cookie) #NOTE: this must be matched by a restore
+		self.exc_cookie_stack.append(exc_cookie) #NOTE: this must be matched by a restore or drop
 		self.ctx.add(c.FuncCall(c.ID('PyErr_Fetch'), c.ExprList(
 																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
 		# NOTE: if we have a real exception here that we are replacing, then restore will decref it, but fetch doesn't incref it for us
-		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[0].name))))
-		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[1].name))))
-		self.ctx.add(c.FuncCall(c.ID('Py_XINCREF'), c.ExprList(c.ID(exc_cookie[2].name))))
+		for ex in exc_cookie:
+			ex.xincref()
 
 
 	def normalize_exception_full(self, exc_cookie):
@@ -513,9 +515,8 @@ class Frames2C(ASTVisitor):
 																c.UnaryOp('&', c.ID(exc_cookie[0].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[1].name)),
 																c.UnaryOp('&', c.ID(exc_cookie[2].name)))))
-		exc_cookie[0].xincref()
-		exc_cookie[1].xincref()
-		exc_cookie[2].xincref()
+		for ex in exc_cookie:
+			ex.xincref()
 
 
 	def normalize_exception(self, exc_cookie):
@@ -714,353 +715,6 @@ class Frames2C(ASTVisitor):
 
 
 
-	def visit_Assert(self, node):
-		inst = self.visit(node.test)
-		istrue_inst = inst.is_true()
-		check = self.ctx.add(c.If(c.UnaryOp('!', c.ID(istrue_inst.name)), c.Compound(), None))
-		with self.new_context(check.iftrue):
-			if not node.msg:
-				s = None
-			elif isinstance(node.msg, py.Str):
-				s = PyStringType.dequote(node.msg.s)
-			else:
-				inst = self.visit(node.msg)
-				s = inst.str()
-			self.set_exception_str('PyExc_AssertionError', s)
-			self.capture_error()
-			self.exit_with_exception()
-
-
-	def visit_Assign(self, node):
-		self.comment("Assign: {} = {}".format([str(t) for t in node.targets], str(node.value)))
-		val = self.visit(node.value)
-		for target in node.targets:
-			self._store_any(target, val)
-		val.decref()
-
-
-	def visit_Attribute(self, node):
-		'''
-		FIXME: we need a way to lift attrs into "tmp" vars in the surrounding scope to elide these long chains of accesses...
-			Once we have a global CFG, this should be totally do-able... Until then, just use a tmp var to store the lookup.
-
-		if node.hl.ll:
-			# Note: we arrive at these through refs... can we use the underlying value, if it is still live?
-			pdb.set_trace()
-			inst = node.hl.ll
-		else:
-			inst = self.create_ll_instance(node.hl)
-			inst.declare_tmp(name='_attr')
-		'''
-		inst = PyObjectLL(None, self)
-		inst.declare_tmp(name='_attr')
-
-		#FIXME: these cases are identical... what happened here?
-		self.comment('Load Attribute "{}.{}"'.format(str(node.value), str(node.attr)))
-		if node.ctx == py.Store or node.ctx == py.Aug:
-			# load the lhs object into the local c scope
-			if isinstance(node.value, py.Name):
-				lhs = self._load_name(node.value)
-			else:
-				lhs = self.visit(node.value)
-
-			# load the attr off of the lhs, for use as a storage target
-			lhs.get_attr_string(str(node.attr), inst)
-			lhs.decref()
-			return inst
-
-		elif node.ctx == py.Load:
-			# load the attr lhs as normal
-			if isinstance(node.value, py.Name):
-				lhs = self._load_name(node.value)
-			else:
-				lhs = self.visit(node.value)
-
-			# store the attr value into a local tmp variable
-			lhs.get_attr_string(str(node.attr), inst)
-			lhs.decref()
-			return inst
-
-		else:
-			raise NotImplementedError("Unknown Attribute access context: {}".format(node.ctx))
-
-
-	def visit_AugAssign(self, node):
-		self.comment('AugAssign: {} {} {}'.format(str(node.target), self.AUGASSIGN_PRETTY[node.op], str(node.value)))
-		val_inst = self.visit(node.value)
-		tgt_inst = self._load_any(node.target)
-
-		# get the intermediate instance
-		out_inst = self.create_ll_instance(node.hl)
-		out_inst.declare_tmp()
-
-		# perform the op, either returning a copy or getting a new instance
-		if node.op == py.BitOr:
-			tgt_inst.inplace_bitor(val_inst, out_inst)
-		elif node.op == py.BitXor:
-			tgt_inst.inplace_bitxor(val_inst, out_inst)
-		elif node.op == py.BitAnd:
-			tgt_inst.inplace_bitand(val_inst, out_inst)
-		elif node.op == py.LShift:
-			tgt_inst.inplace_lshift(val_inst, out_inst)
-		elif node.op == py.RShift:
-			tgt_inst.inplace_rshift(val_inst, out_inst)
-		elif node.op == py.Add:
-			tgt_inst.inplace_add(val_inst, out_inst)
-		elif node.op == py.Sub:
-			tgt_inst.inplace_subtract(val_inst, out_inst)
-		elif node.op == py.Mult:
-			tgt_inst.inplace_multiply(val_inst, out_inst)
-		elif node.op == py.Div:
-			tgt_inst.inplace_divide(val_inst, out_inst)
-		elif node.op == py.FloorDiv:
-			tgt_inst.inplace_floor_divide(val_inst, out_inst)
-		elif node.op == py.Mod:
-			tgt_inst.inplace_modulus(val_inst, out_inst)
-		elif node.op == py.Pow:
-			tgt_inst.inplace_power(val_inst, out_inst)
-
-		val_inst.decref()
-		tgt_inst.decref()
-		self._store_any(node.target, out_inst)
-		return out_inst
-
-
-	def visit_BinOp(self, node):
-		l = self.visit(node.left)
-		r = self.visit(node.right)
-
-		inst = self.create_ll_instance(node.hl)
-		inst.declare_tmp()
-
-		#TODO: python detects str + str at runtime and skips dispatch through PyNumber_Add, so we can 
-		#		assume that would be faster
-		if node.op == py.BitOr:
-			l.bitor(r, inst)
-		elif node.op == py.BitXor:
-			l.bitxor(r, inst)
-		elif node.op == py.BitAnd:
-			l.bitand(r, inst)
-		elif node.op == py.LShift:
-			l.lshift(r, inst)
-		elif node.op == py.RShift:
-			l.rshift(r, inst)
-		elif node.op == py.Add:
-			l.add(r, inst)
-		elif node.op == py.Sub:
-			l.subtract(r, inst)
-		elif node.op == py.Mult:
-			l.multiply(r, inst)
-		elif node.op == py.Div:
-			l.divide(r, inst)
-		elif node.op == py.FloorDiv:
-			l.floor_divide(r, inst)
-		elif node.op == py.Mod:
-			l.modulus(r, inst)
-		elif node.op == py.Pow:
-			l.power(r, inst)
-		else:
-			raise NotImplementedError("BinOp({})".format(node.op))
-
-		return inst
-
-
-	def visit_BoolOp(self, node):
-		self.comment('Boolop {}'.format((' ' + self.BOOLOPS_PRETTY[node.op] + ' ').join([str(v) for v in node.values])))
-
-		out = PyObjectLL(None, self)
-		out.declare_tmp(name="_boolop_res")
-
-		tmp = CIntegerLL(None, self, is_a_bool=True)
-		tmp.declare_tmp()
-
-		# Note: need to re-initialize manually so that use in a loop starts with a default of 0 every time
-		self.ctx.add(c.Assignment('=', c.ID(tmp.name), c.Constant('integer', 0)))
-
-		# store base context, for restore, since we can't use with stmts here
-		base_context = self.ctx
-
-		# visit each value in order... nest so that we will automatically fall out on failure
-		val_inst = None
-		for value in node.values:
-			# only decref val_instance on second+ pass
-			if val_inst and len(node.values) > 1 and value is not node.values[1]:
-				val_inst.decref()
-
-			val_inst = self.visit(value)
-			val_inst.is_true(tmp)
-
-			# Note: our last output is our actual result for both And and Or, since we only get to the last
-			#		op if all of our others have been True or False respectively.
-			if value is not node.values[-1]:
-				# continue to next only if we are False
-				if node.op == py.Or:
-					ifstmt = self.ctx.add(c.If(c.UnaryOp('!', c.ID(tmp.name)), c.Compound(), c.Compound()))
-
-				# continue to next only if we are True
-				elif node.op == py.And:
-					ifstmt = self.ctx.add(c.If(c.ID(tmp.name), c.Compound(), c.Compound()))
-
-				# start next comparision in this (failed) context
-				self.ctx = ifstmt.iftrue
-
-				# if we are not continuing (the stmt is false) then assign our output
-				with self.new_context(ifstmt.iffalse):
-					val_inst = val_inst.as_pyobject()
-					out.assign_name(val_inst)
-					val_inst.decref_only() # note: this is not the last iteration of values, so keep in play, even if we exit early at runtim
-			else:
-				val_inst = val_inst.as_pyobject()
-				out.assign_name(val_inst)
-
-		# restore prior context
-		self.ctx = base_context
-
-		# cleanup
-		tmp.decref()
-
-		return out
-
-
-	def visit_Bytes(self, node):
-		inst = self.create_ll_instance(node.hl)
-		inst.declare_tmp()
-		inst.new(PyStringType.dequote(node.s))
-		return inst
-
-
-	def visit_Break(self, node):
-		self.comment('break')
-		def break_handler(label): # the next break is our ultimate target
-			var = self.loop_vars[-1]
-			if var: var.decref_only() # NOTE: cleanup the loop variable
-			self.clear_exception()
-			self.ctx.add(c.Goto(label))
-			return True
-		self.handle_flowcontrol(break_handler=break_handler)
-
-
-
-	def visit_Call(self, node):
-		def _call_super(self, node, funcinst):
-			#FIXME: what if we call through a variable?
-			#FIXME: what happens if we write to __class__ at runtime?
-
-			# get the class type and the instance
-			cls = self.find_nearest_class_scope(err='super must be called in a class context: {}'.format(node.start))
-			fn = self.find_nearest_method_scope(err='super must be called in a method context: {}'.format(node.start))
-
-			args = PyTupleLL(None, self)
-			args.declare_tmp(name='__auto_super_call_args')
-			args.pack(cls.ll.c_obj, fn.ll.get_self_accessor())
-
-			# do the actual call
-			rv = PyObjectLL(None, self)
-			rv.declare_tmp()
-			funcinst.call(args, None, rv)
-
-			args.decref()
-			return rv
-
-		def _call_builtin(self, node, funcinst):
-			raise NotImplementedError
-
-		def _call_local(self, node, funcinst):
-			raise NotImplementedError
-
-		def _call_remote(self, node, funcinst):
-			# if we are calling super with no args, we need to provide them, since this is the framework's responsibility
-			#FIXME: should be at higher level in a bit, so remove eventually
-			if node.func.hl and isinstance(node.func, py.Name) and node.func.hl.name == 'super' and not node.args:
-				return _call_super(self, node, funcinst)
-
-			# build the arg tuple
-			args_insts = []
-			if node.args:
-				for arg in node.args:
-					idinst = self.visit(arg)
-					idinst = idinst.as_pyobject()
-					args_insts.append(idinst)
-
-			# Note: we always need to pass a tuple as args, even if there is nothing in it
-			if not node.starargs:
-				args1 = PyTupleLL(None, self)
-				args1.declare_tmp(name='_args')
-				args1.pack(*args_insts)
-			else:
-				args0 = PyListLL(None, self)
-				args0.declare_tmp(name='_star_args')
-				args0.pack(*args_insts)
-				va_inst = self.visit(node.starargs)
-				args0_0 = args0.sequence_inplace_concat(va_inst)
-				args0.decref()
-				va_inst.decref()
-				args1 = args0_0.sequence_as_tuple()
-				args0_0.decref()
-
-			# build the keyword dict
-			args2 = None
-			kw_insts = []
-			if node.keywords or node.kwargs:
-				for kw in node.keywords:
-					valinst = self.visit(kw.value)
-					valinst = valinst.as_pyobject()
-					kw_insts.append((str(kw.keyword), valinst))
-				if kw_insts or node.kwargs:
-					args2 = PyDictLL(None, self)
-					args2.declare_tmp(name='_kw_args')
-					args2.new()
-					if kw_insts:
-						for keyname, valinst in kw_insts:
-							args2.set_item_string(keyname, valinst)
-					if node.kwargs:
-						kwargs_inst = self.visit(node.kwargs)
-						args2.update(kwargs_inst)
-
-			# begin call output
-			self.comment('do call "{}"'.format(str(node.func)))
-
-			# make the call
-			rv = PyObjectLL(None, self)
-			rv.declare_tmp(name='_call_rv')
-			funcinst.call(args1, args2, rv)
-
-			# cleanup the args
-			args1.clear()
-			if args2: args2.clear()
-			for inst in args_insts:
-				inst.decref()
-
-			return rv
-
-		#TODO: direct calling
-		#TODO: track "type" so we can dispatch to PyCFunction_Call or PyFunction_Call instead of PyObject_Call 
-		#TODO: track all call methods (callsite usage types) and see if we can't unpack into a direct c call
-
-		# begin call output
-		self.comment('Call function "{}"'.format(str(node.func)))
-
-		# prepare the func name node
-		funcinst = self.visit(node.func)
-
-		# if we are defined locally, we can know the expected calling proc and reorganize our args to it
-		#if node.func.hl and node.func.hl.scope:
-		#	return _call_local(self, node, funcinst)
-		#else:
-		#	return _call_remote(self, node, funcinst)
-		with self.scope.ll.maybe_recursive_call():
-			ty = node.hl.get_type()
-			ct = ty.call_type if isinstance(ty, PyFunctionType) else PyFunctionType.CALL_TYPE_UNKNOWN
-			if ct == PyFunctionType.CALL_TYPE_LOCAL:
-				rv = _call_local(self, node, funcinst)
-			elif ct == PyFunctionType.CALL_TYPE_BUILTIN:
-				rv = _call_builtin(self, node, funcinst)
-			else:
-				rv = _call_remote(self, node, funcinst)
-
-		funcinst.decref()
-		return rv
-
 
 	def visit_ClassDef(self, node):
 		# declare
@@ -1140,255 +794,6 @@ class Frames2C(ASTVisitor):
 		# store the name in the scope where we are "created"
 		self._store_name(node.name, pyclass_inst)
 
-
-	def visit_Compare(self, node):
-		# format and print the op we are doing for sanity sake
-		s = 'Compare ' + str(node.left)
-		for o, b in zip(node.ops, node.comparators):
-			s += ' {} {}'.format(self.COMPARATORS_PRETTY[o], str(b))
-		self.comment(s)
-
-		# initialize new tmp variable
-		out = CIntegerLL(None, self, is_a_bool=True)
-		out.declare_tmp(name='_cmp_result')
-
-		# Note: we need to initialize the output variable to 0 before the compare since compare can be
-		#		used in, for instance, loops, where we need to re-do the comparison correctly every time.
-		self.ctx.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 0)))
-
-		# store this because when we bail we will come all the way back to our starting context at once
-		base_context = self.ctx
-
-		# make each comparison in order
-		a = self.visit(node.left)
-		a = a.as_pyobject()
-		for op, b in zip(node.ops, node.comparators):
-			b = self.visit(b)
-			b = b.as_pyobject()
-
-			# do one compare; only continue to next scope if we succeed
-			if op in self.COMPARATORS_RICH:
-				rv = a.rich_compare_bool(b, self.COMPARATORS_RICH[op])
-			elif op == py.In:
-				rv = b.sequence_contains(a)
-			elif op == py.NotIn:
-				rv = b.sequence_contains(a)
-				rv = rv.not_()
-			elif op == py.Is:
-				rv = a.is_(b)
-			elif op == py.IsNot:
-				rv = a.is_(b)
-				rv = rv.not_()
-			else:
-				raise NotImplementedError("unimplemented comparator in visit_compare: {}".format(op))
-
-			# next lhs is current rhs
-			a.decref()
-			a = b
-
-			# NOTE: rv is an int, so this will not actually do anything (we can still use it in the next expr), but 
-			#		will free the var for re-use at the next level of comparision.
-			rv.decref()
-			stmt = self.ctx.add(c.If(c.ID(rv.name), c.Compound(), None))
-			self.ctx = stmt.iftrue
-
-
-		# we are in our deepest nested context now, where all prior statements have been true
-		self.ctx.add(c.Assignment('=', c.ID(out.name), c.Constant('integer', 1)))
-
-		# reset the context
-		self.ctx = base_context
-
-		return out
-
-
-	def visit_Continue(self, node):
-		self.comment('continue')
-		def loop_handler(label):
-			var = self.loop_vars[-1]
-			if var:
-				var.decref_only()
-			self.ctx.add(c.Goto(label))
-			return True
-		self.handle_flowcontrol(continue_handler=loop_handler)
-
-
-	def visit_Delete(self, node):
-		#FIXME: move to _del_any?
-		for target in node.targets:
-			if isinstance(target, py.Name):
-				self._delete_name(target)
-			elif isinstance(target, py.Attribute):
-				inst = self.visit(target.value)
-				inst.del_attr_string(str(target.attr))
-			elif isinstance(target, py.Subscript):
-				ovalue = self.visit(target.value)
-				if isinstance(target.slice, py.Slice):
-					start_inst, end_inst, step_inst = self.visit(target.slice)
-					ovalue.sequence_del_slice(start_inst, end_inst, step_inst)
-					if start_inst: start_inst.decref()
-					if end_inst: end_inst.decref()
-					if step_inst: step_inst.decref()
-				else:
-					kvalue = self.visit(target.slice)
-					ovalue.del_item(kvalue)
-			else:
-				raise NotImplementedError("Unknown deletion type")
-
-
-	def visit_Dict(self, node):
-		inst = self.create_ll_instance(node.hl)
-		inst.declare_tmp()
-		inst.new()
-		if node.keys and node.values:
-			for k, v in zip(node.keys, node.values):
-				kinst = self.visit(k)
-				vinst = self.visit(v)
-				inst.set_item(kinst, vinst)
-				vinst.decref()
-				kinst.decref()
-		return inst
-
-
-	def visit_Ellipsis(self, node):
-		#FIXME: get a ref to the ellipsis object at startup and incref and return it here
-		raise NotImplementedError
-
-
-	def visit_Expr(self, node):
-		return self.visit(node.value)
-
-
-	def visit_ExtSlice(self, node):
-		#FIXME: figure out what these are exactly... 
-		raise NotImplementedError
-
-
-	def visit_For(self, node):
-		#for <target> in <iter>: <body>
-		#else: <orelse>
-
-		# the break and continue label
-		break_label = self.scope.get_label('break_for')
-		continue_label = self.scope.get_label('continue_for')
-
-		# get the PyIter for the iteration object
-		iter_obj = self.visit(node.iter)
-		iter = PyObjectLL(None, self)
-		iter.declare_tmp()
-		iter_obj.get_iter(iter)
-		iter_obj.decref()
-
-		# the gets the object locally inside of the while expr; we do the full assignment inside the body
-		self.loop_vars.append(PyObjectLL(None, self))
-		self.loop_vars[-1].declare_tmp()
-		stmt = self.ctx.add(c.While(c.Assignment('=', c.ID(self.loop_vars[-1].name), c.FuncCall(c.ID('PyIter_Next'), c.ExprList(c.ID(iter.name)))), c.Compound()))
-		with self.new_context(stmt.stmt):
-			with self.new_label(break_label), self.new_label(continue_label):
-				self._store_any(node.target, self.loop_vars[-1])
-				self.visit_nodelist(node.body)
-			self.ctx.add(c.Label(continue_label))
-			self.loop_vars[-1].decref()
-		self.loop_vars.pop()
-		iter.decref()
-
-		# handle the no-break case: else
-		# if we don't jump to forloop, then we need to just run the else block
-		self.visit_nodelist(node.orelse)
-
-		# after else, we get the break target
-		self.ctx.add(c.Label(break_label))
-
-
-
-	def visit_GeneratorExp(self, node):
-		full_args = ([], None, [], None)
-		docstring = None
-
-		# prepare the lowlevel
-		inst = self.create_ll_instance(node.hl)
-		inst.prepare()
-		inst.create_pystubfunc()
-		inst.create_runnerfunc(*full_args)
-
-		self.comment("Build genexp function {}".format(str(node.name)))
-		pycfunc = inst.declare_function_object(docstring)
-		# NOTE: we don't really care about the generator _function_, we just want the underlying generator, so call to flush it out
-		tmp = PyObjectLL(None, self)
-		tmp.declare_tmp()
-		pycfunc.call(None, None, tmp)
-		pycfunc.decref()
-
-		# Build the python stub function
-		with self.new_scope(node.hl, inst.c_pystub_func.body):
-			self.comment('Python interface stub function "{}"'.format(str(node.name)))
-			inst.stub_intro()
-			inst.transfer_to_runnerfunc(*full_args)
-			inst.stub_outro()
-
-		# build the actual runner function
-		with self.new_scope(node.hl, inst.c_runner_func.body):
-			inst.runner_intro()
-			inst.runner_load_args(*full_args)
-			inst.runner_load_locals()
-			self.comment('body')
-			def _set():
-				obj = self.visit(node.elt)
-				self.scope.ll.do_yield(obj)
-			self.visit_comp_generators(node.generators, _set)
-			inst.runner_outro()
-
-		# store the resulting function into the scope where it's defined
-		if not node.hl.is_anonymous:
-			self.comment('store function name into scope')
-			self._store_name(node.name, tmp)
-		inst.name = tmp.name
-
-		return inst
-
-
-	#def visit_Global(self, node):
-	#	not needed
-
-
-	def visit_If(self, node):
-		inst = self.visit(node.test)
-		if isinstance(inst, PyObjectLL):
-			tmpvar = inst.is_true()
-			test = c.BinaryOp('==', c.Constant('integer', 1), c.ID(tmpvar.name))
-		elif isinstance(inst, CIntegerLL):
-			test = c.ID(inst.name)
-		else:
-			raise NotImplementedError('Non-pyobject as value for If test')
-
-		stmt = self.ctx.add(c.If(test, c.Compound(), c.Compound() if node.orelse else None))
-		with self.new_context(stmt.iftrue):
-			self.visit_nodelist(node.body)
-		if node.orelse:
-			with self.new_context(stmt.iffalse):
-				self.visit_nodelist(node.orelse)
-
-
-	def visit_IfExp(self, node):
-		out_inst = PyObjectLL(None, self)
-		out_inst.declare_tmp(name="_ifexp_rv")
-
-		tst_inst = self.visit(node.test)
-		tst_is_true = tst_inst.is_true()
-		ifstmt = self.ctx.add(c.If(c.ID(tst_is_true.name), c.Compound(), c.Compound()))
-		with self.new_context(ifstmt.iftrue):
-			inst = self.visit(node.body)
-			out_inst.assign_name(inst)
-			inst.decref()
-		with self.new_context(ifstmt.iffalse):
-			inst = self.visit(node.orelse)
-			out_inst.assign_name(inst)
-			inst.decref()
-		tst_is_true.decref()
-		if tst_is_true is not tst_inst:
-			tst_inst.decref()
-
-		return out_inst
 
 
 	def _import_module(self, module, fullname):
@@ -1501,20 +906,6 @@ class Frames2C(ASTVisitor):
 			val.decref()
 
 
-	def visit_Index(self, node):
-		#NOTE: Pass through index values... not sure why python ast wraps these rather than just having a value.
-		tmp = self.visit(node.value)
-		return tmp
-
-
-	#def visit_Lambda(self, node):
-	#	See visit_FunctionDef for actual implementation
-
-
-	#def visit_List(self, node):
-	#	See visit_Tuple for actual implementation
-
-
 	def preallocate(self, node):
 		'''Called once for every module before we enter the emit phase.  We use this to acquire a ll builder name
 			for every module so that we can do things like triangular imports without running into problems.'''
@@ -1551,8 +942,9 @@ class Frames2C(ASTVisitor):
 				# visit all children
 				#self.visit_nodelist(body)
 				#for block in node.hl._blocks:
-				#	self.visit_block(block)
-				self.visit_block(node.hl)
+				#	self.visit_frame(block)
+				with self.new_label('end'):
+					self.visit_frame(node.hl)
 
 				# cleanup and return
 				self.ll_module.outro()
@@ -1579,6 +971,7 @@ class Frames2C(ASTVisitor):
 
 		# prepare the lowlevel
 		inst = self.create_ll_instance(node.hl)
+		inst = node.hl.ll
 		inst.prepare()
 		inst.create_pystubfunc()
 		inst.create_runnerfunc(*full_args)
@@ -1658,10 +1051,22 @@ class Frames2C(ASTVisitor):
 	visit_Lambda = visit_FunctionDef
 
 
-	def visit_block(self, block):
+	def visit_frame(self, block):
+		prior_ln = None
 		for op in block._instructions:
 			if op.label:
 				self.ctx.add(c.Label(op.label))
+
+			# check for line changes
+			if op._ast and op._ast.start:
+				ln = op._ast.start[0]
+				if ln != prior_ln:
+					prior_ln = ln
+					prior = self.hl_module.get_source_line(ln - 1).strip() if ln > 0 else ''
+					line = self.hl_module.get_source_line(ln).strip()
+					if not prior.endswith(':') or prior.startswith('def') or prior.startswith('class'):
+						self.ctx.add(c.WhiteSpace(''))
+					self.comment(str(ln) + ': ' + line.replace('/', '<div>').replace('\\', '<bs>'))
 			self.comment(op.format())
 
 			self._current_node = block.ast
@@ -1678,6 +1083,7 @@ class Frames2C(ASTVisitor):
 
 	def visit_LOAD_CONST(self, op):
 		if isinstance(op.v, int): ty = PyIntegerLL
+		elif isinstance(op.v, float): ty = PyFloatLL
 		elif isinstance(op.v, str): ty = PyStringLL
 		elif isinstance(op.v, bytes): ty = PyBytesLL
 		elif op.v is None:
@@ -1686,17 +1092,22 @@ class Frames2C(ASTVisitor):
 			op.target.ll.assign_name(self.none)
 			self.none.incref()
 			return
-		else: raise NotImplementedError
-		op.target.ll = ty(op._ast, self)
+		else: raise NotImplementedError(str(type(op.v)))
+		op.target.ll = ty(op.target, self)
 		op.target.ll.declare(name=op.target.name)
 		op.target.ll.new(op.v)
 
 
 	def visit_LOAD_GLOBAL_OR_BUILTIN(self, op):
-		op.target.ll = self.create_ll_instance(op.hl_source)
+		op.target.ll = self.create_ll_instance(op.target)
 		op.target.ll.declare(name=op.target.name)
-		#op.hl_source.parent.ll.get_attr_string(op.hl_source.name, op.target.ll)
 		self.hl_module.ll.get_attr_string(op.hl_source.name, op.target.ll)
+
+
+	def visit_LOAD_LOCAL(self, op):
+		op.target.ll = self.create_ll_instance(op.target)
+		op.target.ll.declare(name=op.target.name)
+		op.hl_source.parent.ll.get_attr_string(op.hl_source.name, op.target.ll)
 
 	#def visit_LOAD_GLOBAL(self, op):
 	#	op.target.ll = self.create_ll_instance(op.hl_source)
@@ -1710,22 +1121,97 @@ class Frames2C(ASTVisitor):
 		op.operands[0].ll.get_attr_string(op.operands[1], op.target.ll)
 
 
+	def visit_LOAD_ITEM(self, op):
+		op.target.ll = self.create_ll_instance(op.target)
+		op.target.ll.declare(name=op.target.name)
+		op.operands[0].ll.get_item(op.operands[1].ll, op.target.ll)
+
+
 	def visit_STORE_ATTR(self, op):
 		op.operands[0].ll.set_attr_string(op.operands[1], op.operands[2].ll)
 
 
+	def visit_STORE_ITEM(self, op):
+		op.operands[0].ll.set_item(op.operands[1], op.operands[2].ll)
+
+
 	def visit_STORE_GLOBAL(self, op):
-		#op.target.parent.ll.set_attr_string(op.target.name, op.operands[0].ll)
 		self.hl_module.ll.set_attr_string(op.target.name, op.operands[0].ll)
 
 
-	def visit_BINARY_ADD(self, op):
+	def visit_STORE_LOCAL(self, op):
+		op.target.parent.ll.set_attr_string(op.target.name, op.operands[0].ll)
+
+
+	BINOP_DISPATCH = {
+		'BINARY_ADD': 'add',
+		'BINARY_FLOOR_DIVIDE': 'floor_divide',
+		'BINARY_TRUE_DIVIDE': 'divide',
+		'BINARY_MODULO': 'modulus',
+		'BINARY_MULTIPLY': 'multiply',
+		'BINARY_POWER': 'power',
+		'BINARY_SUBTRACT': 'subtract',
+		'BINARY_LSHIFT': 'lshift',
+		'BINARY_RSHIFT': 'rshift',
+		'BINARY_AND': 'bitand',
+		'BINARY_XOR': 'bitxor',
+		'BINARY_OR': 'bitor',
+	}
+	def visit_BinaryOp(self, op):
 		op.target.ll = self.create_ll_instance(op.target)
 		op.target.ll.declare(name=op.target.name)
-		op.operands[0].ll.add(op.operands[1].ll, op.target.ll)
+		fn = getattr(op.operands[0].ll, self.BINOP_DISPATCH[op.__class__.__name__])
+		if not fn: raise NotImplementedError("Unrecognized binop opcode: {}".format(op.__class__.__name__))
+		fn(op.operands[1].ll, op.target.ll)
+	visit_BINARY_ADD = visit_BinaryOp
+	visit_BINARY_FLOOR_DIVIDE = visit_BinaryOp
+	visit_BINARY_TRUE_DIVIDE = visit_BinaryOp
+	visit_BINARY_MODULO = visit_BinaryOp
+	visit_BINARY_MULTIPLY = visit_BinaryOp
+	visit_BINARY_POWER = visit_BinaryOp
+	visit_BINARY_SUBTRACT = visit_BinaryOp
+	visit_BINARY_LSHIFT = visit_BinaryOp
+	visit_BINARY_RSHIFT = visit_BinaryOp
+	visit_BINARY_AND = visit_BinaryOp
+	visit_BINARY_XOR = visit_BinaryOp
+	visit_BINARY_OR = visit_BinaryOp
 
 
-	def visit_MAKE_DICT(self, op):
+	INPLACE_DISPATCH = {
+		'INPLACE_ADD': 'inplace_add',
+		'INPLACE_FLOOR_DIVIDE': 'inplace_floor_divide',
+		'INPLACE_TRUE_DIVIDE': 'inplace_divide',
+		'INPLACE_MODULO': 'inplace_modulus',
+		'INPLACE_MULTIPLY': 'inplace_multiply',
+		'INPLACE_POWER': 'inplace_power',
+		'INPLACE_SUBTRACT': 'inplace_subtract',
+		'INPLACE_LSHIFT': 'inplace_lshift',
+		'INPLACE_RSHIFT': 'inplace_rshift',
+		'INPLACE_AND': 'inplace_bitand',
+		'INPLACE_XOR': 'inplace_bitxor',
+		'INPLACE_OR': 'inplace_bitor',
+	}
+	def visit_InplaceOp(self, op):
+		op.target.ll = self.create_ll_instance(op.target)
+		op.target.ll.declare(name=op.target.name)
+		fn = getattr(op.operands[0].ll, self.INPLACE_DISPATCH[op.__class__.__name__])
+		if not fn: raise NotImplementedError("Unrecognized inplace opcode: {}".format(op.__class__.__name__))
+		fn(op.operands[1].ll, op.target.ll)
+	visit_INPLACE_ADD = visit_InplaceOp
+	visit_INPLACE_FLOOR_DIVIDE = visit_InplaceOp
+	visit_INPLACE_TRUE_DIVIDE = visit_InplaceOp
+	visit_INPLACE_MODULO = visit_InplaceOp
+	visit_INPLACE_MULTIPLY = visit_InplaceOp
+	visit_INPLACE_POWER = visit_InplaceOp
+	visit_INPLACE_SUBTRACT = visit_InplaceOp
+	visit_INPLACE_LSHIFT = visit_InplaceOp
+	visit_INPLACE_RSHIFT = visit_InplaceOp
+	visit_INPLACE_AND = visit_InplaceOp
+	visit_INPLACE_XOR = visit_InplaceOp
+	visit_INPLACE_OR = visit_InplaceOp
+
+
+	def visit_BUILD_DICT(self, op):
 		def pairwise(iterable):
 			"s -> (s0,s1), (s1,s2), (s2, s3), ..."
 			a, b = itertools.tee(iterable)
@@ -1738,31 +1224,83 @@ class Frames2C(ASTVisitor):
 			op.target.ll.set_item(k.ll, v.ll)
 
 
+	def visit_BUILD_SET(self, op):
+		op.target.ll = PySetLL(op.target, self)
+		op.target.ll.declare(name=op.target.name)
+		op.target.ll.new()
+		for operand in op.operands:
+			op.target.ll.add(operand.ll)
+
+
+	def visit_BUILD_TUPLE(self, op):
+		op.target.ll = PyTupleLL(op.target, self)
+		op.target.ll.declare(name=op.target.name)
+		op.target.ll.pack(*[i.ll for i in op.operands])
+
+
+	def visit_BUILD_LIST(self, op):
+		op.target.ll = PyListLL(op.target, self)
+		op.target.ll.declare(name=op.target.name)
+		op.target.ll.pack(*[i.ll for i in op.operands])
+
+
+	def visit_BUILD_SLICE(self, op):
+		op.target.ll = PySliceLL(op.target, self)
+		op.target.ll.declare(name=op.target.name)
+		lower = op.operands[0] if op.operands[0] is not None else self.none
+		upper = op.operands[1] if op.operands[1] is not None else self.none
+		step = op.operands[2] if op.operands[2] is not None else self.none
+		op.target.ll.new(lower, upper, step)
+
+
 	def visit_MAKE_FUNCTION(self, op):
-		inst = self.visit(op._ast)
-		inst.declare_function_object(op._ast.docstring or '""')
+		# get closer ref to the underlying ast node here
+		node = op._ast
+
+		# for use everywhere else in this function when we need to pass our entire args descriptor down to the implementor
+		full_args = (node.args.args or [], node.args.vararg, node.args.kwonlyargs or [], node.args.kwarg)
+
+		# prepare the lowlevel
+		inst = self.create_ll_instance(node.hl)
+		inst.prepare()
+		inst.create_pystubfunc()
+		inst.create_runnerfunc(*full_args)
+		inst.declare_function_object(PyStringType.dequote(op._ast.docstring) if op._ast.docstring else '')
 		op.target.ll = inst.c_obj
+
+		# Build the python stub function
+		with self.new_scope(node.hl, inst.c_pystub_func.body):
+			self.comment('Python interface stub function "{}"'.format(str(node.name)))
+			inst.stub_intro()
+			inst.stub_load_args(node.args.args or [], node.args.defaults or [],
+								node.args.vararg,
+								node.args.kwonlyargs or [], node.args.kw_defaults or [],
+								node.args.kwarg)
+			inst.transfer_to_runnerfunc(*full_args)
+			inst.stub_outro()
+
+		# build the actual runner function
+		with self.new_scope(node.hl, inst.c_runner_func.body):
+			inst.runner_intro()
+			inst.runner_load_args(*full_args)
+			inst.runner_load_locals()
+			self.comment('body')
+			with self.new_label('end'):
+				self.visit_frame(node.hl)
+			inst.runner_outro()
 
 
 	def visit_BRANCH(self, op):
-		raise NotImplementedError
-		self.comment(op.format())
-		owner = op.ast.bb
-		test = self.live_tmp[op.operands[0]].is_true()
-		if isinstance(op.ast, py.If):
-			ifstmt = self.ctx.add(c.If(c.ID(test.name), c.Compound(), None))
-			with self.new_context(ifstmt.iftrue):
-				self.visit_block(owner.get_outbound_block_by_label(op.label_true))
-			if op.ast.orelse:
-				ifstmt.iffalse = c.Compound()
-				with self.new_context(ifstmt.iffalse):
-					self.visit_block(owner.get_outbound_block_by_label(op.label_false))
-			iftrue_block = owner.get_outbound_block_by_label(op.label_true)
-			jump = iftrue_block._instructions[-1]
-			post_block = iftrue_block.get_outbound_block_by_label(jump.label_target)
-			self.visit_block(post_block)
-		else:
-			raise NotImplementedError
+		obj_value = self.create_ll_instance(op.operands[0])
+		obj_value.declare(name=op.operands[0].name)
+		c_value = obj_value.is_true()
+		obj_value.decref()
+		ifstmt = c.If(c.ID(c_value.name), c.Compound(c.Goto(op.label_true)), c.Compound(c.Goto(op.label_false)))
+		self.ctx.add(ifstmt)
+
+
+	def visit_JUMP(self, op):
+		self.ctx.add(c.Goto(op.label_target))
 
 
 	def visit_CALL_GENERIC(self, op):
@@ -1775,11 +1313,13 @@ class Frames2C(ASTVisitor):
 
 		kw = None
 		if op.keywords:
-			kw = PyDictLL()
+			kw = PyDictLL(None, self)
+			kw.declare(name='_call_kws')
+			kw.new()
 			for k, v in op.keywords.items():
-				kw.set_item_string(str(k._ast), v.ll)
+				kw.set_item_string(k, v.ll)
 
-		op.func.ll.call(args, {k.ll: v.ll for k, v in op.keywords.items()}, op.target.ll)
+		op.func.ll.call(args, kw, op.target.ll)
 
 		args.decref()
 		if kw:
@@ -1787,6 +1327,59 @@ class Frames2C(ASTVisitor):
 	#	out = PyObjectLL(None, self)
 	#	out.declare(name=op.target)
 	#	#self.live_tmp[op.func].call(op.args, op.keywords, out)
+
+	def visit_RAISE(self, op):
+		exc = op.operands[0]
+		inst = self.create_ll_instance(exc)
+		is_a_type = inst.is_instance(PyTypeLL)
+		if_stmt = self.ctx.add(c.If(c.ID(is_a_type.name), c.Compound(), c.Compound()))
+		with self.new_context(if_stmt.iftrue):
+			self.set_exception(inst, None)
+		with self.new_context(if_stmt.iffalse):
+			#TODO: move into get_type
+			ty_inst = PyTypeLL(None, self)
+			ty_inst.declare_tmp()
+			inst.get_type(ty_inst)
+			self.set_exception(ty_inst, inst)
+			ty_inst.decref()
+		self.capture_error()
+		self.exit_with_exception()
+		self.handle_flowcontrol(except_handler=self._except_flowcontrol)
+
+	def visit_SETUP_FINALLY(self, op):
+		self.flowcontrol.append(op.label_target)
+
+	def visit_END_FINALLY(self, op):
+		top = self.flowcontrol.pop()
+		assert top == op.label_target
+
+	def visit_SETUP_EXCEPT(self, op):
+		self.flowcontrol.append(op.label_target)
+
+	def visit_END_EXCEPT(self, op):
+		top = self.flowcontrol.pop()
+		assert top == op.label_target
+
+
+	def visit_SETUP_EXCEPTION_HANDLER(self, op):
+		exc_cookie = self.prepare_cookie(op.operands)
+		self.fetch_exception(exc_cookie)
+		self.normalize_exception_full(exc_cookie)
+		self.exc_cookie_stack.append(exc_cookie)
+		#if len(self.flowcontrol):
+		#	self.flowcontrol.pop()
+
+
+	def visit_COMPARE_EXCEPTION_MATCH(self, op):
+		self.ctx.add(c.Assignment('=', c.ID(op.target.name),
+								c.FuncCall(c.ID('PyErr_GivenExceptionMatches'),
+										c.ExprList(c.ID(op.operands[0].name), c.ID(op.operands[1].name)))))
+
+	def visit_END_EXCEPTION_HANDLER(self, op):
+		self.clear_exception()
+
+	def visit_RESTORE_EXCEPTION(self, op):
+		self.restore_exception(self.exc_cookie_stack[-1])
 
 
 	def visit_IMPORT_NAME(self, op):

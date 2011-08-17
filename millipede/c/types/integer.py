@@ -24,8 +24,8 @@ class CIntegerLL(LLType):
 			self.v.scope.ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=[]), need_cleanup=False)
 
 
-	def declare(self, *, is_global=False, quals=[], init=0):
-		super().declare(is_global=is_global, quals=quals)
+	def declare(self, *, is_global=False, quals=[], name=None, init=0):
+		super().declare(is_global=is_global, quals=quals, name=name)
 		#TODO: specialize for signed and sized ints
 		self.v.scope.ctx.add_variable(c.Decl(self.name, c.TypeDecl(self.name, c.IdentifierType('int')), quals=quals, init=c.Constant('integer', init)), False)
 

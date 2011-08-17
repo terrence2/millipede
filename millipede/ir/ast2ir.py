@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from millipede.hl.nodes.builtins import Builtins
 from millipede.hl.nodes.entity import Entity
 from millipede.hl.nodes.module import MpModule
+from millipede.hl.types.integer import CIntegerType
+from millipede.hl.types.pyinteger import PyIntegerType
 from millipede.hl.types.pystring import PyStringType
 from millipede.ir.opcodes import Intermediate
 from millipede.lang.visitor import ASTVisitor
@@ -83,10 +85,16 @@ class Ast2Ir(ASTVisitor):
 				tmps += [op.target]
 
 			for tmp in tmps:
+				if tmp.no_cleanup: continue
 				s_tmp = str(tmp)
 				if s_tmp not in seen:
 					new_ops.appendleft(opcode.DECREF(tmp, None))
 					seen.add(s_tmp)
+
+					# if the statement we insert in front of is labeled, move the label left to the inserted instr
+					if len(new_ops) > 1 and new_ops[1].label:
+						new_ops[0].label = new_ops[1].label
+						new_ops[1].label = None
 
 			new_ops.appendleft(op)
 
@@ -106,22 +114,52 @@ class Ast2Ir(ASTVisitor):
 		elif isinstance(node, py.Attribute):
 			lhs = self._load_any(node.value)
 			self.ctx.instr(opcode.STORE_ATTR(lhs, str(node.attr), to_store, node))
+		elif isinstance(node, (py.Tuple, py.List)):
+			for i, elt in enumerate(node.elts):
+				offset = self.tmpname()
+				self.ctx.instr(opcode.LOAD_CONST(offset, i, None))
+				tmp = self.tmpname()
+				self.ctx.instr(opcode.LOAD_ITEM(tmp, to_store, offset, None))
+				self._store_any(elt, tmp)
+		elif isinstance(node, py.Subscript):
+			lhs = self._load_any(node.value)
+			if isinstance(node.slice, py.Slice):
+				lower = self.visit(node.slice.lower)
+				upper = self.visit(node.slice.upper)
+				step = self.visit(node.slice.step)
+				slice = self.tmpname()
+				self.ctx.instr(opcode.BUILD_SLICE(slice, lower, upper, step, node.slice))
+			else:
+				slice = self.visit(node.slice)
+			self.ctx.instr(opcode.STORE_ITEM(lhs, slice, to_store, node))
 		else:
-			raise NotImplementedError
+			raise NotImplementedError(str(type(node)))
 
 
 	def _load_any(self, node):
 		tgt = self.tmpname()
 		if isinstance(node, py.Name):
 			name = self.ctx.lookup(str(node))
-			#if isinstance(name.parent, Builtins):
-			#	self.ctx.instr(opcode.LOAD_BUILTIN(tgt, node.hl, node))
-			#elif isinstance(name.parent, MpModule):
-			#	self.ctx.instr(opcode.LOAD_GLOBAL(tgt, node.hl, node))
 			if isinstance(name.parent, MpModule):
 				self.ctx.instr(opcode.LOAD_GLOBAL_OR_BUILTIN(tgt, node.hl, node))
 			else:
 				self.ctx.instr(opcode.LOAD_LOCAL(tgt, node.hl, node))
+		elif isinstance(node, py.Attribute):
+			lhs = self._load_any(node.value)
+			tgt = self.tmpname()
+			self.ctx.instr(opcode.LOAD_ATTR(tgt, lhs, str(node.attr), node))
+		elif isinstance(node, py.Subscript):
+			base = self._load_any(node.value)
+			tgt = self.tmpname()
+			if isinstance(node.slice, py.Slice):
+				lower = self.visit(node.slice.lower)
+				upper = self.visit(node.slice.upper)
+				step = self.visit(node.slice.step)
+				slice = self.tmpname()
+				self.ctx.instr(opcode.BUILD_SLICE(slice, lower, upper, step, node.slice))
+			else:
+				slice = self.visit(node.slice)
+			self.ctx.instr(opcode.LOAD_ITEM(tgt, base, slice, node))
 		else:
 			pdb.set_trace()
 			raise NotImplementedError
@@ -152,6 +190,7 @@ class Ast2Ir(ASTVisitor):
 	#def visit_Class(self, node):
 
 
+
 	def visit_FunctionDef(self, node):
 		#('args')
 
@@ -159,29 +198,41 @@ class Ast2Ir(ASTVisitor):
 		tgt = self.tmpname()
 		self.ctx.instr(opcode.MAKE_FUNCTION(tgt, node.hl, node))
 
-		# store the docstring
-		ds_tmp = self.tmpname()
-		self.ctx.instr(opcode.LOAD_CONST(ds_tmp, PyStringType.dequote(node.docstring or '""'), None))
-		self.ctx.instr(opcode.STORE_ATTR(tgt, '__doc__', ds_tmp, None))
+		# setup and store defaults
+		defaults = []
+		for default in (node.args.defaults or []):
+			defaults.append(self.visit(default))
+		tmp = self.tmpname()
+		self.ctx.instr(opcode.BUILD_TUPLE(tmp, *(defaults + [None])))
+		self.ctx.instr(opcode.STORE_ATTR(tgt, '__defaults__', tmp, None))
 
-		# setup and store keywords
-
-		# setup and store annotations, including returns
-		annotations = []
-		for arg in (node.args.args or []):
-			if arg.annotation:
+		# setup and store keyword defaults
+		if node.args.kw_defaults:
+			kwdefaults = []
+			for arg, kwdefault in zip(node.args.kwonlyargs, node.args.kw_defaults):
 				tmp_name = self.tmpname()
-				self.ctx.instr(opcode.LOAD_CONST(tmp_name, str(arg.arg), arg.arg))
-				tmp_value = self.visit(arg.annotation)
-				annotations.extend((tmp_name, tmp_value))
-		if node.returns:
+				self.ctx.instr(opcode.LOAD_CONST(tmp_name, str(arg.arg), node.returns))
+				kwdefaults.extend((tmp_name, self.visit(kwdefault)))
+			tmp = self.tmpname()
+			self.ctx.instr(opcode.BUILD_DICT(tmp, *(kwdefaults + [None])))
+			self.ctx.instr(opcode.STORE_ATTR(tgt, '__kwdefaults__', tmp, None))
+
+		# setup and store annotations, including returns, and for star and kw args
+		annotations = []
+		def _annotate(name, vnode):
 			tmp_name = self.tmpname()
-			self.ctx.instr(opcode.LOAD_CONST(tmp_name, 'return', node.returns))
-			tmp_value = self.visit(node.returns)
+			self.ctx.instr(opcode.LOAD_CONST(tmp_name, name, None))
+			tmp_value = self.visit(vnode)
 			annotations.extend((tmp_name, tmp_value))
+		for arg in (node.args.args or []) + (node.args.kwonlyargs or []):
+			if arg.annotation: _annotate(str(arg.arg), arg.annotation)
+		if node.returns: _annotate('return', node.returns)
+		if node.args.varargannotation: _annotate(str(node.args.vararg), node.args.varargannotation)
+		if node.args.kwargannotation: _annotate(str(node.args.kwarg), node.args.kwargannotation)
 		ann_name = self.tmpname()
-		self.ctx.instr(opcode.MAKE_DICT(ann_name, *(annotations + [None])))
+		self.ctx.instr(opcode.BUILD_DICT(ann_name, *(annotations + [None])))
 		self.ctx.instr(opcode.STORE_ATTR(tgt, '__annotations__', ann_name, None))
+
 
 		# chain all decorators
 		for deco in (node.decorator_list or []):
@@ -209,6 +260,27 @@ class Ast2Ir(ASTVisitor):
 
 
 	#### INSTRUCTIONS
+	def visit_AugAssign(self, node):
+		lhs = self._load_any(node.target)
+		rhs = self.visit(node.value)
+		tgt = self.tmpname()
+		if node.op == py.BitOr: cls = opcode.INPLACE_OR
+		elif node.op == py.BitXor: cls = opcode.INPLACE_XOR
+		elif node.op == py.BitAnd: cls = opcode.INPLACE_AND
+		elif node.op == py.LShift: cls = opcode.INPLACE_LSHIFT
+		elif node.op == py.RShift: cls = opcode.INPLACE_RSHIFT
+		elif node.op == py.Add: cls = opcode.INPLACE_ADD
+		elif node.op == py.Sub: cls = opcode.INPLACE_SUBTRACT
+		elif node.op == py.Mult: cls = opcode.INPLACE_MULTIPLY
+		elif node.op == py.Div: cls = opcode.INPLACE_TRUE_DIVIDE
+		elif node.op == py.FloorDiv: cls = opcode.INPLACE_FLOOR_DIVIDE
+		elif node.op == py.Mod: cls = opcode.INPLACE_MODULO
+		elif node.op == py.Pow: cls = opcode.INPLACE_POWER
+		else: raise NotImplementedError("Unknown augop: {}".format(node.op))
+		self.ctx.instr(cls(tgt, lhs, rhs, node))
+		self._store_any(node.target, tgt)
+
+
 	def visit_Assign(self, node):
 		nm = self.visit(node.value)
 		for tgt in node.targets:
@@ -231,10 +303,12 @@ class Ast2Ir(ASTVisitor):
 		elif node.op == py.FloorDiv: cls = opcode.BINARY_FLOOR_DIVIDE
 		elif node.op == py.Mod: cls = opcode.BINARY_MODULO
 		elif node.op == py.Pow: cls = opcode.BINARY_POWER
+		else: raise NotImplementedError("Unknown binop: {}".format(node.op))
 		self.ctx.instr(cls(tgt, lhs, rhs, node))
 		return tgt
 
 
+	### GLOBAL BRANCH
 	def visit_Call(self, node):
 		func = self.visit(node.func)
 
@@ -248,7 +322,7 @@ class Ast2Ir(ASTVisitor):
 		keywords = {}
 		if node.keywords:
 			for kw in node.keywords:
-				keywords[str(kw.name)] = self.visit(kw.value)
+				keywords[str(kw.keyword)] = self.visit(kw.value)
 
 		kwargs = None if not node.kwargs else self.visit(node.kwargs)
 
@@ -257,7 +331,19 @@ class Ast2Ir(ASTVisitor):
 		self.ctx.prepare_label(self.labelname('ret'))
 		return rv
 
+	def visit_Import(self, node):
+		for alias in node.names:
+			tgt = self.tmpname()
+			self.ctx.instr(opcode.IMPORT_NAME(tgt, alias.name, alias.name))
+			self.ctx.prepare_label(self.labelname('ret'))
+			store = alias.asname if alias.asname else alias.name
+			self._store_any(store, tgt)
 
+	def visit_ImportFrom(self, node):
+		raise NotImplementedError("ImportFrom")
+
+
+	### LOCAL BRANCH
 	#def visit_Compare(self, node):
 	#	pdb.set_trace()
 	#	lhs = self.visit(node.left)
@@ -270,7 +356,6 @@ class Ast2Ir(ASTVisitor):
 	#		lhs = rhs
 	#		rhs = self.visit(comp)
 	#	return tgt
-
 
 
 	def visit_If(self, node):
@@ -291,16 +376,149 @@ class Ast2Ir(ASTVisitor):
 		self.ctx.label_instr(label_end, opcode.NOP(None))
 
 
+	def visit_Try(self, node):
+		start_label = self.labelname('try')
+		except_label = self.labelname('except')
+		orelse_label = self.labelname('noexcept')
+		finally_label = self.labelname('finally')
+		fail_label = self.labelname('tryfail')
+		end_label = self.labelname('tryend')
 
-	def visit_Import(self, node):
-		for alias in node.names:
-			tgt = self.tmpname()
-			self.ctx.instr(opcode.IMPORT_NAME(tgt, alias.name, alias.name))
-			self.ctx.prepare_label(self.labelname('ret'))
-			store = alias.asname if alias.asname else alias.name
-			self._store_any(store, tgt)
+		#### TRY BB ####
+		# Note: all blocks end with a branch and start with a label; even though this should flow normally from the
+		#	prior instruction into the try block, we need to split it up with a jump/label pair because every basic-block
+		#	should have only a single exception handler target.
+		self.ctx.instr(opcode.JUMP(start_label, None))
+		self.ctx.prepare_label(start_label)
+
+		# setup compiler to set the target for subsequent runtime failures
+		if node.finallybody:
+			self.ctx.instr(opcode.SETUP_FINALLY(finally_label, None))
+		if node.handlers:
+			self.ctx.instr(opcode.SETUP_EXCEPT(except_label, None))
+
+		# emit code for the body
+		self.visit_nodelist(node.body)
+
+		# clear the except handler (but not the finally handler)
+		if node.handlers:
+			self.ctx.instr(opcode.END_EXCEPT(except_label, None))
+
+		# if we make it here, then we want to jump past the exception handler bits
+		if node.orelse:
+			self.ctx.instr(opcode.JUMP(orelse_label, None))
+		elif node.finallybody:
+			self.ctx.instr(opcode.JUMP(finally_label, None))
+		else:
+			self.ctx.instr(opcode.JUMP(end_label, None))
+		#### END TRY BB ####
 
 
+		#### EXCEPT BB ####
+		# NOTE: The except bb has no explicit entry, but is only jumped to by failures that 
+		#		occur in SETUP_EXCEPT/END_EXCEPT
+		self.ctx.prepare_label(except_label)
+
+		# store aside the error state
+		exc = (self.tmpname(), self.tmpname(), self.tmpname())
+		self.ctx.instr(opcode.SETUP_EXCEPTION_HANDLER(exc, None))
+
+		# prepare labels for all matcher and handler positions
+		match_labels = [self.labelname('exm') for _ in node.handlers]
+		handle_labels = [self.labelname('exh') for _ in node.handlers]
+
+		# jump to the first matcher
+		self.ctx.instr(opcode.JUMP(match_labels[0], None))
+
+		# perform matching against the exception class, branching to the real handler blocks
+		for i, handler in enumerate(node.handlers):
+			if i + 1 < len(node.handlers):
+				next_matcher = match_labels[i + 1]
+			else:
+				next_matcher = fail_label
+
+			self.ctx.prepare_label(match_labels[i])
+			if not handler.type: # generic handler
+				self.ctx.instr(opcode.JUMP(handle_labels[i], None))
+			elif isinstance(handler.type, py.Tuple):
+				raise NotImplementedError
+			elif isinstance(handler.type, (py.Name, py.Attribute, py.Subscript)):
+				inst = self.visit(handler.type)
+				matches = self.tmpname()
+				matches.add_type(CIntegerType())
+				matches.no_cleanup = True
+				self.ctx.instr(opcode.COMPARE_EXCEPTION_MATCH(matches, exc[0], inst, handler))
+				self.ctx.instr(opcode.BRANCH(matches, handle_labels[i], next_matcher, handler))
+
+		##  #### FAILURE BB ####
+		# for when we raise, but can't match an exception
+		self.ctx.prepare_label(fail_label)
+		self.ctx.instr(opcode.RESTORE_EXCEPTION(exc, None))
+		self.ctx.instr(opcode.JUMP('end', None))
+		##  #### END FAILURE BB ####
+
+		# emit actual handler blocks
+		for i, handler in enumerate(node.handlers):
+			self.ctx.prepare_label(handle_labels[i])
+			# load exception into name
+			if handler.name:
+				self._store_any(handler.name, exc[0])
+			# visit actual block
+			self.visit_nodelist(handler.body)
+			# if we reach the end of the handler, jump out to finish or finally
+			if node.finallybody:
+				self.ctx.instr(opcode.JUMP(finally_label, None))
+			else:
+				self.ctx.instr(opcode.JUMP(end_label, None))
+		#### END EXCEPT BB ####
+
+
+		#### ORELSE BB ####
+		self.ctx.prepare_label(orelse_label)
+
+		# visit the orelse block
+		self.visit_nodelist(node.orelse)
+
+		# exit to finally (if we have one) or the end otherwise
+		if node.finallybody:
+			self.ctx.instr(opcode.JUMP(finally_label, None))
+		else:
+			self.ctx.instr(opcode.JUMP(end_label, None))
+		#### END ORELSE BB ####
+
+
+		#### FINALLY BB ####
+		if node.finallybody:
+			self.ctx.prepare_label(finally_label)
+			self.visit_nodelist(node.finallybody)
+			#self.ctx.instr(opcode.JUMP(end_label, None))
+		#### END FINALLY BB ####
+
+		# next block needs to take over where we leave off
+		self.ctx.prepare_label(end_label)
+
+		if node.finallybody:
+			self.ctx.instr(opcode.END_FINALLY(finally_label, None))
+
+	def visit_Raise(self, node):
+		if not node.exc:
+			self.ctx.instr(opcode.RERAISE(node))
+		else:
+			exc = self.visit(node.exc)
+			exc.no_cleanup = True
+			self.ctx.instr(opcode.RAISE(exc, node))
+
+
+	### INDEX
+	def visit_Index(self, node):
+		return self.visit(node.value)
+
+
+	def visit_Slice(self, node):
+		raise SystemError("Found a naked slice!")
+
+
+	### NAME ACCESS
 	def visit_Attribute(self, node):
 		tmp_name = self.visit(node.value)
 		if node.ctx in (py.Load, py.Aug):
@@ -318,6 +536,20 @@ class Ast2Ir(ASTVisitor):
 			raise NotImplementedError
 
 
+	def visit_Subscript(self, node):
+		if node.ctx in (py.Load, py.Aug):
+			return self._load_any(node)
+		else:
+			raise NotImplementedError
+
+
+	### FLOW
+	def visit_Break(self, node):
+		raise NotImplementedError("break")
+	def visit_Continue(self, node):
+		raise NotImplementedError("break")
+
+
 	def visit_Pass(self, node):
 		self.ctx.instr(opcode.NOP(node))
 
@@ -332,11 +564,37 @@ class Ast2Ir(ASTVisitor):
 
 
 	#### CONTAINERS
-	#def visit_Tuple(self, node):
-	#	srcs = [self.visit(e) for e in node.elts]
-	#	tgt = self.tmpname()
-	#	self.ctx.instr(BUILD_TUPLE(tgt, *(srcs + [node])))
-	#	return tgt
+	def visit_Dict(self, node):
+		assert not node.keys or len(node.keys) == len(node.values)
+		srcs = []
+		if node.keys:
+			for k, v in zip(node.keys, node.values):
+				srcs.append(self.visit(k))
+				srcs.append(self.visit(v))
+		tgt = self.tmpname()
+		self.ctx.instr(opcode.BUILD_DICT(tgt, *(srcs + [node])))
+		return tgt
+
+
+	def visit_Set(self, node):
+		srcs = [self.visit(e) for e in node.elts] if node.elts else []
+		tgt = self.tmpname()
+		self.ctx.instr(opcode.BUILD_SET(tgt, *(srcs + [node])))
+		return tgt
+
+
+	def visit_List(self, node):
+		srcs = [self.visit(e) for e in node.elts] if node.elts else []
+		tgt = self.tmpname()
+		self.ctx.instr(opcode.BUILD_LIST(tgt, *(srcs + [node])))
+		return tgt
+
+
+	def visit_Tuple(self, node):
+		srcs = [self.visit(e) for e in node.elts] if node.elts else []
+		tgt = self.tmpname()
+		self.ctx.instr(opcode.BUILD_TUPLE(tgt, *(srcs + [node])))
+		return tgt
 
 
 	#### CONSTANTS
